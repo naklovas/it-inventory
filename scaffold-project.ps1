@@ -89,9 +89,12 @@ public sealed class GrafanaOptions
     // Doluysa "Authorization: Bearer <ApiToken>" ile istek atilir.
     public string ApiToken { get; set; } = "";
 
-    // Gecici cozum: tarayicidan (F12 > Network) kopyalanan grafana_session cerez degeri.
-    // Sadece hizli test icin - bir sure sonra suresi dolar (grafana_session_expiry).
-    // ApiToken bosken, SessionCookie doluysa bu kullanilir.
+    // Gecici cozum: tarayicidan (F12 > Network > istegin "Cookie" header'i, ya da
+    // curl komutundaki -b "..." icerigi) kopyalanan TAM cerez metni, oldugu gibi -
+    // ornek: "grafana_session=xxx; grafana_session_expiry=yyy". Sadece grafana_session
+    // gonderip grafana_session_expiry'i atlamak 401'e yol aciyor, ikisi birlikte gerekli.
+    // Sadece hizli test icin - bir sure sonra suresi dolar. ApiToken bosken, SessionCookie
+    // doluysa bu kullanilir.
     public string SessionCookie { get; set; } = "";
 }
 '@
@@ -141,7 +144,9 @@ public sealed class GrafanaInfluxClient : IDisposable
         }
         else if (!string.IsNullOrWhiteSpace(options.SessionCookie))
         {
-            _httpClient.DefaultRequestHeaders.Add("Cookie", $"grafana_session={options.SessionCookie}");
+            // options.SessionCookie tarayicidan kopyalanan TAM cerez metni
+            // ("grafana_session=...; grafana_session_expiry=...") - oldugu gibi gonderiliyor.
+            _httpClient.DefaultRequestHeaders.Add("Cookie", options.SessionCookie);
         }
         else
         {
