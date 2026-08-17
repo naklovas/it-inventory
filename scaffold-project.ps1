@@ -23,7 +23,8 @@ function Write-ProjectFile {
         [Parameter(Mandatory)] [string]$Path,
         [Parameter(Mandatory)] [string]$Content
     )
-    Set-Content -Path $Path -Value $Content -Encoding utf8NoBOM -NoNewline
+    $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllText($Path, $Content, $utf8NoBom)
     Write-Host "  yazildi: $Path"
 }
 
