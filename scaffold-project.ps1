@@ -202,10 +202,12 @@ public sealed class GrafanaInfluxClient : IAsyncDisposable
                     ExtraHTTPHeaders = new Dictionary<string, string> { ["x-grafana-org-id"] = "1" },
                 });
 
+            // Sayfayi kasten kapatmiyoruz: kalici context'te tek sayfa kalirsa tarayici sureci
+            // de kapaniyor (Playwright'in bilinen davranisi), sonraki APIRequest cagrisi
+            // "Target ... has been closed" hatasi veriyor.
             var dashboardUrl = $"{_options.BaseUrl.TrimEnd('/')}{_options.DashboardPath}";
             var page = await _browserContext.NewPageAsync();
             await page.GotoAsync(dashboardUrl, new PageGotoOptions { WaitUntil = WaitUntilState.NetworkIdle });
-            await page.CloseAsync();
         }
 
         var response = await _browserContext.APIRequest.GetAsync(url);
