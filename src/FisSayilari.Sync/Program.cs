@@ -19,7 +19,16 @@ if (string.IsNullOrWhiteSpace(connectionString))
 // Ilk deneme: sadece bugunu cek ve DB'ye yaz.
 var bugun = DateOnly.FromDateTime(DateTime.Now);
 
-using var httpClient = new HttpClient();
+// UseDefaultCredentials: Grafana'nin onunde SSO/Windows Integrated Auth (NTLM/Kerberos) varsa,
+// bu programi calistiran domain kullanicisinin kimligini otomatik gonderir - tarayicinizdaki
+// sessiz SSO'nun aynisi. grafana_session cerezi bu adimdan sonra kurulur.
+using var httpClientHandler = new HttpClientHandler { UseDefaultCredentials = true };
+using var httpClient = new HttpClient(httpClientHandler);
+httpClient.DefaultRequestHeaders.Add("Accept", "application/json, text/plain, */*");
+httpClient.DefaultRequestHeaders.Add("x-grafana-org-id", "1");
+httpClient.DefaultRequestHeaders.Add(
+    "Referer", $"{grafanaOptions.BaseUrl.TrimEnd('/')}{grafanaOptions.DashboardPath}");
+
 var grafanaClient = new GrafanaInfluxClient(httpClient, grafanaOptions);
 var repository = new FisGunlukRepository(connectionString);
 

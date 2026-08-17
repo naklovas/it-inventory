@@ -49,6 +49,7 @@ public sealed class GrafanaInfluxClient
 
     // fromDay/toDay dahil (inclusive) araliktaki her gun ve her kanal icin InfluxDB'ye
     // GROUP BY time(1d) ile toplatilmis fis sayisini doner. Dakikalik veri hic bu tarafa cekilmez.
+    // Panelin kendisi gibi, 6 kanalin sorgusunu tek istekte (noktali virgulle ayrilmis) gonderiyoruz.
     public async Task<IReadOnlyList<GunlukFisSayisi>> GetGunlukToplamlarAsync(
         DateOnly fromDay, DateOnly toDay, CancellationToken ct = default)
     {
@@ -57,53 +58,51 @@ public sealed class GrafanaInfluxClient
         var startMs = IstanbulGunBasiUtcMs(fromDay);
         var endMs = IstanbulGunBasiUtcMs(toDay.AddDays(1)); // ust sinir haric (exclusive)
 
-        var sonuc = new List<GunlukFisSayisi>();
-        foreach (var (measurement, kanal) in Kanallar)
+        var combinedQuery = string.Join(";", Kanallar.Select(k =>
+            $"SELECT SUM(\"{Alan}\") FROM \"{RetentionPolicy}\".\"{k.Measurement}\" " +
+            $"WHERE time >= {startMs}ms AND time < {endMs}ms " +
+            $"GROUP BY time(1d) tz('{_options.Timezone}')"));
+
+        var url = $"{_options.BaseUrl.TrimEnd('/')}/api/datasources/proxy/uid/{_options.DatasourceUid}/query" +
+                  $"?db={Uri.EscapeDataString(_options.InfluxDbName)}&epoch=ms&q={Uri.EscapeDataString(combinedQuery)}";
+
+        using var response = await _httpClient.GetAsync(url, ct);
+        var body = await response.Content.ReadAsStringAsync(ct);
+        if (!response.IsSuccessStatusCode)
         {
-            var query = $"SELECT SUM(\"{Alan}\") FROM \"{RetentionPolicy}\".\"{measurement}\" " +
-                        $"WHERE time >= {startMs}ms AND time < {endMs}ms " +
-                        $"GROUP BY time(1d) tz('{_options.Timezone}')";
-
-            var url = $"{_options.BaseUrl.TrimEnd('/')}/api/datasources/proxy/uid/{_options.DatasourceUid}/query" +
-                      $"?epoch=ms&q={Uri.EscapeDataString(query)}";
-
-            using var response = await _httpClient.GetAsync(url, ct);
-            var body = await response.Content.ReadAsStringAsync(ct);
-            if (!response.IsSuccessStatusCode)
-            {
-                throw new InvalidOperationException(
-                    $"Grafana proxy istegi basarisiz ({kanal}, HTTP {(int)response.StatusCode}): {body}");
-            }
-
-            sonuc.AddRange(ParseGunlukSeriler(body, kanal));
+            throw new InvalidOperationException(
+                $"Grafana proxy istegi basarisiz (HTTP {(int)response.StatusCode}): {body}");
         }
 
-        return sonuc;
+        return ParseGunlukSeriler(body).ToList();
     }
 
-    private IEnumerable<GunlukFisSayisi> ParseGunlukSeriler(string responseJson, string kanal)
+    // InfluxDB, noktali virgulle ayrilmis her SELECT icin "results" dizisinde ayri bir eleman doner,
+    // sirasi gonderilen sorgu sirasiyla (yani Kanallar dizisiyle) ayni.
+    private IEnumerable<GunlukFisSayisi> ParseGunlukSeriler(string responseJson)
     {
         using var doc = JsonDocument.Parse(responseJson);
         var results = doc.RootElement.GetProperty("results");
-        if (results.GetArrayLength() == 0)
-            yield break;
 
-        var firstResult = results[0];
-        if (!firstResult.TryGetProperty("series", out var seriesArray))
-            yield break; // bu araliktaki hicbir gunde veri yok
-
-        foreach (var series in seriesArray.EnumerateArray())
+        for (var i = 0; i < results.GetArrayLength() && i < Kanallar.Length; i++)
         {
-            var values = series.GetProperty("values");
-            foreach (var row in values.EnumerateArray())
-            {
-                var epochMs = row[0].GetInt64();
-                // sum(ADET) veri olmayan bir gun icin null donebilir
-                var toplam = row[1].ValueKind == JsonValueKind.Null ? 0L : row[1].GetInt64();
+            var kanal = Kanallar[i].Kanal;
+            if (!results[i].TryGetProperty("series", out var seriesArray))
+                continue; // bu kanalda bu araliktaki hicbir gunde veri yok
 
-                var utc = DateTimeOffset.FromUnixTimeMilliseconds(epochMs).UtcDateTime;
-                var localGunBaslangici = TimeZoneInfo.ConvertTimeFromUtc(utc, _timeZone);
-                yield return new GunlukFisSayisi(DateOnly.FromDateTime(localGunBaslangici), kanal, toplam);
+            foreach (var series in seriesArray.EnumerateArray())
+            {
+                var values = series.GetProperty("values");
+                foreach (var row in values.EnumerateArray())
+                {
+                    var epochMs = row[0].GetInt64();
+                    // sum(ADET) veri olmayan bir gun icin null donebilir
+                    var toplam = row[1].ValueKind == JsonValueKind.Null ? 0L : row[1].GetInt64();
+
+                    var utc = DateTimeOffset.FromUnixTimeMilliseconds(epochMs).UtcDateTime;
+                    var localGunBaslangici = TimeZoneInfo.ConvertTimeFromUtc(utc, _timeZone);
+                    yield return new GunlukFisSayisi(DateOnly.FromDateTime(localGunBaslangici), kanal, toplam);
+                }
             }
         }
     }
