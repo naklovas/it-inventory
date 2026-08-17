@@ -78,6 +78,11 @@ public sealed class GrafanaOptions
     public string BaseUrl { get; set; } = "";
     public string DatasourceUid { get; set; } = "";
     public string Timezone { get; set; } = "Europe/Istanbul";
+
+    // Anonim erisimde Grafana, sayfa ilk yuklendiginde bir oturum cerezi veriyor;
+    // API cagrilari bu cerez olmadan 401 donebiliyor. Bu yuzden once bu sayfaya
+    // bir "isinma" istegi atip cerezi aliyoruz, sonra ayni HttpClient ile proxy'yi cagiriyoruz.
+    public string DashboardPath { get; set; } = "/d/UN0bbgwnz/ziraat-bankasi-kanal-fis-sayilari?orgId=1";
 }
 '@
 
@@ -109,6 +114,8 @@ public sealed class GrafanaInfluxClient
     private readonly GrafanaOptions _options;
     private readonly TimeZoneInfo _timeZone;
 
+    private bool _oturumIsindi;
+
     public GrafanaInfluxClient(HttpClient httpClient, GrafanaOptions options)
     {
         _httpClient = httpClient;
@@ -116,11 +123,26 @@ public sealed class GrafanaInfluxClient
         _timeZone = TimeZoneInfo.FindSystemTimeZoneById(options.Timezone);
     }
 
+    // Anonim erisimde Grafana, dashboard sayfasi ilk yuklendiginde bir oturum cerezi veriyor;
+    // API'ye o cerez olmadan gidilirse 401 donuyor. HttpClient'in varsayilan handler'i
+    // cerezleri kendiliginden tasidigi icin, bu istekten sonraki tum cagrilar ayni cerezi kullanir.
+    private async Task OturumIsitAsync(CancellationToken ct)
+    {
+        if (_oturumIsindi) return;
+
+        var url = $"{_options.BaseUrl.TrimEnd('/')}{_options.DashboardPath}";
+        using var response = await _httpClient.GetAsync(url, ct);
+        response.EnsureSuccessStatusCode();
+        _oturumIsindi = true;
+    }
+
     // fromDay/toDay dahil (inclusive) araliktaki her gun ve her kanal icin InfluxDB'ye
     // GROUP BY time(1d) ile toplatilmis fis sayisini doner. Dakikalik veri hic bu tarafa cekilmez.
     public async Task<IReadOnlyList<GunlukFisSayisi>> GetGunlukToplamlarAsync(
         DateOnly fromDay, DateOnly toDay, CancellationToken ct = default)
     {
+        await OturumIsitAsync(ct);
+
         var startMs = IstanbulGunBasiUtcMs(fromDay);
         var endMs = IstanbulGunBasiUtcMs(toDay.AddDays(1)); // ust sinir haric (exclusive)
 
