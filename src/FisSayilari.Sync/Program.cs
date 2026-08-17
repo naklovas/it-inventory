@@ -19,9 +19,7 @@ if (string.IsNullOrWhiteSpace(connectionString))
 // Ilk deneme: sadece bugunu cek ve DB'ye yaz.
 var bugun = DateOnly.FromDateTime(DateTime.Now);
 
-// ApiToken bossa, GrafanaInfluxClient ilk cagrida sistemde kurulu Edge'i acip
-// (playwright-profile/ klasorundeki kalici oturumla) SSO'yu tarayici uzerinden halleder.
-await using var grafanaClient = new GrafanaInfluxClient(grafanaOptions);
+using var grafanaClient = new GrafanaInfluxClient(grafanaOptions);
 var repository = new FisGunlukRepository(connectionString);
 
 Console.WriteLine($"{bugun:yyyy-MM-dd} icin fis sayilari Grafana/InfluxDB proxy'sinden cekiliyor...");

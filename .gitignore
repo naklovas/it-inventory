@@ -1,5 +1,2 @@
 bin/
 obj/
-
-# Playwright ile kurulan kalici oturum profili - cerez/oturum verisi icerir, commit'lenmemeli
-playwright-profile/
