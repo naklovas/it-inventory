@@ -1,3 +1,4 @@
+using System.Net.Http.Headers;
 using System.Text.Json;
 
 namespace FisSayilari.Sync;
@@ -34,16 +35,31 @@ public sealed class GrafanaInfluxClient
         _timeZone = TimeZoneInfo.FindSystemTimeZoneById(options.Timezone);
     }
 
-    // Anonim erisimde Grafana, dashboard sayfasi ilk yuklendiginde bir oturum cerezi veriyor;
-    // API'ye o cerez olmadan gidilirse 401 donuyor. HttpClient'in varsayilan handler'i
-    // cerezleri kendiliginden tasidigi icin, bu istekten sonraki tum cagrilar ayni cerezi kullanir.
+    // Kimlik dogrulamayi bir kez kurar. Oncelik sirasi:
+    // 1) ApiToken (Service Account Token) - kalici/dogru cozum, Bearer header yeterli.
+    // 2) SessionCookie - tarayicidan elle kopyalanan gecici cerez, hizli test icin.
+    // 3) Hicbiri yoksa: dashboard sayfasina bir istek atip SSO/Windows auth ile
+    //    kurulacak oturum cerezini HttpClient'in varsayilan cerez yonetimine birakir.
     private async Task OturumIsitAsync(CancellationToken ct)
     {
         if (_oturumIsindi) return;
 
-        var url = $"{_options.BaseUrl.TrimEnd('/')}{_options.DashboardPath}";
-        using var response = await _httpClient.GetAsync(url, ct);
-        response.EnsureSuccessStatusCode();
+        if (!string.IsNullOrWhiteSpace(_options.ApiToken))
+        {
+            _httpClient.DefaultRequestHeaders.Authorization =
+                new AuthenticationHeaderValue("Bearer", _options.ApiToken);
+        }
+        else if (!string.IsNullOrWhiteSpace(_options.SessionCookie))
+        {
+            _httpClient.DefaultRequestHeaders.Add("Cookie", $"grafana_session={_options.SessionCookie}");
+        }
+        else
+        {
+            var url = $"{_options.BaseUrl.TrimEnd('/')}{_options.DashboardPath}";
+            using var response = await _httpClient.GetAsync(url, ct);
+            response.EnsureSuccessStatusCode();
+        }
+
         _oturumIsindi = true;
     }
 

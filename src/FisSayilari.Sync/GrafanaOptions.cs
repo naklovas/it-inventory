@@ -13,4 +13,13 @@ public sealed class GrafanaOptions
 
     // InfluxDB datasource'unun proxy sorgusunda bekledigi "db" query parametresi.
     public string InfluxDbName { get; set; } = "test";
+
+    // Kalici/dogru cozum: Grafana'da olusturulan bir Service Account Token.
+    // Doluysa "Authorization: Bearer <ApiToken>" ile istek atilir, cerez/SSO hic devreye girmez.
+    public string ApiToken { get; set; } = "";
+
+    // Gecici cozum: tarayicidan (F12 > Network) kopyalanan grafana_session cerez degeri.
+    // Sadece test icin - bir sure sonra suresi dolar (grafana_session_expiry), kalici script'te
+    // ApiToken kullanin. ApiToken bosken, SessionCookie doluysa bu kullanilir.
+    public string SessionCookie { get; set; } = "";
 }
