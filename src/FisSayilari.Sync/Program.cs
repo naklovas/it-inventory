@@ -16,45 +16,53 @@ if (string.IsNullOrWhiteSpace(grafanaOptions.DatasourceUid))
 if (string.IsNullOrWhiteSpace(connectionString))
     throw new InvalidOperationException("appsettings.json: ConnectionStrings:FisDb bos birakilamaz.");
 
-// Tarih araligi appsettings.json > Cekim bolumunden okunur (BaslangicGunu/BitisGunu bos
-// birakilirsa bugun kullanilir). Komut satiri argumani verilirse (dotnet run -- 2026-08-10
-// [2026-08-10]) settings'i gecersiz kilar.
-var baslangicStr = config["Cekim:BaslangicGunu"];
-var bitisStr = config["Cekim:BitisGunu"];
+// Zaman araligi appsettings.json > Cekim bolumunden okunur (Baslangic/Bitis formati
+// "yyyy-MM-dd HH:mm", bos birakilirsa bugun 00:00 - simdi kullanilir). AralikDakika,
+// GROUP BY dilim genisligi: 1440 gunluk, 60 saatlik, 15 15-dakikalik. Komut satiri
+// argumani verilirse (dotnet run -- "2026-08-10 09:00" "2026-08-10 18:00") settings'i
+// gecersiz kilar.
+var baslangicStr = config["Cekim:Baslangic"];
+var bitisStr = config["Cekim:Bitis"];
+var aralikDakikaStr = config["Cekim:AralikDakika"];
 
-DateOnly fromDay, toDay;
+DateTime baslangic, bitis;
 if (args.Length >= 1)
 {
-    fromDay = DateOnly.Parse(args[0]);
-    toDay = args.Length >= 2 ? DateOnly.Parse(args[1]) : fromDay;
+    baslangic = DateTime.Parse(args[0]);
+    bitis = args.Length >= 2 ? DateTime.Parse(args[1]) : DateTime.Now;
 }
 else if (!string.IsNullOrWhiteSpace(baslangicStr))
 {
-    fromDay = DateOnly.Parse(baslangicStr);
-    toDay = !string.IsNullOrWhiteSpace(bitisStr) ? DateOnly.Parse(bitisStr) : fromDay;
+    baslangic = DateTime.Parse(baslangicStr);
+    bitis = !string.IsNullOrWhiteSpace(bitisStr) ? DateTime.Parse(bitisStr) : DateTime.Now;
 }
 else
 {
-    fromDay = toDay = DateOnly.FromDateTime(DateTime.Now);
+    baslangic = DateTime.Today;
+    bitis = DateTime.Now;
 }
 
-if (fromDay > toDay)
-    throw new InvalidOperationException("Baslangic tarihi bitis tarihinden sonra olamaz.");
+var aralikDakika = string.IsNullOrWhiteSpace(aralikDakikaStr) ? 60 : int.Parse(aralikDakikaStr);
+
+if (baslangic > bitis)
+    throw new InvalidOperationException("Baslangic, bitisten sonra olamaz.");
 
 using var grafanaClient = new GrafanaInfluxClient(grafanaOptions);
-var repository = new FisGunlukRepository(connectionString);
+var repository = new FisSayilariRepository(connectionString);
 
-Console.WriteLine($"{fromDay:yyyy-MM-dd} - {toDay:yyyy-MM-dd} araligi icin fis sayilari Grafana/InfluxDB proxy'sinden cekiliyor...");
-var gunlukToplamlar = await grafanaClient.GetGunlukToplamlarAsync(fromDay, toDay);
+Console.WriteLine(
+    $"{baslangic:yyyy-MM-dd HH:mm} - {bitis:yyyy-MM-dd HH:mm} araligi, {aralikDakika} dakikalik " +
+    "dilimlerle Grafana/InfluxDB proxy'sinden cekiliyor...");
+var kayitlar = await grafanaClient.GetToplamlarAsync(baslangic, bitis, aralikDakika);
 
-foreach (var satir in gunlukToplamlar)
-    Console.WriteLine($"  {satir.Gun:yyyy-MM-dd}  {satir.Kanal,-10}  {satir.ToplamFisSayisi}");
+foreach (var satir in kayitlar)
+    Console.WriteLine($"  {satir.Zaman:yyyy-MM-dd HH:mm}  {satir.Kanal,-10}  {satir.ToplamFisSayisi}");
 
-if (gunlukToplamlar.Count == 0)
+if (kayitlar.Count == 0)
 {
     Console.WriteLine("Hicbir kanaldan veri donmedi (secilen aralikta veri olmayabilir ya da sorgu/uid hatali).");
     return;
 }
 
-await repository.UpsertAsync(gunlukToplamlar);
-Console.WriteLine($"{gunlukToplamlar.Count} satir dbo.FisGunlukOzet tablosuna yazildi.");
+await repository.UpsertAsync(kayitlar);
+Console.WriteLine($"{kayitlar.Count} satir dbo.FisSayilariOzet tablosuna yazildi.");

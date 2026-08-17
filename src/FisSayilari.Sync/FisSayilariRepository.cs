@@ -2,16 +2,16 @@ using Microsoft.Data.SqlClient;
 
 namespace FisSayilari.Sync;
 
-public sealed class FisGunlukRepository
+public sealed class FisSayilariRepository
 {
     private readonly string _connectionString;
 
-    public FisGunlukRepository(string connectionString)
+    public FisSayilariRepository(string connectionString)
     {
         _connectionString = connectionString;
     }
 
-    public async Task UpsertAsync(IReadOnlyList<GunlukFisSayisi> satirlar, CancellationToken ct = default)
+    public async Task UpsertAsync(IReadOnlyList<FisSayisiKaydi> satirlar, CancellationToken ct = default)
     {
         if (satirlar.Count == 0) return;
 
@@ -20,20 +20,20 @@ public sealed class FisGunlukRepository
         await using var transaction = connection.BeginTransaction();
 
         const string merge = """
-            MERGE dbo.FisGunlukOzet AS hedef
-            USING (SELECT @Tarih AS Tarih, @Kanal AS Kanal) AS kaynak
-                ON hedef.Tarih = kaynak.Tarih AND hedef.Kanal = kaynak.Kanal
+            MERGE dbo.FisSayilariOzet AS hedef
+            USING (SELECT @Zaman AS Zaman, @Kanal AS Kanal) AS kaynak
+                ON hedef.Zaman = kaynak.Zaman AND hedef.Kanal = kaynak.Kanal
             WHEN MATCHED THEN
                 UPDATE SET ToplamFisSayisi = @ToplamFisSayisi, GuncellemeZamani = SYSUTCDATETIME()
             WHEN NOT MATCHED THEN
-                INSERT (Tarih, Kanal, ToplamFisSayisi, GuncellemeZamani)
-                VALUES (@Tarih, @Kanal, @ToplamFisSayisi, SYSUTCDATETIME());
+                INSERT (Zaman, Kanal, ToplamFisSayisi, GuncellemeZamani)
+                VALUES (@Zaman, @Kanal, @ToplamFisSayisi, SYSUTCDATETIME());
             """;
 
         foreach (var satir in satirlar)
         {
             await using var command = new SqlCommand(merge, connection, transaction);
-            command.Parameters.AddWithValue("@Tarih", satir.Gun.ToDateTime(TimeOnly.MinValue));
+            command.Parameters.AddWithValue("@Zaman", satir.Zaman);
             command.Parameters.AddWithValue("@Kanal", satir.Kanal);
             command.Parameters.AddWithValue("@ToplamFisSayisi", satir.ToplamFisSayisi);
             await command.ExecuteNonQueryAsync(ct);

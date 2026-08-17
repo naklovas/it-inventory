@@ -3,7 +3,7 @@ using System.Text.Json;
 
 namespace FisSayilari.Sync;
 
-public sealed record GunlukFisSayisi(DateOnly Gun, string Kanal, long ToplamFisSayisi);
+public sealed record FisSayisiKaydi(DateTime Zaman, string Kanal, long ToplamFisSayisi);
 
 // Ziraat Bankasi Kanal Fis Sayilari dashboard'undaki (UN0bbgwnz, panel 24) 6 InfluxQL sorgusuyla
 // eslesen olcum adlari. Inspect > JSON > "DataFrame JSON (from Query)" ciktisindan alindi.
@@ -68,19 +68,20 @@ public sealed class GrafanaInfluxClient : IDisposable
         }
     }
 
-    // fromDay/toDay dahil (inclusive) araliktaki her gun ve her kanal icin InfluxDB'ye
-    // GROUP BY time(1d) ile toplatilmis fis sayisini doner. Dakikalik veri hic bu tarafa cekilmez.
+    // baslangic/bitis (yerel saat, Istanbul) araligindaki her zaman dilimi ve her kanal icin
+    // InfluxDB'ye GROUP BY time(aralikDakika) ile toplatilmis fis sayisini doner.
+    // aralikDakika=1440 gunluk, 60 saatlik, 15 15-dakikalik dilimler verir.
     // Panelin kendisi gibi, 6 kanalin sorgusunu tek istekte (noktali virgulle ayrilmis) gonderiyoruz.
-    public async Task<IReadOnlyList<GunlukFisSayisi>> GetGunlukToplamlarAsync(
-        DateOnly fromDay, DateOnly toDay, CancellationToken ct = default)
+    public async Task<IReadOnlyList<FisSayisiKaydi>> GetToplamlarAsync(
+        DateTime baslangic, DateTime bitis, int aralikDakika, CancellationToken ct = default)
     {
-        var startMs = IstanbulGunBasiUtcMs(fromDay);
-        var endMs = IstanbulGunBasiUtcMs(toDay.AddDays(1)); // ust sinir haric (exclusive)
+        var startMs = IstanbulZamanUtcMs(baslangic);
+        var endMs = IstanbulZamanUtcMs(bitis);
 
         var combinedQuery = string.Join(";", Kanallar.Select(k =>
             $"SELECT SUM(\"{Alan}\") FROM \"{RetentionPolicy}\".\"{k.Measurement}\" " +
             $"WHERE time >= {startMs}ms AND time < {endMs}ms " +
-            $"GROUP BY time(1d) tz('{_options.Timezone}')"));
+            $"GROUP BY time({aralikDakika}m) tz('{_options.Timezone}')"));
 
         var url = $"{_options.BaseUrl.TrimEnd('/')}/api/datasources/proxy/uid/{_options.DatasourceUid}/query" +
                   $"?db={Uri.EscapeDataString(_options.InfluxDbName)}&epoch=ms&q={Uri.EscapeDataString(combinedQuery)}";
@@ -93,12 +94,12 @@ public sealed class GrafanaInfluxClient : IDisposable
                 $"Grafana proxy istegi basarisiz (HTTP {(int)response.StatusCode}): {body}");
         }
 
-        return ParseGunlukSeriler(body).ToList();
+        return ParseSeriler(body).ToList();
     }
 
     // InfluxDB, noktali virgulle ayrilmis her SELECT icin "results" dizisinde ayri bir eleman doner,
     // sirasi gonderilen sorgu sirasiyla (yani Kanallar dizisiyle) ayni.
-    private IEnumerable<GunlukFisSayisi> ParseGunlukSeriler(string responseJson)
+    private IEnumerable<FisSayisiKaydi> ParseSeriler(string responseJson)
     {
         using var doc = JsonDocument.Parse(responseJson);
         var results = doc.RootElement.GetProperty("results");
@@ -107,7 +108,7 @@ public sealed class GrafanaInfluxClient : IDisposable
         {
             var kanal = Kanallar[i].Kanal;
             if (!results[i].TryGetProperty("series", out var seriesArray))
-                continue; // bu kanalda bu araliktaki hicbir gunde veri yok
+                continue; // bu kanalda bu araliktaki hicbir dilimde veri yok
 
             foreach (var series in seriesArray.EnumerateArray())
             {
@@ -115,21 +116,21 @@ public sealed class GrafanaInfluxClient : IDisposable
                 foreach (var row in values.EnumerateArray())
                 {
                     var epochMs = row[0].GetInt64();
-                    // sum(ADET) veri olmayan bir gun icin null donebilir
+                    // sum(ADET) veri olmayan bir dilim icin null donebilir
                     var toplam = row[1].ValueKind == JsonValueKind.Null ? 0L : row[1].GetInt64();
 
                     var utc = DateTimeOffset.FromUnixTimeMilliseconds(epochMs).UtcDateTime;
-                    var localGunBaslangici = TimeZoneInfo.ConvertTimeFromUtc(utc, _timeZone);
-                    yield return new GunlukFisSayisi(DateOnly.FromDateTime(localGunBaslangici), kanal, toplam);
+                    var localZaman = TimeZoneInfo.ConvertTimeFromUtc(utc, _timeZone);
+                    yield return new FisSayisiKaydi(localZaman, kanal, toplam);
                 }
             }
         }
     }
 
-    private long IstanbulGunBasiUtcMs(DateOnly gun)
+    private long IstanbulZamanUtcMs(DateTime yerelZaman)
     {
-        var localMidnight = DateTime.SpecifyKind(gun.ToDateTime(TimeOnly.MinValue), DateTimeKind.Unspecified);
-        var utc = TimeZoneInfo.ConvertTimeToUtc(localMidnight, _timeZone);
+        var yerel = DateTime.SpecifyKind(yerelZaman, DateTimeKind.Unspecified);
+        var utc = TimeZoneInfo.ConvertTimeToUtc(yerel, _timeZone);
         return new DateTimeOffset(utc, TimeSpan.Zero).ToUnixTimeMilliseconds();
     }
 

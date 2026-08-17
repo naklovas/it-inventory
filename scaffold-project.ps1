@@ -71,8 +71,9 @@ Write-ProjectFile -Path (Join-Path $projectDir 'appsettings.json') -Content @'
     "SessionCookie": ""
   },
   "Cekim": {
-    "BaslangicGunu": "",
-    "BitisGunu": ""
+    "Baslangic": "",
+    "Bitis": "",
+    "AralikDakika": 60
   }
 }
 '@
@@ -113,7 +114,7 @@ using System.Text.Json;
 
 namespace FisSayilari.Sync;
 
-public sealed record GunlukFisSayisi(DateOnly Gun, string Kanal, long ToplamFisSayisi);
+public sealed record FisSayisiKaydi(DateTime Zaman, string Kanal, long ToplamFisSayisi);
 
 // Ziraat Bankasi Kanal Fis Sayilari dashboard'undaki (UN0bbgwnz, panel 24) 6 InfluxQL sorgusuyla
 // eslesen olcum adlari. Inspect > JSON > "DataFrame JSON (from Query)" ciktisindan alindi.
@@ -178,19 +179,20 @@ public sealed class GrafanaInfluxClient : IDisposable
         }
     }
 
-    // fromDay/toDay dahil (inclusive) araliktaki her gun ve her kanal icin InfluxDB'ye
-    // GROUP BY time(1d) ile toplatilmis fis sayisini doner. Dakikalik veri hic bu tarafa cekilmez.
+    // baslangic/bitis (yerel saat, Istanbul) araligindaki her zaman dilimi ve her kanal icin
+    // InfluxDB'ye GROUP BY time(aralikDakika) ile toplatilmis fis sayisini doner.
+    // aralikDakika=1440 gunluk, 60 saatlik, 15 15-dakikalik dilimler verir.
     // Panelin kendisi gibi, 6 kanalin sorgusunu tek istekte (noktali virgulle ayrilmis) gonderiyoruz.
-    public async Task<IReadOnlyList<GunlukFisSayisi>> GetGunlukToplamlarAsync(
-        DateOnly fromDay, DateOnly toDay, CancellationToken ct = default)
+    public async Task<IReadOnlyList<FisSayisiKaydi>> GetToplamlarAsync(
+        DateTime baslangic, DateTime bitis, int aralikDakika, CancellationToken ct = default)
     {
-        var startMs = IstanbulGunBasiUtcMs(fromDay);
-        var endMs = IstanbulGunBasiUtcMs(toDay.AddDays(1)); // ust sinir haric (exclusive)
+        var startMs = IstanbulZamanUtcMs(baslangic);
+        var endMs = IstanbulZamanUtcMs(bitis);
 
         var combinedQuery = string.Join(";", Kanallar.Select(k =>
             $"SELECT SUM(\"{Alan}\") FROM \"{RetentionPolicy}\".\"{k.Measurement}\" " +
             $"WHERE time >= {startMs}ms AND time < {endMs}ms " +
-            $"GROUP BY time(1d) tz('{_options.Timezone}')"));
+            $"GROUP BY time({aralikDakika}m) tz('{_options.Timezone}')"));
 
         var url = $"{_options.BaseUrl.TrimEnd('/')}/api/datasources/proxy/uid/{_options.DatasourceUid}/query" +
                   $"?db={Uri.EscapeDataString(_options.InfluxDbName)}&epoch=ms&q={Uri.EscapeDataString(combinedQuery)}";
@@ -203,12 +205,12 @@ public sealed class GrafanaInfluxClient : IDisposable
                 $"Grafana proxy istegi basarisiz (HTTP {(int)response.StatusCode}): {body}");
         }
 
-        return ParseGunlukSeriler(body).ToList();
+        return ParseSeriler(body).ToList();
     }
 
     // InfluxDB, noktali virgulle ayrilmis her SELECT icin "results" dizisinde ayri bir eleman doner,
     // sirasi gonderilen sorgu sirasiyla (yani Kanallar dizisiyle) ayni.
-    private IEnumerable<GunlukFisSayisi> ParseGunlukSeriler(string responseJson)
+    private IEnumerable<FisSayisiKaydi> ParseSeriler(string responseJson)
     {
         using var doc = JsonDocument.Parse(responseJson);
         var results = doc.RootElement.GetProperty("results");
@@ -217,7 +219,7 @@ public sealed class GrafanaInfluxClient : IDisposable
         {
             var kanal = Kanallar[i].Kanal;
             if (!results[i].TryGetProperty("series", out var seriesArray))
-                continue; // bu kanalda bu araliktaki hicbir gunde veri yok
+                continue; // bu kanalda bu araliktaki hicbir dilimde veri yok
 
             foreach (var series in seriesArray.EnumerateArray())
             {
@@ -225,21 +227,21 @@ public sealed class GrafanaInfluxClient : IDisposable
                 foreach (var row in values.EnumerateArray())
                 {
                     var epochMs = row[0].GetInt64();
-                    // sum(ADET) veri olmayan bir gun icin null donebilir
+                    // sum(ADET) veri olmayan bir dilim icin null donebilir
                     var toplam = row[1].ValueKind == JsonValueKind.Null ? 0L : row[1].GetInt64();
 
                     var utc = DateTimeOffset.FromUnixTimeMilliseconds(epochMs).UtcDateTime;
-                    var localGunBaslangici = TimeZoneInfo.ConvertTimeFromUtc(utc, _timeZone);
-                    yield return new GunlukFisSayisi(DateOnly.FromDateTime(localGunBaslangici), kanal, toplam);
+                    var localZaman = TimeZoneInfo.ConvertTimeFromUtc(utc, _timeZone);
+                    yield return new FisSayisiKaydi(localZaman, kanal, toplam);
                 }
             }
         }
     }
 
-    private long IstanbulGunBasiUtcMs(DateOnly gun)
+    private long IstanbulZamanUtcMs(DateTime yerelZaman)
     {
-        var localMidnight = DateTime.SpecifyKind(gun.ToDateTime(TimeOnly.MinValue), DateTimeKind.Unspecified);
-        var utc = TimeZoneInfo.ConvertTimeToUtc(localMidnight, _timeZone);
+        var yerel = DateTime.SpecifyKind(yerelZaman, DateTimeKind.Unspecified);
+        var utc = TimeZoneInfo.ConvertTimeToUtc(yerel, _timeZone);
         return new DateTimeOffset(utc, TimeSpan.Zero).ToUnixTimeMilliseconds();
     }
 
@@ -247,21 +249,21 @@ public sealed class GrafanaInfluxClient : IDisposable
 }
 '@
 
-Write-ProjectFile -Path (Join-Path $projectDir 'FisGunlukRepository.cs') -Content @'
+Write-ProjectFile -Path (Join-Path $projectDir 'FisSayilariRepository.cs') -Content @'
 using Microsoft.Data.SqlClient;
 
 namespace FisSayilari.Sync;
 
-public sealed class FisGunlukRepository
+public sealed class FisSayilariRepository
 {
     private readonly string _connectionString;
 
-    public FisGunlukRepository(string connectionString)
+    public FisSayilariRepository(string connectionString)
     {
         _connectionString = connectionString;
     }
 
-    public async Task UpsertAsync(IReadOnlyList<GunlukFisSayisi> satirlar, CancellationToken ct = default)
+    public async Task UpsertAsync(IReadOnlyList<FisSayisiKaydi> satirlar, CancellationToken ct = default)
     {
         if (satirlar.Count == 0) return;
 
@@ -270,20 +272,20 @@ public sealed class FisGunlukRepository
         await using var transaction = connection.BeginTransaction();
 
         const string merge = """
-            MERGE dbo.FisGunlukOzet AS hedef
-            USING (SELECT @Tarih AS Tarih, @Kanal AS Kanal) AS kaynak
-                ON hedef.Tarih = kaynak.Tarih AND hedef.Kanal = kaynak.Kanal
+            MERGE dbo.FisSayilariOzet AS hedef
+            USING (SELECT @Zaman AS Zaman, @Kanal AS Kanal) AS kaynak
+                ON hedef.Zaman = kaynak.Zaman AND hedef.Kanal = kaynak.Kanal
             WHEN MATCHED THEN
                 UPDATE SET ToplamFisSayisi = @ToplamFisSayisi, GuncellemeZamani = SYSUTCDATETIME()
             WHEN NOT MATCHED THEN
-                INSERT (Tarih, Kanal, ToplamFisSayisi, GuncellemeZamani)
-                VALUES (@Tarih, @Kanal, @ToplamFisSayisi, SYSUTCDATETIME());
+                INSERT (Zaman, Kanal, ToplamFisSayisi, GuncellemeZamani)
+                VALUES (@Zaman, @Kanal, @ToplamFisSayisi, SYSUTCDATETIME());
             """;
 
         foreach (var satir in satirlar)
         {
             await using var command = new SqlCommand(merge, connection, transaction);
-            command.Parameters.AddWithValue("@Tarih", satir.Gun.ToDateTime(TimeOnly.MinValue));
+            command.Parameters.AddWithValue("@Zaman", satir.Zaman);
             command.Parameters.AddWithValue("@Kanal", satir.Kanal);
             command.Parameters.AddWithValue("@ToplamFisSayisi", satir.ToplamFisSayisi);
             await command.ExecuteNonQueryAsync(ct);
@@ -313,60 +315,68 @@ if (string.IsNullOrWhiteSpace(grafanaOptions.DatasourceUid))
 if (string.IsNullOrWhiteSpace(connectionString))
     throw new InvalidOperationException("appsettings.json: ConnectionStrings:FisDb bos birakilamaz.");
 
-// Tarih araligi appsettings.json > Cekim bolumunden okunur (BaslangicGunu/BitisGunu bos
-// birakilirsa bugun kullanilir). Komut satiri argumani verilirse (dotnet run -- 2026-08-10
-// [2026-08-10]) settings'i gecersiz kilar.
-var baslangicStr = config["Cekim:BaslangicGunu"];
-var bitisStr = config["Cekim:BitisGunu"];
+// Zaman araligi appsettings.json > Cekim bolumunden okunur (Baslangic/Bitis formati
+// "yyyy-MM-dd HH:mm", bos birakilirsa bugun 00:00 - simdi kullanilir). AralikDakika,
+// GROUP BY dilim genisligi: 1440 gunluk, 60 saatlik, 15 15-dakikalik. Komut satiri
+// argumani verilirse (dotnet run -- "2026-08-10 09:00" "2026-08-10 18:00") settings'i
+// gecersiz kilar.
+var baslangicStr = config["Cekim:Baslangic"];
+var bitisStr = config["Cekim:Bitis"];
+var aralikDakikaStr = config["Cekim:AralikDakika"];
 
-DateOnly fromDay, toDay;
+DateTime baslangic, bitis;
 if (args.Length >= 1)
 {
-    fromDay = DateOnly.Parse(args[0]);
-    toDay = args.Length >= 2 ? DateOnly.Parse(args[1]) : fromDay;
+    baslangic = DateTime.Parse(args[0]);
+    bitis = args.Length >= 2 ? DateTime.Parse(args[1]) : DateTime.Now;
 }
 else if (!string.IsNullOrWhiteSpace(baslangicStr))
 {
-    fromDay = DateOnly.Parse(baslangicStr);
-    toDay = !string.IsNullOrWhiteSpace(bitisStr) ? DateOnly.Parse(bitisStr) : fromDay;
+    baslangic = DateTime.Parse(baslangicStr);
+    bitis = !string.IsNullOrWhiteSpace(bitisStr) ? DateTime.Parse(bitisStr) : DateTime.Now;
 }
 else
 {
-    fromDay = toDay = DateOnly.FromDateTime(DateTime.Now);
+    baslangic = DateTime.Today;
+    bitis = DateTime.Now;
 }
 
-if (fromDay > toDay)
-    throw new InvalidOperationException("Baslangic tarihi bitis tarihinden sonra olamaz.");
+var aralikDakika = string.IsNullOrWhiteSpace(aralikDakikaStr) ? 60 : int.Parse(aralikDakikaStr);
+
+if (baslangic > bitis)
+    throw new InvalidOperationException("Baslangic, bitisten sonra olamaz.");
 
 using var grafanaClient = new GrafanaInfluxClient(grafanaOptions);
-var repository = new FisGunlukRepository(connectionString);
+var repository = new FisSayilariRepository(connectionString);
 
-Console.WriteLine($"{fromDay:yyyy-MM-dd} - {toDay:yyyy-MM-dd} araligi icin fis sayilari Grafana/InfluxDB proxy'sinden cekiliyor...");
-var gunlukToplamlar = await grafanaClient.GetGunlukToplamlarAsync(fromDay, toDay);
+Console.WriteLine(
+    $"{baslangic:yyyy-MM-dd HH:mm} - {bitis:yyyy-MM-dd HH:mm} araligi, {aralikDakika} dakikalik " +
+    "dilimlerle Grafana/InfluxDB proxy'sinden cekiliyor...");
+var kayitlar = await grafanaClient.GetToplamlarAsync(baslangic, bitis, aralikDakika);
 
-foreach (var satir in gunlukToplamlar)
-    Console.WriteLine($"  {satir.Gun:yyyy-MM-dd}  {satir.Kanal,-10}  {satir.ToplamFisSayisi}");
+foreach (var satir in kayitlar)
+    Console.WriteLine($"  {satir.Zaman:yyyy-MM-dd HH:mm}  {satir.Kanal,-10}  {satir.ToplamFisSayisi}");
 
-if (gunlukToplamlar.Count == 0)
+if (kayitlar.Count == 0)
 {
     Console.WriteLine("Hicbir kanaldan veri donmedi (secilen aralikta veri olmayabilir ya da sorgu/uid hatali).");
     return;
 }
 
-await repository.UpsertAsync(gunlukToplamlar);
-Console.WriteLine($"{gunlukToplamlar.Count} satir dbo.FisGunlukOzet tablosuna yazildi.");
+await repository.UpsertAsync(kayitlar);
+Console.WriteLine($"{kayitlar.Count} satir dbo.FisSayilariOzet tablosuna yazildi.");
 '@
 
 Write-ProjectFile -Path (Join-Path $sqlDir 'schema.sql') -Content @'
-IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'FisGunlukOzet' AND schema_id = SCHEMA_ID('dbo'))
+IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'FisSayilariOzet' AND schema_id = SCHEMA_ID('dbo'))
 BEGIN
-    CREATE TABLE dbo.FisGunlukOzet
+    CREATE TABLE dbo.FisSayilariOzet
     (
-        Tarih               DATE            NOT NULL,
+        Zaman               DATETIME2       NOT NULL,
         Kanal               NVARCHAR(20)    NOT NULL,
         ToplamFisSayisi     BIGINT          NOT NULL,
         GuncellemeZamani    DATETIME2       NOT NULL DEFAULT SYSUTCDATETIME(),
-        CONSTRAINT PK_FisGunlukOzet PRIMARY KEY (Tarih, Kanal)
+        CONSTRAINT PK_FisSayilariOzet PRIMARY KEY (Zaman, Kanal)
     );
 END
 '@
