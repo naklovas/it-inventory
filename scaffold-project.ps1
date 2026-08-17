@@ -46,6 +46,7 @@ Write-ProjectFile -Path (Join-Path $projectDir 'FisSayilari.Sync.csproj') -Conte
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="8.0.2" />
+    <PackageReference Include="Microsoft.Playwright" Version="1.48.*" />
   </ItemGroup>
 
   <ItemGroup>
@@ -68,7 +69,7 @@ Write-ProjectFile -Path (Join-Path $projectDir 'appsettings.json') -Content @'
     "Timezone": "Europe/Istanbul",
     "InfluxDbName": "test",
     "ApiToken": "",
-    "SessionCookie": ""
+    "Headless": true
   }
 }
 '@
@@ -82,28 +83,29 @@ public sealed class GrafanaOptions
     public string DatasourceUid { get; set; } = "";
     public string Timezone { get; set; } = "Europe/Istanbul";
 
-    // Grafana, sayfa ilk yuklendiginde (SSO/Windows auth ile) bir oturum cerezi veriyor;
-    // API cagrilari bu cerez olmadan 401 donebiliyor. Bu yuzden once bu sayfaya
-    // bir "isinma" istegi atip cerezi aliyoruz, sonra ayni HttpClient ile proxy'yi cagiriyoruz.
+    // Oturumu kurmak icin once tarayicida acilan dashboard sayfasi.
     public string DashboardPath { get; set; } = "/d/UN0bbgwnz/ziraat-bankasi-kanal-fis-sayilari?orgId=1";
 
     // InfluxDB datasource'unun proxy sorgusunda bekledigi "db" query parametresi.
     public string InfluxDbName { get; set; } = "test";
 
     // Kalici/dogru cozum: Grafana'da olusturulan bir Service Account Token.
-    // Doluysa "Authorization: Bearer <ApiToken>" ile istek atilir, cerez/SSO hic devreye girmez.
+    // Doluysa "Authorization: Bearer <ApiToken>" ile duz HTTP istegi atilir, tarayici hic acilmaz.
     public string ApiToken { get; set; } = "";
 
-    // Gecici cozum: tarayicidan (F12 > Network) kopyalanan grafana_session cerez degeri.
-    // Sadece test icin - bir sure sonra suresi dolar (grafana_session_expiry), kalici script'te
-    // ApiToken kullanin. ApiToken bosken, SessionCookie doluysa bu kullanilir.
-    public string SessionCookie { get; set; } = "";
+    // ApiToken bos oldugunda kullanilan yol: Playwright ile gercek bir Edge penceresi acilip
+    // (playwright-profile/ klasorunde saklanan kalici profille) dashboard sayfasina gidilir,
+    // boylece o tarayicinin SSO/Windows oturumu kullanilir. Ilk calistirmada SSO otomatik
+    // tamamlanmazsa Headless=false ile pencereyi gorup elle giris yapabilirsiniz; sonraki
+    // calistirmalarda ayni profil sayesinde Headless=true yeterli olur.
+    public bool Headless { get; set; } = true;
 }
 '@
 
 Write-ProjectFile -Path (Join-Path $projectDir 'GrafanaInfluxClient.cs') -Content @'
 using System.Net.Http.Headers;
 using System.Text.Json;
+using Microsoft.Playwright;
 
 namespace FisSayilari.Sync;
 
@@ -111,7 +113,7 @@ public sealed record GunlukFisSayisi(DateOnly Gun, string Kanal, long ToplamFisS
 
 // Ziraat Bankasi Kanal Fis Sayilari dashboard'undaki (UN0bbgwnz, panel 24) 6 InfluxQL sorgusuyla
 // eslesen olcum adlari. Inspect > JSON > "DataFrame JSON (from Query)" ciktisindan alindi.
-public sealed class GrafanaInfluxClient
+public sealed class GrafanaInfluxClient : IAsyncDisposable
 {
     private static readonly (string Measurement, string Kanal)[] Kanallar =
     [
@@ -126,45 +128,17 @@ public sealed class GrafanaInfluxClient
     private const string RetentionPolicy = "autogen";
     private const string Alan = "ADET";
 
-    private readonly HttpClient _httpClient;
     private readonly GrafanaOptions _options;
     private readonly TimeZoneInfo _timeZone;
 
-    private bool _oturumIsindi;
+    private HttpClient? _tokenHttpClient;
+    private IPlaywright? _playwright;
+    private IBrowserContext? _browserContext;
 
-    public GrafanaInfluxClient(HttpClient httpClient, GrafanaOptions options)
+    public GrafanaInfluxClient(GrafanaOptions options)
     {
-        _httpClient = httpClient;
         _options = options;
         _timeZone = TimeZoneInfo.FindSystemTimeZoneById(options.Timezone);
-    }
-
-    // Kimlik dogrulamayi bir kez kurar. Oncelik sirasi:
-    // 1) ApiToken (Service Account Token) - kalici/dogru cozum, Bearer header yeterli.
-    // 2) SessionCookie - tarayicidan elle kopyalanan gecici cerez, hizli test icin.
-    // 3) Hicbiri yoksa: dashboard sayfasina bir istek atip SSO/Windows auth ile
-    //    kurulacak oturum cerezini HttpClient'in varsayilan cerez yonetimine birakir.
-    private async Task OturumIsitAsync(CancellationToken ct)
-    {
-        if (_oturumIsindi) return;
-
-        if (!string.IsNullOrWhiteSpace(_options.ApiToken))
-        {
-            _httpClient.DefaultRequestHeaders.Authorization =
-                new AuthenticationHeaderValue("Bearer", _options.ApiToken);
-        }
-        else if (!string.IsNullOrWhiteSpace(_options.SessionCookie))
-        {
-            _httpClient.DefaultRequestHeaders.Add("Cookie", $"grafana_session={_options.SessionCookie}");
-        }
-        else
-        {
-            var url = $"{_options.BaseUrl.TrimEnd('/')}{_options.DashboardPath}";
-            using var response = await _httpClient.GetAsync(url, ct);
-            response.EnsureSuccessStatusCode();
-        }
-
-        _oturumIsindi = true;
     }
 
     // fromDay/toDay dahil (inclusive) araliktaki her gun ve her kanal icin InfluxDB'ye
@@ -173,8 +147,6 @@ public sealed class GrafanaInfluxClient
     public async Task<IReadOnlyList<GunlukFisSayisi>> GetGunlukToplamlarAsync(
         DateOnly fromDay, DateOnly toDay, CancellationToken ct = default)
     {
-        await OturumIsitAsync(ct);
-
         var startMs = IstanbulGunBasiUtcMs(fromDay);
         var endMs = IstanbulGunBasiUtcMs(toDay.AddDays(1)); // ust sinir haric (exclusive)
 
@@ -186,15 +158,59 @@ public sealed class GrafanaInfluxClient
         var url = $"{_options.BaseUrl.TrimEnd('/')}/api/datasources/proxy/uid/{_options.DatasourceUid}/query" +
                   $"?db={Uri.EscapeDataString(_options.InfluxDbName)}&epoch=ms&q={Uri.EscapeDataString(combinedQuery)}";
 
-        using var response = await _httpClient.GetAsync(url, ct);
-        var body = await response.Content.ReadAsStringAsync(ct);
-        if (!response.IsSuccessStatusCode)
+        var (status, body) = string.IsNullOrWhiteSpace(_options.ApiToken)
+            ? await FetchViaBrowserAsync(url, ct)
+            : await FetchViaHttpClientAsync(url, ct);
+
+        if (status is < 200 or >= 300)
         {
-            throw new InvalidOperationException(
-                $"Grafana proxy istegi basarisiz (HTTP {(int)response.StatusCode}): {body}");
+            throw new InvalidOperationException($"Grafana proxy istegi basarisiz (HTTP {status}): {body}");
         }
 
         return ParseGunlukSeriler(body).ToList();
+    }
+
+    // Kalici/dogru yol: Service Account Token varsa duz HTTP yeterli, tarayici hic gerekmez.
+    private async Task<(int Status, string Body)> FetchViaHttpClientAsync(string url, CancellationToken ct)
+    {
+        if (_tokenHttpClient is null)
+        {
+            _tokenHttpClient = new HttpClient();
+            _tokenHttpClient.DefaultRequestHeaders.Authorization =
+                new AuthenticationHeaderValue("Bearer", _options.ApiToken);
+        }
+
+        using var response = await _tokenHttpClient.GetAsync(url, ct);
+        return ((int)response.StatusCode, await response.Content.ReadAsStringAsync(ct));
+    }
+
+    // Token yoksa: gercek bir tarayici (sistemde kurulu Edge) kalici bir profille aciliyor,
+    // dashboard sayfasina gidip SSO/Windows oturumunu kuruyor, sonra ayni oturumun
+    // cerezlerini paylasan APIRequest ile bizim InfluxQL sorgumuzu atiyoruz.
+    private async Task<(int Status, string Body)> FetchViaBrowserAsync(string url, CancellationToken ct)
+    {
+        if (_browserContext is null)
+        {
+            _playwright = await Playwright.CreateAsync();
+
+            var profileDir = Path.Combine(AppContext.BaseDirectory, "playwright-profile");
+            _browserContext = await _playwright.Chromium.LaunchPersistentContextAsync(profileDir,
+                new BrowserTypeLaunchPersistentContextOptions
+                {
+                    Channel = "msedge",
+                    Headless = _options.Headless,
+                    ExtraHTTPHeaders = new Dictionary<string, string> { ["x-grafana-org-id"] = "1" },
+                });
+
+            var dashboardUrl = $"{_options.BaseUrl.TrimEnd('/')}{_options.DashboardPath}";
+            var page = await _browserContext.NewPageAsync();
+            await page.GotoAsync(dashboardUrl, new PageGotoOptions { WaitUntil = WaitUntilState.NetworkIdle });
+            await page.CloseAsync();
+        }
+
+        var response = await _browserContext.APIRequest.GetAsync(url);
+        var body = await response.TextAsync();
+        return (response.Status, body);
     }
 
     // InfluxDB, noktali virgulle ayrilmis her SELECT icin "results" dizisinde ayri bir eleman doner,
@@ -232,6 +248,14 @@ public sealed class GrafanaInfluxClient
         var localMidnight = DateTime.SpecifyKind(gun.ToDateTime(TimeOnly.MinValue), DateTimeKind.Unspecified);
         var utc = TimeZoneInfo.ConvertTimeToUtc(localMidnight, _timeZone);
         return new DateTimeOffset(utc, TimeSpan.Zero).ToUnixTimeMilliseconds();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_browserContext is not null)
+            await _browserContext.CloseAsync();
+        _playwright?.Dispose();
+        _tokenHttpClient?.Dispose();
     }
 }
 '@
@@ -305,17 +329,9 @@ if (string.IsNullOrWhiteSpace(connectionString))
 // Ilk deneme: sadece bugunu cek ve DB'ye yaz.
 var bugun = DateOnly.FromDateTime(DateTime.Now);
 
-// UseDefaultCredentials: Grafana'nin onunde SSO/Windows Integrated Auth (NTLM/Kerberos) varsa,
-// bu programi calistiran domain kullanicisinin kimligini otomatik gonderir - tarayicinizdaki
-// sessiz SSO'nun aynisi. grafana_session cerezi bu adimdan sonra kurulur.
-using var httpClientHandler = new HttpClientHandler { UseDefaultCredentials = true };
-using var httpClient = new HttpClient(httpClientHandler);
-httpClient.DefaultRequestHeaders.Add("Accept", "application/json, text/plain, */*");
-httpClient.DefaultRequestHeaders.Add("x-grafana-org-id", "1");
-httpClient.DefaultRequestHeaders.Add(
-    "Referer", $"{grafanaOptions.BaseUrl.TrimEnd('/')}{grafanaOptions.DashboardPath}");
-
-var grafanaClient = new GrafanaInfluxClient(httpClient, grafanaOptions);
+// ApiToken bossa, GrafanaInfluxClient ilk cagrida sistemde kurulu Edge'i acip
+// (playwright-profile/ klasorundeki kalici oturumla) SSO'yu tarayici uzerinden halleder.
+await using var grafanaClient = new GrafanaInfluxClient(grafanaOptions);
 var repository = new FisGunlukRepository(connectionString);
 
 Console.WriteLine($"{bugun:yyyy-MM-dd} icin fis sayilari Grafana/InfluxDB proxy'sinden cekiliyor...");
@@ -362,3 +378,8 @@ finally {
 Write-Host ""
 Write-Host "appsettings.json icindeki ConnectionStrings:FisDb ve Grafana:DatasourceUid alanlarini doldurup"
 Write-Host "'dotnet run --project $projectDir' ile calistirabilirsiniz."
+Write-Host ""
+Write-Host "Not: appsettings.json'da Grafana:ApiToken bossa, ilk calistirmada bir Edge penceresi"
+Write-Host "acilir (Headless=false yapip calistirirsaniz gorursunuz). SSO otomatik tamamlanmazsa"
+Write-Host "o pencerede elle giris yapin; oturum playwright-profile/ klasorunde saklanir ve"
+Write-Host "sonraki calistirmalarda (Headless=true) tekrar kullanilir."

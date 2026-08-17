@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Text.Json;
+using Microsoft.Playwright;
 
 namespace FisSayilari.Sync;
 
@@ -7,7 +8,7 @@ public sealed record GunlukFisSayisi(DateOnly Gun, string Kanal, long ToplamFisS
 
 // Ziraat Bankasi Kanal Fis Sayilari dashboard'undaki (UN0bbgwnz, panel 24) 6 InfluxQL sorgusuyla
 // eslesen olcum adlari. Inspect > JSON > "DataFrame JSON (from Query)" ciktisindan alindi.
-public sealed class GrafanaInfluxClient
+public sealed class GrafanaInfluxClient : IAsyncDisposable
 {
     private static readonly (string Measurement, string Kanal)[] Kanallar =
     [
@@ -22,45 +23,17 @@ public sealed class GrafanaInfluxClient
     private const string RetentionPolicy = "autogen";
     private const string Alan = "ADET";
 
-    private readonly HttpClient _httpClient;
     private readonly GrafanaOptions _options;
     private readonly TimeZoneInfo _timeZone;
 
-    private bool _oturumIsindi;
+    private HttpClient? _tokenHttpClient;
+    private IPlaywright? _playwright;
+    private IBrowserContext? _browserContext;
 
-    public GrafanaInfluxClient(HttpClient httpClient, GrafanaOptions options)
+    public GrafanaInfluxClient(GrafanaOptions options)
     {
-        _httpClient = httpClient;
         _options = options;
         _timeZone = TimeZoneInfo.FindSystemTimeZoneById(options.Timezone);
-    }
-
-    // Kimlik dogrulamayi bir kez kurar. Oncelik sirasi:
-    // 1) ApiToken (Service Account Token) - kalici/dogru cozum, Bearer header yeterli.
-    // 2) SessionCookie - tarayicidan elle kopyalanan gecici cerez, hizli test icin.
-    // 3) Hicbiri yoksa: dashboard sayfasina bir istek atip SSO/Windows auth ile
-    //    kurulacak oturum cerezini HttpClient'in varsayilan cerez yonetimine birakir.
-    private async Task OturumIsitAsync(CancellationToken ct)
-    {
-        if (_oturumIsindi) return;
-
-        if (!string.IsNullOrWhiteSpace(_options.ApiToken))
-        {
-            _httpClient.DefaultRequestHeaders.Authorization =
-                new AuthenticationHeaderValue("Bearer", _options.ApiToken);
-        }
-        else if (!string.IsNullOrWhiteSpace(_options.SessionCookie))
-        {
-            _httpClient.DefaultRequestHeaders.Add("Cookie", $"grafana_session={_options.SessionCookie}");
-        }
-        else
-        {
-            var url = $"{_options.BaseUrl.TrimEnd('/')}{_options.DashboardPath}";
-            using var response = await _httpClient.GetAsync(url, ct);
-            response.EnsureSuccessStatusCode();
-        }
-
-        _oturumIsindi = true;
     }
 
     // fromDay/toDay dahil (inclusive) araliktaki her gun ve her kanal icin InfluxDB'ye
@@ -69,8 +42,6 @@ public sealed class GrafanaInfluxClient
     public async Task<IReadOnlyList<GunlukFisSayisi>> GetGunlukToplamlarAsync(
         DateOnly fromDay, DateOnly toDay, CancellationToken ct = default)
     {
-        await OturumIsitAsync(ct);
-
         var startMs = IstanbulGunBasiUtcMs(fromDay);
         var endMs = IstanbulGunBasiUtcMs(toDay.AddDays(1)); // ust sinir haric (exclusive)
 
@@ -82,15 +53,59 @@ public sealed class GrafanaInfluxClient
         var url = $"{_options.BaseUrl.TrimEnd('/')}/api/datasources/proxy/uid/{_options.DatasourceUid}/query" +
                   $"?db={Uri.EscapeDataString(_options.InfluxDbName)}&epoch=ms&q={Uri.EscapeDataString(combinedQuery)}";
 
-        using var response = await _httpClient.GetAsync(url, ct);
-        var body = await response.Content.ReadAsStringAsync(ct);
-        if (!response.IsSuccessStatusCode)
+        var (status, body) = string.IsNullOrWhiteSpace(_options.ApiToken)
+            ? await FetchViaBrowserAsync(url, ct)
+            : await FetchViaHttpClientAsync(url, ct);
+
+        if (status is < 200 or >= 300)
         {
-            throw new InvalidOperationException(
-                $"Grafana proxy istegi basarisiz (HTTP {(int)response.StatusCode}): {body}");
+            throw new InvalidOperationException($"Grafana proxy istegi basarisiz (HTTP {status}): {body}");
         }
 
         return ParseGunlukSeriler(body).ToList();
+    }
+
+    // Kalici/dogru yol: Service Account Token varsa duz HTTP yeterli, tarayici hic gerekmez.
+    private async Task<(int Status, string Body)> FetchViaHttpClientAsync(string url, CancellationToken ct)
+    {
+        if (_tokenHttpClient is null)
+        {
+            _tokenHttpClient = new HttpClient();
+            _tokenHttpClient.DefaultRequestHeaders.Authorization =
+                new AuthenticationHeaderValue("Bearer", _options.ApiToken);
+        }
+
+        using var response = await _tokenHttpClient.GetAsync(url, ct);
+        return ((int)response.StatusCode, await response.Content.ReadAsStringAsync(ct));
+    }
+
+    // Token yoksa: gercek bir tarayici (sistemde kurulu Edge) kalici bir profille aciliyor,
+    // dashboard sayfasina gidip SSO/Windows oturumunu kuruyor, sonra ayni oturumun
+    // cerezlerini paylasan APIRequest ile bizim InfluxQL sorgumuzu atiyoruz.
+    private async Task<(int Status, string Body)> FetchViaBrowserAsync(string url, CancellationToken ct)
+    {
+        if (_browserContext is null)
+        {
+            _playwright = await Playwright.CreateAsync();
+
+            var profileDir = Path.Combine(AppContext.BaseDirectory, "playwright-profile");
+            _browserContext = await _playwright.Chromium.LaunchPersistentContextAsync(profileDir,
+                new BrowserTypeLaunchPersistentContextOptions
+                {
+                    Channel = "msedge",
+                    Headless = _options.Headless,
+                    ExtraHTTPHeaders = new Dictionary<string, string> { ["x-grafana-org-id"] = "1" },
+                });
+
+            var dashboardUrl = $"{_options.BaseUrl.TrimEnd('/')}{_options.DashboardPath}";
+            var page = await _browserContext.NewPageAsync();
+            await page.GotoAsync(dashboardUrl, new PageGotoOptions { WaitUntil = WaitUntilState.NetworkIdle });
+            await page.CloseAsync();
+        }
+
+        var response = await _browserContext.APIRequest.GetAsync(url);
+        var body = await response.TextAsync();
+        return (response.Status, body);
     }
 
     // InfluxDB, noktali virgulle ayrilmis her SELECT icin "results" dizisinde ayri bir eleman doner,
@@ -128,5 +143,13 @@ public sealed class GrafanaInfluxClient
         var localMidnight = DateTime.SpecifyKind(gun.ToDateTime(TimeOnly.MinValue), DateTimeKind.Unspecified);
         var utc = TimeZoneInfo.ConvertTimeToUtc(localMidnight, _timeZone);
         return new DateTimeOffset(utc, TimeSpan.Zero).ToUnixTimeMilliseconds();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_browserContext is not null)
+            await _browserContext.CloseAsync();
+        _playwright?.Dispose();
+        _tokenHttpClient?.Dispose();
     }
 }

@@ -19,17 +19,9 @@ if (string.IsNullOrWhiteSpace(connectionString))
 // Ilk deneme: sadece bugunu cek ve DB'ye yaz.
 var bugun = DateOnly.FromDateTime(DateTime.Now);
 
-// UseDefaultCredentials: Grafana'nin onunde SSO/Windows Integrated Auth (NTLM/Kerberos) varsa,
-// bu programi calistiran domain kullanicisinin kimligini otomatik gonderir - tarayicinizdaki
-// sessiz SSO'nun aynisi. grafana_session cerezi bu adimdan sonra kurulur.
-using var httpClientHandler = new HttpClientHandler { UseDefaultCredentials = true };
-using var httpClient = new HttpClient(httpClientHandler);
-httpClient.DefaultRequestHeaders.Add("Accept", "application/json, text/plain, */*");
-httpClient.DefaultRequestHeaders.Add("x-grafana-org-id", "1");
-httpClient.DefaultRequestHeaders.Add(
-    "Referer", $"{grafanaOptions.BaseUrl.TrimEnd('/')}{grafanaOptions.DashboardPath}");
-
-var grafanaClient = new GrafanaInfluxClient(httpClient, grafanaOptions);
+// ApiToken bossa, GrafanaInfluxClient ilk cagrida sistemde kurulu Edge'i acip
+// (playwright-profile/ klasorundeki kalici oturumla) SSO'yu tarayici uzerinden halleder.
+await using var grafanaClient = new GrafanaInfluxClient(grafanaOptions);
 var repository = new FisGunlukRepository(connectionString);
 
 Console.WriteLine($"{bugun:yyyy-MM-dd} icin fis sayilari Grafana/InfluxDB proxy'sinden cekiliyor...");
