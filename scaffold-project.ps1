@@ -69,6 +69,10 @@ Write-ProjectFile -Path (Join-Path $projectDir 'appsettings.json') -Content @'
     "InfluxDbName": "test",
     "ApiToken": "",
     "SessionCookie": ""
+  },
+  "Cekim": {
+    "BaslangicGunu": "",
+    "BitisGunu": ""
   }
 }
 '@
@@ -309,22 +313,26 @@ if (string.IsNullOrWhiteSpace(grafanaOptions.DatasourceUid))
 if (string.IsNullOrWhiteSpace(connectionString))
     throw new InvalidOperationException("appsettings.json: ConnectionStrings:FisDb bos birakilamaz.");
 
-// Kullanim: dotnet run                     -> bugun
-//          dotnet run -- 2026-08-10        -> tek gun
-//          dotnet run -- 2026-08-01 2026-08-10 -> tarih araligi (dahil)
+// Tarih araligi appsettings.json > Cekim bolumunden okunur (BaslangicGunu/BitisGunu bos
+// birakilirsa bugun kullanilir). Komut satiri argumani verilirse (dotnet run -- 2026-08-10
+// [2026-08-10]) settings'i gecersiz kilar.
+var baslangicStr = config["Cekim:BaslangicGunu"];
+var bitisStr = config["Cekim:BitisGunu"];
+
 DateOnly fromDay, toDay;
-switch (args.Length)
+if (args.Length >= 1)
 {
-    case 0:
-        fromDay = toDay = DateOnly.FromDateTime(DateTime.Now);
-        break;
-    case 1:
-        fromDay = toDay = DateOnly.Parse(args[0]);
-        break;
-    default:
-        fromDay = DateOnly.Parse(args[0]);
-        toDay = DateOnly.Parse(args[1]);
-        break;
+    fromDay = DateOnly.Parse(args[0]);
+    toDay = args.Length >= 2 ? DateOnly.Parse(args[1]) : fromDay;
+}
+else if (!string.IsNullOrWhiteSpace(baslangicStr))
+{
+    fromDay = DateOnly.Parse(baslangicStr);
+    toDay = !string.IsNullOrWhiteSpace(bitisStr) ? DateOnly.Parse(bitisStr) : fromDay;
+}
+else
+{
+    fromDay = toDay = DateOnly.FromDateTime(DateTime.Now);
 }
 
 if (fromDay > toDay)
