@@ -156,12 +156,15 @@ public sealed class GrafanaInfluxClient : IDisposable
         {
             _httpClient.DefaultRequestHeaders.Authorization =
                 new AuthenticationHeaderValue("Bearer", options.ApiToken);
+            Console.WriteLine("[auth] ApiToken kullaniliyor (uzunluk: " + options.ApiToken.Length + ")");
         }
         else if (!string.IsNullOrWhiteSpace(options.SessionCookie))
         {
             // options.SessionCookie tarayicidan kopyalanan TAM cerez metni
             // ("grafana_session=...; grafana_session_expiry=...") - oldugu gibi gonderiliyor.
             _httpClient.DefaultRequestHeaders.Add("Cookie", options.SessionCookie);
+            Console.WriteLine("[auth] SessionCookie kullaniliyor (uzunluk: " + options.SessionCookie.Length + "): " +
+                options.SessionCookie);
         }
         else
         {
