@@ -6,6 +6,10 @@ public sealed class GrafanaOptions
     public string DatasourceUid { get; set; } = "";
     public string Timezone { get; set; } = "Europe/Istanbul";
 
+    // Sadece "Referer" header'ini olusturmak icin kullaniliyor - calisan tarayici istegiyle
+    // birebir ayni gorunmesi icin.
+    public string DashboardPath { get; set; } = "/d/UN0bbgwnz/ziraat-bankasi-kanal-fis-sayilari?orgId=1&viewPanel=24";
+
     // InfluxDB datasource'unun proxy sorgusunda bekledigi "db" query parametresi.
     public string InfluxDbName { get; set; } = "test";
 

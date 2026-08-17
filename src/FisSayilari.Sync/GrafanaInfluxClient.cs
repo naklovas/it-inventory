@@ -31,6 +31,17 @@ public sealed class GrafanaInfluxClient : IDisposable
         _options = options;
         _timeZone = TimeZoneInfo.FindSystemTimeZoneById(options.Timezone);
 
+        // Calisan tarayici istegiyle (F12'den yakalanan) birebir ayni gorunmesi icin:
+        // varsayilan HttpClient User-Agent gondermiyor, x-grafana-org-id ve Referer'i de
+        // eklemiyordu - bir WAF/guvenlik katmani bunlari kontrol ediyor olabilir.
+        _httpClient.DefaultRequestHeaders.Add("Accept", "application/json, text/plain, */*");
+        _httpClient.DefaultRequestHeaders.Add("x-grafana-org-id", "1");
+        _httpClient.DefaultRequestHeaders.Add(
+            "Referer", $"{options.BaseUrl.TrimEnd('/')}{options.DashboardPath}");
+        _httpClient.DefaultRequestHeaders.Add("User-Agent",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) " +
+            "Chrome/128.0.0.0 Safari/537.36 Edg/128.0.0.0");
+
         // Kurumsal SSO/Windows Integrated Auth (401) ve tarayici otomasyonu (IT politikasiyla
         // Edge'de remote debugging kapali) ikisi de bu ortamda calismiyor. Geriye kalan tek
         // saglam yol: bir Grafana Service Account Token. SessionCookie sadece hizli, tek
