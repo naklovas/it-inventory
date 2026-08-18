@@ -22,8 +22,8 @@ public class WizardOptionsRepository
         await connection.OpenAsync(ct);
 
         const string fieldSql = """
-            SELECT FieldId, FieldKey, Label, LabelEn, FieldType, AllowOther, SortOrder,
-                   ConditionalOnFieldKey, ConditionalHiddenValue
+            SELECT FieldId, FieldKey, Label, LabelEn, Help, HelpEn, FieldType, AllowOther,
+                   AllowItemNotes, SortOrder, ConditionalOnFieldKey, ConditionalHiddenValue
             FROM dbo.WizardField
             ORDER BY SortOrder;
             """;
@@ -39,18 +39,21 @@ public class WizardOptionsRepository
                     FieldKey = reader.GetString(1),
                     LabelTr = labelTr,
                     LabelEn = reader.IsDBNull(3) ? labelTr : reader.GetString(3),
-                    FieldType = Enum.Parse<WizardFieldType>(reader.GetString(4)),
-                    AllowOther = reader.GetBoolean(5),
-                    SortOrder = reader.GetInt32(6),
-                    ConditionalOnFieldKey = reader.IsDBNull(7) ? null : reader.GetString(7),
-                    ConditionalHiddenValue = reader.IsDBNull(8) ? null : reader.GetString(8),
+                    HelpTr = reader.IsDBNull(4) ? "" : reader.GetString(4),
+                    HelpEn = reader.IsDBNull(5) ? "" : reader.GetString(5),
+                    FieldType = Enum.Parse<WizardFieldType>(reader.GetString(6)),
+                    AllowOther = reader.GetBoolean(7),
+                    AllowItemNotes = reader.GetBoolean(8),
+                    SortOrder = reader.GetInt32(9),
+                    ConditionalOnFieldKey = reader.IsDBNull(10) ? null : reader.GetString(10),
+                    ConditionalHiddenValue = reader.IsDBNull(11) ? null : reader.GetString(11),
                 };
                 fields.Add((reader.GetInt32(0), definition));
             }
         }
 
         const string optionSql = """
-            SELECT OptionText, OptionTextEn
+            SELECT OptionText, OptionTextEn, OptionHelp, OptionHelpEn
             FROM dbo.WizardOption
             WHERE FieldId = @FieldId
             ORDER BY SortOrder;
@@ -68,6 +71,8 @@ public class WizardOptionsRepository
                 {
                     Tr = tr,
                     En = reader.IsDBNull(1) ? tr : reader.GetString(1),
+                    HelpTr = reader.IsDBNull(2) ? "" : reader.GetString(2),
+                    HelpEn = reader.IsDBNull(3) ? "" : reader.GetString(3),
                 });
             }
         }

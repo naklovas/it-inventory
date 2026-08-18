@@ -1,15 +1,32 @@
 @namespace PromptBuilder.Components.Shared
 
 <div class="field">
-    <div class="field-label">@Label</div>
+    <div class="field-label-row">
+        <div class="field-label">@Label</div>
+        @if (!string.IsNullOrWhiteSpace(FieldHelp))
+        {
+            <details class="field-help">
+                <summary>ⓘ</summary>
+                <p>@FieldHelp</p>
+            </details>
+        }
+    </div>
     <div class="options">
         @foreach (var choice in Options)
         {
-            <label class="option">
-                <input type="checkbox" checked="@Selected.Contains(choice.Value)"
-                       @onchange="@(e => Toggle(choice.Value, (bool)(e.Value ?? false)))" />
-                <span>@choice.Display</span>
-            </label>
+            <div class="option-row">
+                <label class="option" title="@choice.Help">
+                    <input type="checkbox" checked="@Selected.Contains(choice.Value)"
+                           @onchange="@(e => Toggle(choice.Value, (bool)(e.Value ?? false)))" />
+                    <span>@choice.Display</span>
+                </label>
+                @if (AllowItemNotes && Selected.Contains(choice.Value))
+                {
+                    <input class="item-note-input" placeholder="@ItemNotePlaceholder"
+                           value="@GetItemNote(choice.Value)"
+                           @oninput="@(e => OnItemNoteInput(choice.Value, (string?)e.Value ?? ""))" />
+                }
+            </div>
         }
     </div>
     @if (AllowOther)
@@ -21,6 +38,7 @@
 
 @code {
     [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter] public string FieldHelp { get; set; } = "";
     [Parameter, EditorRequired] public List<WizardChoice> Options { get; set; } = [];
     [Parameter] public List<string> Selected { get; set; } = [];
     [Parameter] public EventCallback<List<string>> SelectedChanged { get; set; }
@@ -28,6 +46,10 @@
     [Parameter] public string OtherPlaceholder { get; set; } = "Diğer (virgülle ayırın)...";
     [Parameter] public string OtherText { get; set; } = "";
     [Parameter] public EventCallback<string> OtherTextChanged { get; set; }
+    [Parameter] public bool AllowItemNotes { get; set; }
+    [Parameter] public Dictionary<string, string> ItemNotes { get; set; } = new();
+    [Parameter] public EventCallback<(string Value, string Note)> ItemNoteChanged { get; set; }
+    [Parameter] public string ItemNotePlaceholder { get; set; } = "Not ekleyin (opsiyonel)...";
 
     private Task Toggle(string value, bool isChecked)
     {
@@ -42,4 +64,8 @@
         }
         return SelectedChanged.InvokeAsync(updated);
     }
+
+    private string GetItemNote(string value) => ItemNotes.GetValueOrDefault(value, "");
+
+    private Task OnItemNoteInput(string value, string note) => ItemNoteChanged.InvokeAsync((value, note));
 }

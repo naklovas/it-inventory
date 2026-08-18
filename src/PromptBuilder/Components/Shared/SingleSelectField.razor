@@ -1,11 +1,20 @@
 @namespace PromptBuilder.Components.Shared
 
 <div class="field">
-    <div class="field-label">@Label</div>
+    <div class="field-label-row">
+        <div class="field-label">@Label</div>
+        @if (!string.IsNullOrWhiteSpace(FieldHelp))
+        {
+            <details class="field-help">
+                <summary>ⓘ</summary>
+                <p>@FieldHelp</p>
+            </details>
+        }
+    </div>
     <div class="options">
         @foreach (var choice in Options)
         {
-            <label class="option">
+            <label class="option" title="@choice.Help">
                 <input type="radio" name="@GroupName" checked="@(Value == choice.Value)"
                        @onchange="@(() => OnSelect(choice.Value))" />
                 <span>@choice.Display</span>
@@ -29,6 +38,7 @@
 
 @code {
     [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter] public string FieldHelp { get; set; } = "";
     [Parameter, EditorRequired] public List<WizardChoice> Options { get; set; } = [];
     [Parameter] public string Value { get; set; } = "";
     [Parameter] public EventCallback<string> ValueChanged { get; set; }

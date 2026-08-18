@@ -66,6 +66,65 @@ h1 {
     margin-bottom: 8px;
 }
 
+.field-label-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.field-label-row .field-label {
+    margin-bottom: 0;
+}
+
+.field-help summary {
+    cursor: pointer;
+    color: #2f6fed;
+    list-style: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 1px solid #2f6fed;
+    text-align: center;
+    line-height: 16px;
+    font-size: 0.75rem;
+}
+
+.field-help summary::-webkit-details-marker {
+    display: none;
+}
+
+.field-help[open] summary {
+    background: #2f6fed;
+    color: #fff;
+}
+
+.field-help p {
+    margin: 6px 0 0;
+    padding: 8px 10px;
+    background: #f4f5f7;
+    border-radius: 6px;
+    color: #5b6270;
+    font-weight: 400;
+    font-size: 0.85rem;
+    max-width: 560px;
+}
+
+.option-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.item-note-input {
+    margin: 0 0 4px 22px;
+    padding: 4px 8px;
+    border: 1px solid #d3d6dd;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    max-width: 300px;
+}
+
 .options {
     display: flex;
     flex-wrap: wrap;

@@ -61,11 +61,20 @@ public class PromptGeneratorService
     private static string ResolveMulti(WizardModel model, WizardFieldDefinition field)
     {
         var selected = model.MultiValues.GetValueOrDefault(field.FieldKey, []);
+        var notes = model.ItemNotes.GetValueOrDefault(field.FieldKey, new Dictionary<string, string>());
         var items = new List<string>();
+
         foreach (var value in selected)
         {
             var option = field.Options.FirstOrDefault(o => o.Tr == value);
-            if (option is not null) items.Add(option.For(model.Language));
+            if (option is null) continue;
+
+            var text = option.For(model.Language);
+            if (notes.TryGetValue(value, out var note) && !string.IsNullOrWhiteSpace(note))
+            {
+                text += $" ({note.Trim()})";
+            }
+            items.Add(text);
         }
 
         var other = model.OtherValues.GetValueOrDefault(field.FieldKey, "");

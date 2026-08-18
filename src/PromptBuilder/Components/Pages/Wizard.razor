@@ -31,11 +31,14 @@
         {
             if (IsHidden(field)) continue;
 
-            var choices = field.Options.Select(o => new WizardChoice(o.Tr, o.For(_model.Language))).ToList();
+            var choices = field.Options
+                .Select(o => new WizardChoice(o.Tr, o.For(_model.Language), o.HelpFor(_model.Language)))
+                .ToList();
 
             @if (field.FieldType == WizardFieldType.SingleSelect)
             {
-                <SingleSelectField Label="@field.Label(_model.Language)" Options="choices" AllowOther="field.AllowOther"
+                <SingleSelectField Label="@field.Label(_model.Language)" FieldHelp="@field.Help(_model.Language)"
+                                    Options="choices" AllowOther="field.AllowOther"
                                     OtherOptionLabel="@_ui.OtherLabel" OtherPlaceholder="@_ui.OtherPlaceholder"
                                     Value="@GetSingle(field.FieldKey)"
                                     ValueChanged="@(v => SetSingle(field.FieldKey, v))"
@@ -44,12 +47,16 @@
             }
             else
             {
-                <MultiSelectField Label="@field.Label(_model.Language)" Options="choices"
+                <MultiSelectField Label="@field.Label(_model.Language)" FieldHelp="@field.Help(_model.Language)"
+                                   Options="choices"
                                    Selected="@GetMulti(field.FieldKey)"
                                    SelectedChanged="@(v => SetMulti(field.FieldKey, v))"
                                    AllowOther="field.AllowOther" OtherPlaceholder="@_ui.OtherPlaceholderMulti"
                                    OtherText="@GetOther(field.FieldKey)"
-                                   OtherTextChanged="@(v => SetOther(field.FieldKey, v))" />
+                                   OtherTextChanged="@(v => SetOther(field.FieldKey, v))"
+                                   AllowItemNotes="field.AllowItemNotes" ItemNotePlaceholder="@_ui.ItemNotePlaceholder"
+                                   ItemNotes="@GetItemNotes(field.FieldKey)"
+                                   ItemNoteChanged="@(args => SetItemNote(field.FieldKey, args.Value, args.Note))" />
             }
         }
 
@@ -116,6 +123,27 @@
 
     private string GetOther(string key) => _model.OtherValues.GetValueOrDefault(key, "");
     private void SetOther(string key, string value) => _model.OtherValues[key] = value;
+
+    private Dictionary<string, string> GetItemNotes(string key) =>
+        _model.ItemNotes.TryGetValue(key, out var notes) ? notes : new Dictionary<string, string>();
+
+    private void SetItemNote(string fieldKey, string value, string note)
+    {
+        if (!_model.ItemNotes.TryGetValue(fieldKey, out var notes))
+        {
+            notes = new Dictionary<string, string>();
+            _model.ItemNotes[fieldKey] = notes;
+        }
+
+        if (string.IsNullOrWhiteSpace(note))
+        {
+            notes.Remove(value);
+        }
+        else
+        {
+            notes[value] = note;
+        }
+    }
 
     private void GeneratePrompt()
     {

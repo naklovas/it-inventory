@@ -16,6 +16,7 @@ public class UiStrings
     public string OtherLabel { get; init; } = "";
     public string OtherPlaceholder { get; init; } = "";
     public string OtherPlaceholderMulti { get; init; } = "";
+    public string ItemNotePlaceholder { get; init; } = "";
 
     public string PromptIntro { get; init; } = "";
     public string ExtraNotesHeading { get; init; } = "";
@@ -38,6 +39,7 @@ public class UiStrings
         OtherLabel = "Diğer",
         OtherPlaceholder = "Belirtin...",
         OtherPlaceholderMulti = "Diğer (virgülle ayırın)...",
+        ItemNotePlaceholder = "Not ekleyin (opsiyonel)...",
         PromptIntro = "Aşağıdaki gereksinimlere uygun bir C# uygulaması geliştirmeni istiyorum:",
         ExtraNotesHeading = "Ek notlar:",
         PromptOutro = "Lütfen bu gereksinimlere uygun, iyi yapılandırılmış, best practice'lere uyan " +
@@ -61,6 +63,7 @@ public class UiStrings
         OtherLabel = "Other",
         OtherPlaceholder = "Please specify...",
         OtherPlaceholderMulti = "Other (comma-separated)...",
+        ItemNotePlaceholder = "Add a note (optional)...",
         PromptIntro = "I want you to build a C# application that meets the following requirements:",
         ExtraNotesHeading = "Additional notes:",
         PromptOutro = "Please produce a well-structured, best-practice C# project skeleton that meets " +
