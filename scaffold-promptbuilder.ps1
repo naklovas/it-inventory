@@ -127,6 +127,7 @@ Write-ProjectFile -Path (Join-Path $projectDir 'Components/_Imports.razor') -Con
 @using Microsoft.AspNetCore.Components.Routing
 @using Microsoft.AspNetCore.Components.Web
 @using static Microsoft.AspNetCore.Components.Web.RenderMode
+@using Microsoft.JSInterop
 @using PromptBuilder.Components
 @using PromptBuilder.Components.Layout
 @using PromptBuilder.Components.Shared
