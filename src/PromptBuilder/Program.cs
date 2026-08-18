@@ -6,6 +6,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 builder.Services.AddScoped<PromptGeneratorService>();
+builder.Services.AddScoped<WizardOptionsRepository>();
 
 var app = builder.Build();
 

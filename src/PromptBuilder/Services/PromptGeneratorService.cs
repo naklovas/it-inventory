@@ -5,47 +5,31 @@ namespace PromptBuilder.Services;
 
 public class PromptGeneratorService
 {
-    public string Generate(WizardModel m)
+    public string Generate(WizardModel model, List<WizardFieldDefinition> fields)
     {
         var sb = new StringBuilder();
 
         sb.AppendLine("Aşağıdaki gereksinimlere uygun bir C# uygulaması geliştirmeni istiyorum:");
         sb.AppendLine();
 
-        AppendLine(sb, "Proje adı", m.ProjectName);
-        AppendLine(sb, "Uygulama tipi", Resolve(m.AppType, m.AppTypeOther));
-        AppendLine(sb, "Amaç/domain", Resolve(m.Domain, m.DomainOther));
-        AppendLine(sb, "Ölçek", m.Scale);
-        AppendLine(sb, "Veri katmanı", m.DataLayer);
-        if (m.DataLayer != "Yok (bellek içi)")
+        AppendLine(sb, "Proje adı", model.ProjectName);
+
+        foreach (var field in fields)
         {
-            AppendLine(sb, "Veri erişim yöntemi", m.AccessMethod);
-        }
-        AppendLine(sb, "Kimlik doğrulama", m.Auth);
-        AppendLine(sb, "Mimari", m.Architecture);
-        AppendLine(sb, "Backend mimarisi", m.BackendArchitecture);
-        if (m.BackendArchitecture != "Monolit (arayüzle tek proje)")
-        {
-            AppendLine(sb, "API dokümantasyonu", m.ApiDocs);
-        }
-        AppendLine(sb, "Temel özellikler", Resolve(m.Features, m.FeaturesOther));
-        AppendLine(sb, "UI stili", m.UiStyle);
-        AppendLine(sb, ".NET sürümü", m.DotnetVersion);
-        AppendLine(sb, "Loglama", m.Logging);
-        AppendLine(sb, "Test beklentisi", m.TestExpectation);
-        AppendLine(sb, "Deployment", m.Deployment);
-        AppendLine(sb, "Ek kütüphaneler", Resolve(m.ExtraLibraries, m.ExtraLibrariesOther));
-        AppendLine(sb, "Kullanılacak diller", Resolve(m.Languages, m.LanguagesOther));
-        if (m.ScriptInterpreter != "Yok")
-        {
-            AppendLine(sb, "Script/otomasyon interpreter'ı", m.ScriptInterpreter);
+            if (IsHidden(field, model)) continue;
+
+            var value = field.FieldType == WizardFieldType.MultiSelect
+                ? ResolveMulti(model, field.FieldKey)
+                : ResolveSingle(model, field.FieldKey);
+
+            AppendLine(sb, field.Label, value);
         }
 
-        if (!string.IsNullOrWhiteSpace(m.ExtraNotes))
+        if (!string.IsNullOrWhiteSpace(model.ExtraNotes))
         {
             sb.AppendLine();
             sb.AppendLine("Ek notlar:");
-            sb.AppendLine(m.ExtraNotes.Trim());
+            sb.AppendLine(model.ExtraNotes.Trim());
         }
 
         sb.AppendLine();
@@ -55,12 +39,24 @@ public class PromptGeneratorService
         return sb.ToString();
     }
 
-    private static string Resolve(string value, string other) =>
-        value == "Diğer" && !string.IsNullOrWhiteSpace(other) ? other : value;
-
-    private static string Resolve(List<string> values, string other)
+    private static bool IsHidden(WizardFieldDefinition field, WizardModel model)
     {
-        var items = new List<string>(values);
+        if (field.ConditionalOnFieldKey is null) return false;
+        var parentValue = model.SingleValues.GetValueOrDefault(field.ConditionalOnFieldKey, "");
+        return parentValue == field.ConditionalHiddenValue;
+    }
+
+    private static string ResolveSingle(WizardModel model, string fieldKey)
+    {
+        var value = model.SingleValues.GetValueOrDefault(fieldKey, "");
+        var other = model.OtherValues.GetValueOrDefault(fieldKey, "");
+        return value == "Diğer" && !string.IsNullOrWhiteSpace(other) ? other : value;
+    }
+
+    private static string ResolveMulti(WizardModel model, string fieldKey)
+    {
+        var items = new List<string>(model.MultiValues.GetValueOrDefault(fieldKey, []));
+        var other = model.OtherValues.GetValueOrDefault(fieldKey, "");
         if (!string.IsNullOrWhiteSpace(other))
         {
             items.AddRange(other.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));

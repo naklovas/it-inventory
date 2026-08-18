@@ -1,103 +1,108 @@
 @page "/"
+@inject WizardOptionsRepository OptionsRepository
 @inject PromptGeneratorService PromptGenerator
 @inject IJSRuntime JS
 
 <div class="wizard">
     <h1>C# Uygulama Prompt Builder</h1>
-    <p class="intro">Alanları seçin, en altta hazır bir prompt oluşturulacak.</p>
+    <p class="intro">Alanları seçin, en altta hazır bir prompt oluşturulacak. Sorular SQL Server'daki
+        dbo.WizardField / dbo.WizardOption tablolarından geliyor.</p>
 
-    <div class="field">
-        <div class="field-label">Proje adı</div>
-        <input class="text-input" placeholder="Örn: StokTakip" @bind="_model.ProjectName" @bind:event="oninput" />
-    </div>
-
-    <SingleSelectField Label="Uygulama tipi" Options="WizardOptions.AppType"
-                        @bind-Value="_model.AppType" @bind-OtherText="_model.AppTypeOther" />
-
-    <SingleSelectField Label="Amaç/domain" Options="WizardOptions.Domain"
-                        @bind-Value="_model.Domain" @bind-OtherText="_model.DomainOther" />
-
-    <SingleSelectField Label="Ölçek" Options="WizardOptions.Scale" AllowOther="false"
-                        @bind-Value="_model.Scale" />
-
-    <SingleSelectField Label="Veri katmanı" Options="WizardOptions.DataLayer" AllowOther="false"
-                        @bind-Value="_model.DataLayer" />
-
-    @if (_model.DataLayer != "Yok (bellek içi)")
+    @if (_loadError is not null)
     {
-        <SingleSelectField Label="Veri erişim yöntemi" Options="WizardOptions.AccessMethod" AllowOther="false"
-                            @bind-Value="_model.AccessMethod" />
+        <div class="field error">@_loadError</div>
     }
-
-    <SingleSelectField Label="Kimlik doğrulama" Options="WizardOptions.Auth" AllowOther="false"
-                        @bind-Value="_model.Auth" />
-
-    <SingleSelectField Label="Mimari" Options="WizardOptions.Architecture" AllowOther="false"
-                        @bind-Value="_model.Architecture" />
-
-    <SingleSelectField Label="Backend mimarisi" Options="WizardOptions.BackendArchitecture" AllowOther="false"
-                        @bind-Value="_model.BackendArchitecture" />
-
-    @if (_model.BackendArchitecture != "Monolit (arayüzle tek proje)" && !string.IsNullOrEmpty(_model.BackendArchitecture))
+    else if (_fields is null)
     {
-        <SingleSelectField Label="API dokümantasyonu" Options="WizardOptions.ApiDocs" AllowOther="false"
-                            @bind-Value="_model.ApiDocs" />
+        <p>Yükleniyor...</p>
     }
-
-    <MultiSelectField Label="Temel özellikler" Options="WizardOptions.Features"
-                       @bind-Selected="_model.Features" @bind-OtherText="_model.FeaturesOther" />
-
-    <SingleSelectField Label="UI stili" Options="WizardOptions.UiStyle" AllowOther="false"
-                        @bind-Value="_model.UiStyle" />
-
-    <SingleSelectField Label=".NET sürümü" Options="WizardOptions.DotnetVersion" AllowOther="false"
-                        @bind-Value="_model.DotnetVersion" />
-
-    <SingleSelectField Label="Loglama" Options="WizardOptions.Logging" AllowOther="false"
-                        @bind-Value="_model.Logging" />
-
-    <SingleSelectField Label="Test beklentisi" Options="WizardOptions.TestExpectation" AllowOther="false"
-                        @bind-Value="_model.TestExpectation" />
-
-    <SingleSelectField Label="Deployment" Options="WizardOptions.Deployment" AllowOther="false"
-                        @bind-Value="_model.Deployment" />
-
-    <MultiSelectField Label="Ek kütüphaneler" Options="WizardOptions.ExtraLibraries"
-                       @bind-Selected="_model.ExtraLibraries" @bind-OtherText="_model.ExtraLibrariesOther" />
-
-    <MultiSelectField Label="Kullanılacak diller" Options="WizardOptions.Languages"
-                       @bind-Selected="_model.Languages" @bind-OtherText="_model.LanguagesOther" />
-
-    <SingleSelectField Label="Script/otomasyon interpreter'ı" Options="WizardOptions.ScriptInterpreter" AllowOther="false"
-                        @bind-Value="_model.ScriptInterpreter" />
-
-    <div class="field">
-        <div class="field-label">Ek notlar (opsiyonel)</div>
-        <textarea class="text-area" rows="3" placeholder="Yukarıdaki alanlara sığmayan özel istekler..."
-                  @bind="_model.ExtraNotes" @bind:event="oninput"></textarea>
-    </div>
-
-    <button class="generate-btn" @onclick="GeneratePrompt">Prompt Oluştur</button>
-
-    @if (!string.IsNullOrEmpty(_generatedPrompt))
+    else
     {
-        <div class="output">
-            <div class="output-header">
-                <span>Oluşan Prompt</span>
-                <button class="copy-btn" @onclick="CopyToClipboard">Kopyala</button>
-            </div>
-            <textarea class="output-area" rows="16" readonly>@_generatedPrompt</textarea>
+        <div class="field">
+            <div class="field-label">Proje adı</div>
+            <input class="text-input" placeholder="Örn: StokTakip" @bind="_model.ProjectName" @bind:event="oninput" />
         </div>
+
+        @foreach (var field in _fields)
+        {
+            if (IsHidden(field)) continue;
+
+            @if (field.FieldType == WizardFieldType.SingleSelect)
+            {
+                <SingleSelectField Label="@field.Label" Options="field.Options.ToArray()" AllowOther="field.AllowOther"
+                                    Value="@GetSingle(field.FieldKey)"
+                                    ValueChanged="@(v => SetSingle(field.FieldKey, v))"
+                                    OtherText="@GetOther(field.FieldKey)"
+                                    OtherTextChanged="@(v => SetOther(field.FieldKey, v))" />
+            }
+            else
+            {
+                <MultiSelectField Label="@field.Label" Options="field.Options.ToArray()"
+                                   Selected="@GetMulti(field.FieldKey)"
+                                   SelectedChanged="@(v => SetMulti(field.FieldKey, v))"
+                                   AllowOther="field.AllowOther"
+                                   OtherText="@GetOther(field.FieldKey)"
+                                   OtherTextChanged="@(v => SetOther(field.FieldKey, v))" />
+            }
+        }
+
+        <div class="field">
+            <div class="field-label">Ek notlar (opsiyonel)</div>
+            <textarea class="text-area" rows="3" placeholder="Yukarıdaki alanlara sığmayan özel istekler..."
+                      @bind="_model.ExtraNotes" @bind:event="oninput"></textarea>
+        </div>
+
+        <button class="generate-btn" @onclick="GeneratePrompt">Prompt Oluştur</button>
+
+        @if (!string.IsNullOrEmpty(_generatedPrompt))
+        {
+            <div class="output">
+                <div class="output-header">
+                    <span>Oluşan Prompt</span>
+                    <button class="copy-btn" @onclick="CopyToClipboard">Kopyala</button>
+                </div>
+                <textarea class="output-area" rows="16" readonly>@_generatedPrompt</textarea>
+            </div>
+        }
     }
 </div>
 
 @code {
     private readonly WizardModel _model = new();
+    private List<WizardFieldDefinition>? _fields;
+    private string? _loadError;
     private string _generatedPrompt = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _fields = await OptionsRepository.GetFieldsAsync();
+        }
+        catch (Exception ex)
+        {
+            _loadError = $"Alanlar veritabanından yüklenemedi: {ex.Message}";
+        }
+    }
+
+    private bool IsHidden(WizardFieldDefinition field)
+    {
+        if (field.ConditionalOnFieldKey is null) return false;
+        return GetSingle(field.ConditionalOnFieldKey) == field.ConditionalHiddenValue;
+    }
+
+    private string GetSingle(string key) => _model.SingleValues.GetValueOrDefault(key, "");
+    private void SetSingle(string key, string value) => _model.SingleValues[key] = value;
+
+    private List<string> GetMulti(string key) => _model.MultiValues.GetValueOrDefault(key, []);
+    private void SetMulti(string key, List<string> value) => _model.MultiValues[key] = value;
+
+    private string GetOther(string key) => _model.OtherValues.GetValueOrDefault(key, "");
+    private void SetOther(string key, string value) => _model.OtherValues[key] = value;
 
     private void GeneratePrompt()
     {
-        _generatedPrompt = PromptGenerator.Generate(_model);
+        _generatedPrompt = PromptGenerator.Generate(_model, _fields ?? []);
     }
 
     private Task CopyToClipboard() =>

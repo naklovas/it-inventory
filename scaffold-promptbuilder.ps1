@@ -4,7 +4,12 @@
 .DESCRIPTION
     Bu script, repo klonlamadan, gerekli tum kaynak dosyalarini
     (csproj, appsettings.json, *.razor, *.cs, wwwroot) calistigi dizinin
-    altina yazar. Ardindan "dotnet build" ile derlemeyi dener.
+    altina, sql/promptbuilder_schema.sql'i de sql/ altina yazar. Ardindan
+    "dotnet build" ile derlemeyi dener.
+
+    Sorular (WizardField/WizardOption) SQL Server'dan okunuyor - calistirmadan
+    once appsettings.json > ConnectionStrings:PromptBuilderDb'yi doldurup
+    sql/promptbuilder_schema.sql'i o veritabaninda calistirmaniz gerekir.
 .EXAMPLE
     .\scaffold-promptbuilder.ps1
 #>
@@ -13,8 +18,10 @@ $ErrorActionPreference = 'Stop'
 
 $root = $PSScriptRoot
 $projectDir = Join-Path $root 'src/PromptBuilder'
+$sqlDir = Join-Path $root 'sql'
 
 New-Item -ItemType Directory -Force -Path $projectDir | Out-Null
+New-Item -ItemType Directory -Force -Path $sqlDir | Out-Null
 New-Item -ItemType Directory -Force -Path (Join-Path $projectDir 'Components') | Out-Null
 New-Item -ItemType Directory -Force -Path (Join-Path $projectDir 'Components/Layout') | Out-Null
 New-Item -ItemType Directory -Force -Path (Join-Path $projectDir 'Components/Pages') | Out-Null
@@ -46,6 +53,10 @@ Write-ProjectFile -Path (Join-Path $projectDir 'PromptBuilder.csproj') -Content 
     <RootNamespace>PromptBuilder</RootNamespace>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="5.2.2" />
+  </ItemGroup>
+
 </Project>
 '@
 
@@ -58,6 +69,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 builder.Services.AddScoped<PromptGeneratorService>();
+builder.Services.AddScoped<WizardOptionsRepository>();
 
 var app = builder.Build();
 
@@ -79,6 +91,9 @@ app.Run();
 
 Write-ProjectFile -Path (Join-Path $projectDir 'appsettings.json') -Content @'
 {
+  "ConnectionStrings": {
+    "PromptBuilderDb": ""
+  },
   "Logging": {
     "LogLevel": {
       "Default": "Information",
@@ -257,105 +272,110 @@ Write-ProjectFile -Path (Join-Path $projectDir 'Components/Shared/MultiSelectFie
 
 Write-ProjectFile -Path (Join-Path $projectDir 'Components/Pages/Wizard.razor') -Content @'
 @page "/"
+@inject WizardOptionsRepository OptionsRepository
 @inject PromptGeneratorService PromptGenerator
 @inject IJSRuntime JS
 
 <div class="wizard">
     <h1>C# Uygulama Prompt Builder</h1>
-    <p class="intro">Alanları seçin, en altta hazır bir prompt oluşturulacak.</p>
+    <p class="intro">Alanları seçin, en altta hazır bir prompt oluşturulacak. Sorular SQL Server'daki
+        dbo.WizardField / dbo.WizardOption tablolarından geliyor.</p>
 
-    <div class="field">
-        <div class="field-label">Proje adı</div>
-        <input class="text-input" placeholder="Örn: StokTakip" @bind="_model.ProjectName" @bind:event="oninput" />
-    </div>
-
-    <SingleSelectField Label="Uygulama tipi" Options="WizardOptions.AppType"
-                        @bind-Value="_model.AppType" @bind-OtherText="_model.AppTypeOther" />
-
-    <SingleSelectField Label="Amaç/domain" Options="WizardOptions.Domain"
-                        @bind-Value="_model.Domain" @bind-OtherText="_model.DomainOther" />
-
-    <SingleSelectField Label="Ölçek" Options="WizardOptions.Scale" AllowOther="false"
-                        @bind-Value="_model.Scale" />
-
-    <SingleSelectField Label="Veri katmanı" Options="WizardOptions.DataLayer" AllowOther="false"
-                        @bind-Value="_model.DataLayer" />
-
-    @if (_model.DataLayer != "Yok (bellek içi)")
+    @if (_loadError is not null)
     {
-        <SingleSelectField Label="Veri erişim yöntemi" Options="WizardOptions.AccessMethod" AllowOther="false"
-                            @bind-Value="_model.AccessMethod" />
+        <div class="field error">@_loadError</div>
     }
-
-    <SingleSelectField Label="Kimlik doğrulama" Options="WizardOptions.Auth" AllowOther="false"
-                        @bind-Value="_model.Auth" />
-
-    <SingleSelectField Label="Mimari" Options="WizardOptions.Architecture" AllowOther="false"
-                        @bind-Value="_model.Architecture" />
-
-    <SingleSelectField Label="Backend mimarisi" Options="WizardOptions.BackendArchitecture" AllowOther="false"
-                        @bind-Value="_model.BackendArchitecture" />
-
-    @if (_model.BackendArchitecture != "Monolit (arayüzle tek proje)" && !string.IsNullOrEmpty(_model.BackendArchitecture))
+    else if (_fields is null)
     {
-        <SingleSelectField Label="API dokümantasyonu" Options="WizardOptions.ApiDocs" AllowOther="false"
-                            @bind-Value="_model.ApiDocs" />
+        <p>Yükleniyor...</p>
     }
-
-    <MultiSelectField Label="Temel özellikler" Options="WizardOptions.Features"
-                       @bind-Selected="_model.Features" @bind-OtherText="_model.FeaturesOther" />
-
-    <SingleSelectField Label="UI stili" Options="WizardOptions.UiStyle" AllowOther="false"
-                        @bind-Value="_model.UiStyle" />
-
-    <SingleSelectField Label=".NET sürümü" Options="WizardOptions.DotnetVersion" AllowOther="false"
-                        @bind-Value="_model.DotnetVersion" />
-
-    <SingleSelectField Label="Loglama" Options="WizardOptions.Logging" AllowOther="false"
-                        @bind-Value="_model.Logging" />
-
-    <SingleSelectField Label="Test beklentisi" Options="WizardOptions.TestExpectation" AllowOther="false"
-                        @bind-Value="_model.TestExpectation" />
-
-    <SingleSelectField Label="Deployment" Options="WizardOptions.Deployment" AllowOther="false"
-                        @bind-Value="_model.Deployment" />
-
-    <MultiSelectField Label="Ek kütüphaneler" Options="WizardOptions.ExtraLibraries"
-                       @bind-Selected="_model.ExtraLibraries" @bind-OtherText="_model.ExtraLibrariesOther" />
-
-    <MultiSelectField Label="Kullanılacak diller" Options="WizardOptions.Languages"
-                       @bind-Selected="_model.Languages" @bind-OtherText="_model.LanguagesOther" />
-
-    <SingleSelectField Label="Script/otomasyon interpreter'ı" Options="WizardOptions.ScriptInterpreter" AllowOther="false"
-                        @bind-Value="_model.ScriptInterpreter" />
-
-    <div class="field">
-        <div class="field-label">Ek notlar (opsiyonel)</div>
-        <textarea class="text-area" rows="3" placeholder="Yukarıdaki alanlara sığmayan özel istekler..."
-                  @bind="_model.ExtraNotes" @bind:event="oninput"></textarea>
-    </div>
-
-    <button class="generate-btn" @onclick="GeneratePrompt">Prompt Oluştur</button>
-
-    @if (!string.IsNullOrEmpty(_generatedPrompt))
+    else
     {
-        <div class="output">
-            <div class="output-header">
-                <span>Oluşan Prompt</span>
-                <button class="copy-btn" @onclick="CopyToClipboard">Kopyala</button>
-            </div>
-            <textarea class="output-area" rows="16" readonly>@_generatedPrompt</textarea>
+        <div class="field">
+            <div class="field-label">Proje adı</div>
+            <input class="text-input" placeholder="Örn: StokTakip" @bind="_model.ProjectName" @bind:event="oninput" />
         </div>
+
+        @foreach (var field in _fields)
+        {
+            if (IsHidden(field)) continue;
+
+            @if (field.FieldType == WizardFieldType.SingleSelect)
+            {
+                <SingleSelectField Label="@field.Label" Options="field.Options.ToArray()" AllowOther="field.AllowOther"
+                                    Value="@GetSingle(field.FieldKey)"
+                                    ValueChanged="@(v => SetSingle(field.FieldKey, v))"
+                                    OtherText="@GetOther(field.FieldKey)"
+                                    OtherTextChanged="@(v => SetOther(field.FieldKey, v))" />
+            }
+            else
+            {
+                <MultiSelectField Label="@field.Label" Options="field.Options.ToArray()"
+                                   Selected="@GetMulti(field.FieldKey)"
+                                   SelectedChanged="@(v => SetMulti(field.FieldKey, v))"
+                                   AllowOther="field.AllowOther"
+                                   OtherText="@GetOther(field.FieldKey)"
+                                   OtherTextChanged="@(v => SetOther(field.FieldKey, v))" />
+            }
+        }
+
+        <div class="field">
+            <div class="field-label">Ek notlar (opsiyonel)</div>
+            <textarea class="text-area" rows="3" placeholder="Yukarıdaki alanlara sığmayan özel istekler..."
+                      @bind="_model.ExtraNotes" @bind:event="oninput"></textarea>
+        </div>
+
+        <button class="generate-btn" @onclick="GeneratePrompt">Prompt Oluştur</button>
+
+        @if (!string.IsNullOrEmpty(_generatedPrompt))
+        {
+            <div class="output">
+                <div class="output-header">
+                    <span>Oluşan Prompt</span>
+                    <button class="copy-btn" @onclick="CopyToClipboard">Kopyala</button>
+                </div>
+                <textarea class="output-area" rows="16" readonly>@_generatedPrompt</textarea>
+            </div>
+        }
     }
 </div>
 
 @code {
     private readonly WizardModel _model = new();
+    private List<WizardFieldDefinition>? _fields;
+    private string? _loadError;
     private string _generatedPrompt = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _fields = await OptionsRepository.GetFieldsAsync();
+        }
+        catch (Exception ex)
+        {
+            _loadError = $"Alanlar veritabanından yüklenemedi: {ex.Message}";
+        }
+    }
+
+    private bool IsHidden(WizardFieldDefinition field)
+    {
+        if (field.ConditionalOnFieldKey is null) return false;
+        return GetSingle(field.ConditionalOnFieldKey) == field.ConditionalHiddenValue;
+    }
+
+    private string GetSingle(string key) => _model.SingleValues.GetValueOrDefault(key, "");
+    private void SetSingle(string key, string value) => _model.SingleValues[key] = value;
+
+    private List<string> GetMulti(string key) => _model.MultiValues.GetValueOrDefault(key, []);
+    private void SetMulti(string key, List<string> value) => _model.MultiValues[key] = value;
+
+    private string GetOther(string key) => _model.OtherValues.GetValueOrDefault(key, "");
+    private void SetOther(string key, string value) => _model.OtherValues[key] = value;
 
     private void GeneratePrompt()
     {
-        _generatedPrompt = PromptGenerator.Generate(_model);
+        _generatedPrompt = PromptGenerator.Generate(_model, _fields ?? []);
     }
 
     private Task CopyToClipboard() =>
@@ -363,106 +383,25 @@ Write-ProjectFile -Path (Join-Path $projectDir 'Components/Pages/Wizard.razor') 
 }
 '@
 
-Write-ProjectFile -Path (Join-Path $projectDir 'Models/WizardOptions.cs') -Content @'
+Write-ProjectFile -Path (Join-Path $projectDir 'Models/WizardFieldDefinition.cs') -Content @'
 namespace PromptBuilder.Models;
 
-public static class WizardOptions
+public enum WizardFieldType
 {
-    public static readonly string[] AppType =
-    [
-        "Web API", "Web App (MVC/Razor)", "Blazor (Server/WASM)", "WPF",
-        "WinForms", "Console/CLI", "Windows Service", "MAUI"
-    ];
+    SingleSelect,
+    MultiSelect
+}
 
-    public static readonly string[] Domain =
-    [
-        "CRUD/veri yönetimi", "Envanter-stok takibi", "Muhasebe/finans",
-        "Raporlama/dashboard", "Otomasyon/entegrasyon scripti", "Onay/iş akışı sistemi"
-    ];
-
-    public static readonly string[] Scale =
-    [
-        "Kişisel/tek kullanıcı", "Küçük ekip (dahili)", "Kurumsal çok kullanıcılı", "İnternete açık"
-    ];
-
-    public static readonly string[] DataLayer =
-    [
-        "Yok (bellek içi)", "SQLite", "SQL Server", "PostgreSQL", "MySQL", "Dosya tabanlı (JSON/Excel/CSV)"
-    ];
-
-    public static readonly string[] AccessMethod =
-    [
-        "Entity Framework Core", "Dapper", "ADO.NET (raw)"
-    ];
-
-    public static readonly string[] Auth =
-    [
-        "Yok", "ASP.NET Core Identity", "JWT", "Windows/AD Auth",
-        "OAuth (Google/Microsoft)", "Basit kullanıcı-şifre"
-    ];
-
-    public static readonly string[] Architecture =
-    [
-        "Basit tek proje", "Katmanlı (N-tier)", "Clean Architecture", "MVVM (masaüstü)", "Vertical Slice"
-    ];
-
-    public static readonly string[] Features =
-    [
-        "Listeleme/filtreleme", "CRUD ekranları", "Excel import/export", "PDF export",
-        "E-posta gönderimi", "Zamanlanmış görev", "Dosya yükleme", "Arama",
-        "Log/audit trail", "Bildirim", "3. parti API entegrasyonu"
-    ];
-
-    public static readonly string[] UiStyle =
-    [
-        "Minimal", "Modern (Bootstrap/MudBlazor/MaterialDesign)", "Kurumsal/tablo ağırlıklı", "Dashboard/grafikli"
-    ];
-
-    public static readonly string[] DotnetVersion =
-    [
-        ".NET 8", ".NET 9", "Framework 4.8 (legacy)", "Farketmez"
-    ];
-
-    public static readonly string[] TestExpectation =
-    [
-        "Yok", "Unit test (xUnit/NUnit)", "Unit + Integration"
-    ];
-
-    public static readonly string[] Deployment =
-    [
-        "Local exe", "IIS", "Docker", "Azure", "Windows Service"
-    ];
-
-    public static readonly string[] BackendArchitecture =
-    [
-        "Monolit (arayüzle tek proje)", "Ayrı REST API + ayrı frontend",
-        "Ayrı GraphQL API + frontend", "Sadece API (frontend yok)"
-    ];
-
-    public static readonly string[] ApiDocs =
-    [
-        "Swagger/OpenAPI ekle", "Gerek yok"
-    ];
-
-    public static readonly string[] Logging =
-    [
-        "Yok", "Built-in ILogger", "Serilog"
-    ];
-
-    public static readonly string[] ExtraLibraries =
-    [
-        "AutoMapper", "MediatR", "FluentValidation", "Yok/farketmez"
-    ];
-
-    public static readonly string[] Languages =
-    [
-        "C#", "SQL", "JavaScript/TypeScript", "PowerShell", "Python"
-    ];
-
-    public static readonly string[] ScriptInterpreter =
-    [
-        "Yok", "PowerShell", "Python", "Roslyn C# Scripting (CSX)"
-    ];
+public class WizardFieldDefinition
+{
+    public string FieldKey { get; set; } = "";
+    public string Label { get; set; } = "";
+    public WizardFieldType FieldType { get; set; }
+    public bool AllowOther { get; set; }
+    public int SortOrder { get; set; }
+    public string? ConditionalOnFieldKey { get; set; }
+    public string? ConditionalHiddenValue { get; set; }
+    public List<string> Options { get; set; } = [];
 }
 '@
 
@@ -473,48 +412,84 @@ public class WizardModel
 {
     public string ProjectName { get; set; } = "";
 
-    public string AppType { get; set; } = "";
-    public string AppTypeOther { get; set; } = "";
-
-    public string Domain { get; set; } = "";
-    public string DomainOther { get; set; } = "";
-
-    public string Scale { get; set; } = "";
-
-    public string DataLayer { get; set; } = "";
-
-    public string AccessMethod { get; set; } = "";
-
-    public string Auth { get; set; } = "";
-
-    public string Architecture { get; set; } = "";
-
-    public List<string> Features { get; set; } = [];
-    public string FeaturesOther { get; set; } = "";
-
-    public string UiStyle { get; set; } = "";
-
-    public string DotnetVersion { get; set; } = "";
-
-    public string TestExpectation { get; set; } = "";
-
-    public string Deployment { get; set; } = "";
-
-    public string BackendArchitecture { get; set; } = "";
-
-    public string ApiDocs { get; set; } = "";
-
-    public string Logging { get; set; } = "";
-
-    public List<string> ExtraLibraries { get; set; } = [];
-    public string ExtraLibrariesOther { get; set; } = "";
-
-    public List<string> Languages { get; set; } = [];
-    public string LanguagesOther { get; set; } = "";
-
-    public string ScriptInterpreter { get; set; } = "";
+    public Dictionary<string, string> SingleValues { get; set; } = new();
+    public Dictionary<string, List<string>> MultiValues { get; set; } = new();
+    public Dictionary<string, string> OtherValues { get; set; } = new();
 
     public string ExtraNotes { get; set; } = "";
+}
+'@
+
+Write-ProjectFile -Path (Join-Path $projectDir 'Services/WizardOptionsRepository.cs') -Content @'
+using Microsoft.Data.SqlClient;
+using PromptBuilder.Models;
+
+namespace PromptBuilder.Services;
+
+public class WizardOptionsRepository
+{
+    private readonly string _connectionString;
+
+    public WizardOptionsRepository(IConfiguration configuration)
+    {
+        _connectionString = configuration.GetConnectionString("PromptBuilderDb")
+            ?? throw new InvalidOperationException(
+                "appsettings.json: ConnectionStrings:PromptBuilderDb bos birakilamaz.");
+    }
+
+    public async Task<List<WizardFieldDefinition>> GetFieldsAsync(CancellationToken ct = default)
+    {
+        var fields = new List<(int FieldId, WizardFieldDefinition Definition)>();
+
+        await using var connection = new SqlConnection(_connectionString);
+        await connection.OpenAsync(ct);
+
+        const string fieldSql = """
+            SELECT FieldId, FieldKey, Label, FieldType, AllowOther, SortOrder,
+                   ConditionalOnFieldKey, ConditionalHiddenValue
+            FROM dbo.WizardField
+            ORDER BY SortOrder;
+            """;
+
+        await using (var command = new SqlCommand(fieldSql, connection))
+        await using (var reader = await command.ExecuteReaderAsync(ct))
+        {
+            while (await reader.ReadAsync(ct))
+            {
+                var definition = new WizardFieldDefinition
+                {
+                    FieldKey = reader.GetString(1),
+                    Label = reader.GetString(2),
+                    FieldType = Enum.Parse<WizardFieldType>(reader.GetString(3)),
+                    AllowOther = reader.GetBoolean(4),
+                    SortOrder = reader.GetInt32(5),
+                    ConditionalOnFieldKey = reader.IsDBNull(6) ? null : reader.GetString(6),
+                    ConditionalHiddenValue = reader.IsDBNull(7) ? null : reader.GetString(7),
+                };
+                fields.Add((reader.GetInt32(0), definition));
+            }
+        }
+
+        const string optionSql = """
+            SELECT OptionText
+            FROM dbo.WizardOption
+            WHERE FieldId = @FieldId
+            ORDER BY SortOrder;
+            """;
+
+        foreach (var (fieldId, definition) in fields)
+        {
+            await using var command = new SqlCommand(optionSql, connection);
+            command.Parameters.AddWithValue("@FieldId", fieldId);
+            await using var reader = await command.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct))
+            {
+                definition.Options.Add(reader.GetString(0));
+            }
+        }
+
+        return fields.Select(f => f.Definition).ToList();
+    }
 }
 '@
 
@@ -526,47 +501,31 @@ namespace PromptBuilder.Services;
 
 public class PromptGeneratorService
 {
-    public string Generate(WizardModel m)
+    public string Generate(WizardModel model, List<WizardFieldDefinition> fields)
     {
         var sb = new StringBuilder();
 
         sb.AppendLine("Aşağıdaki gereksinimlere uygun bir C# uygulaması geliştirmeni istiyorum:");
         sb.AppendLine();
 
-        AppendLine(sb, "Proje adı", m.ProjectName);
-        AppendLine(sb, "Uygulama tipi", Resolve(m.AppType, m.AppTypeOther));
-        AppendLine(sb, "Amaç/domain", Resolve(m.Domain, m.DomainOther));
-        AppendLine(sb, "Ölçek", m.Scale);
-        AppendLine(sb, "Veri katmanı", m.DataLayer);
-        if (m.DataLayer != "Yok (bellek içi)")
+        AppendLine(sb, "Proje adı", model.ProjectName);
+
+        foreach (var field in fields)
         {
-            AppendLine(sb, "Veri erişim yöntemi", m.AccessMethod);
-        }
-        AppendLine(sb, "Kimlik doğrulama", m.Auth);
-        AppendLine(sb, "Mimari", m.Architecture);
-        AppendLine(sb, "Backend mimarisi", m.BackendArchitecture);
-        if (m.BackendArchitecture != "Monolit (arayüzle tek proje)")
-        {
-            AppendLine(sb, "API dokümantasyonu", m.ApiDocs);
-        }
-        AppendLine(sb, "Temel özellikler", Resolve(m.Features, m.FeaturesOther));
-        AppendLine(sb, "UI stili", m.UiStyle);
-        AppendLine(sb, ".NET sürümü", m.DotnetVersion);
-        AppendLine(sb, "Loglama", m.Logging);
-        AppendLine(sb, "Test beklentisi", m.TestExpectation);
-        AppendLine(sb, "Deployment", m.Deployment);
-        AppendLine(sb, "Ek kütüphaneler", Resolve(m.ExtraLibraries, m.ExtraLibrariesOther));
-        AppendLine(sb, "Kullanılacak diller", Resolve(m.Languages, m.LanguagesOther));
-        if (m.ScriptInterpreter != "Yok")
-        {
-            AppendLine(sb, "Script/otomasyon interpreter'ı", m.ScriptInterpreter);
+            if (IsHidden(field, model)) continue;
+
+            var value = field.FieldType == WizardFieldType.MultiSelect
+                ? ResolveMulti(model, field.FieldKey)
+                : ResolveSingle(model, field.FieldKey);
+
+            AppendLine(sb, field.Label, value);
         }
 
-        if (!string.IsNullOrWhiteSpace(m.ExtraNotes))
+        if (!string.IsNullOrWhiteSpace(model.ExtraNotes))
         {
             sb.AppendLine();
             sb.AppendLine("Ek notlar:");
-            sb.AppendLine(m.ExtraNotes.Trim());
+            sb.AppendLine(model.ExtraNotes.Trim());
         }
 
         sb.AppendLine();
@@ -576,12 +535,24 @@ public class PromptGeneratorService
         return sb.ToString();
     }
 
-    private static string Resolve(string value, string other) =>
-        value == "Diğer" && !string.IsNullOrWhiteSpace(other) ? other : value;
-
-    private static string Resolve(List<string> values, string other)
+    private static bool IsHidden(WizardFieldDefinition field, WizardModel model)
     {
-        var items = new List<string>(values);
+        if (field.ConditionalOnFieldKey is null) return false;
+        var parentValue = model.SingleValues.GetValueOrDefault(field.ConditionalOnFieldKey, "");
+        return parentValue == field.ConditionalHiddenValue;
+    }
+
+    private static string ResolveSingle(WizardModel model, string fieldKey)
+    {
+        var value = model.SingleValues.GetValueOrDefault(fieldKey, "");
+        var other = model.OtherValues.GetValueOrDefault(fieldKey, "");
+        return value == "Diğer" && !string.IsNullOrWhiteSpace(other) ? other : value;
+    }
+
+    private static string ResolveMulti(WizardModel model, string fieldKey)
+    {
+        var items = new List<string>(model.MultiValues.GetValueOrDefault(fieldKey, []));
+        var other = model.OtherValues.GetValueOrDefault(fieldKey, "");
         if (!string.IsNullOrWhiteSpace(other))
         {
             items.AddRange(other.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
@@ -632,6 +603,11 @@ h1 {
     border-radius: 8px;
     padding: 14px 16px;
     margin-bottom: 12px;
+}
+
+.field.error {
+    border-color: #d64545;
+    color: #b3261e;
 }
 
 .field-label {
@@ -712,6 +688,239 @@ h1 {
 }
 '@
 
+Write-ProjectFile -Path (Join-Path $sqlDir 'promptbuilder_schema.sql') -Content @'
+IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'WizardField' AND schema_id = SCHEMA_ID('dbo'))
+BEGIN
+    CREATE TABLE dbo.WizardField
+    (
+        FieldId                 INT IDENTITY(1,1) PRIMARY KEY,
+        FieldKey                NVARCHAR(50)    NOT NULL UNIQUE,
+        Label                   NVARCHAR(200)   NOT NULL,
+        FieldType               NVARCHAR(20)    NOT NULL, -- 'SingleSelect' | 'MultiSelect'
+        AllowOther              BIT             NOT NULL DEFAULT 1,
+        SortOrder               INT             NOT NULL,
+        ConditionalOnFieldKey   NVARCHAR(50)    NULL, -- baska bir FieldKey; o alan asagidaki degere
+                                                        -- esitse bu alan wizard'da gizlenir
+        ConditionalHiddenValue  NVARCHAR(200)   NULL
+    );
+END;
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'WizardOption' AND schema_id = SCHEMA_ID('dbo'))
+BEGIN
+    CREATE TABLE dbo.WizardOption
+    (
+        OptionId    INT IDENTITY(1,1) PRIMARY KEY,
+        FieldId     INT             NOT NULL REFERENCES dbo.WizardField(FieldId) ON DELETE CASCADE,
+        OptionText  NVARCHAR(200)   NOT NULL,
+        SortOrder   INT             NOT NULL
+    );
+END;
+GO
+
+-- Ilk kurulumda alanlari/secenekleri bir kere doldurur. Tablo zaten doluysa (daha sonra
+-- elle/DB'den duzenlenmis olabilir) hicbir seyi degistirmez.
+IF NOT EXISTS (SELECT 1 FROM dbo.WizardField)
+BEGIN
+    DECLARE @FieldId_AppType INT;
+    INSERT INTO dbo.WizardField (FieldKey, Label, FieldType, AllowOther, SortOrder, ConditionalOnFieldKey, ConditionalHiddenValue)
+    VALUES (N'AppType', N'Uygulama tipi', N'SingleSelect', 1, 10, NULL, NULL);
+    SET @FieldId_AppType = SCOPE_IDENTITY();
+    INSERT INTO dbo.WizardOption (FieldId, OptionText, SortOrder) VALUES
+        (@FieldId_AppType, N'Web API', 1),
+        (@FieldId_AppType, N'Web App (MVC/Razor)', 2),
+        (@FieldId_AppType, N'Blazor (Server/WASM)', 3),
+        (@FieldId_AppType, N'WPF', 4),
+        (@FieldId_AppType, N'WinForms', 5),
+        (@FieldId_AppType, N'Console/CLI', 6),
+        (@FieldId_AppType, N'Windows Service', 7),
+        (@FieldId_AppType, N'MAUI', 8);
+
+    DECLARE @FieldId_Domain INT;
+    INSERT INTO dbo.WizardField (FieldKey, Label, FieldType, AllowOther, SortOrder, ConditionalOnFieldKey, ConditionalHiddenValue)
+    VALUES (N'Domain', N'Amaç/domain', N'SingleSelect', 1, 20, NULL, NULL);
+    SET @FieldId_Domain = SCOPE_IDENTITY();
+    INSERT INTO dbo.WizardOption (FieldId, OptionText, SortOrder) VALUES
+        (@FieldId_Domain, N'CRUD/veri yönetimi', 1),
+        (@FieldId_Domain, N'Envanter-stok takibi', 2),
+        (@FieldId_Domain, N'Muhasebe/finans', 3),
+        (@FieldId_Domain, N'Raporlama/dashboard', 4),
+        (@FieldId_Domain, N'Otomasyon/entegrasyon scripti', 5),
+        (@FieldId_Domain, N'Onay/iş akışı sistemi', 6);
+
+    DECLARE @FieldId_Scale INT;
+    INSERT INTO dbo.WizardField (FieldKey, Label, FieldType, AllowOther, SortOrder, ConditionalOnFieldKey, ConditionalHiddenValue)
+    VALUES (N'Scale', N'Ölçek', N'SingleSelect', 0, 30, NULL, NULL);
+    SET @FieldId_Scale = SCOPE_IDENTITY();
+    INSERT INTO dbo.WizardOption (FieldId, OptionText, SortOrder) VALUES
+        (@FieldId_Scale, N'Kişisel/tek kullanıcı', 1),
+        (@FieldId_Scale, N'Küçük ekip (dahili)', 2),
+        (@FieldId_Scale, N'Kurumsal çok kullanıcılı', 3),
+        (@FieldId_Scale, N'İnternete açık', 4);
+
+    DECLARE @FieldId_DataLayer INT;
+    INSERT INTO dbo.WizardField (FieldKey, Label, FieldType, AllowOther, SortOrder, ConditionalOnFieldKey, ConditionalHiddenValue)
+    VALUES (N'DataLayer', N'Veri katmanı', N'SingleSelect', 0, 40, NULL, NULL);
+    SET @FieldId_DataLayer = SCOPE_IDENTITY();
+    INSERT INTO dbo.WizardOption (FieldId, OptionText, SortOrder) VALUES
+        (@FieldId_DataLayer, N'Yok (bellek içi)', 1),
+        (@FieldId_DataLayer, N'SQLite', 2),
+        (@FieldId_DataLayer, N'SQL Server', 3),
+        (@FieldId_DataLayer, N'PostgreSQL', 4),
+        (@FieldId_DataLayer, N'MySQL', 5),
+        (@FieldId_DataLayer, N'Dosya tabanlı (JSON/Excel/CSV)', 6);
+
+    DECLARE @FieldId_AccessMethod INT;
+    INSERT INTO dbo.WizardField (FieldKey, Label, FieldType, AllowOther, SortOrder, ConditionalOnFieldKey, ConditionalHiddenValue)
+    VALUES (N'AccessMethod', N'Veri erişim yöntemi', N'SingleSelect', 0, 50, N'DataLayer', N'Yok (bellek içi)');
+    SET @FieldId_AccessMethod = SCOPE_IDENTITY();
+    INSERT INTO dbo.WizardOption (FieldId, OptionText, SortOrder) VALUES
+        (@FieldId_AccessMethod, N'Entity Framework Core', 1),
+        (@FieldId_AccessMethod, N'Dapper', 2),
+        (@FieldId_AccessMethod, N'ADO.NET (raw)', 3);
+
+    DECLARE @FieldId_Auth INT;
+    INSERT INTO dbo.WizardField (FieldKey, Label, FieldType, AllowOther, SortOrder, ConditionalOnFieldKey, ConditionalHiddenValue)
+    VALUES (N'Auth', N'Kimlik doğrulama', N'SingleSelect', 0, 60, NULL, NULL);
+    SET @FieldId_Auth = SCOPE_IDENTITY();
+    INSERT INTO dbo.WizardOption (FieldId, OptionText, SortOrder) VALUES
+        (@FieldId_Auth, N'Yok', 1),
+        (@FieldId_Auth, N'ASP.NET Core Identity', 2),
+        (@FieldId_Auth, N'JWT', 3),
+        (@FieldId_Auth, N'Windows/AD Auth', 4),
+        (@FieldId_Auth, N'OAuth (Google/Microsoft)', 5),
+        (@FieldId_Auth, N'Basit kullanıcı-şifre', 6);
+
+    DECLARE @FieldId_Architecture INT;
+    INSERT INTO dbo.WizardField (FieldKey, Label, FieldType, AllowOther, SortOrder, ConditionalOnFieldKey, ConditionalHiddenValue)
+    VALUES (N'Architecture', N'Mimari', N'SingleSelect', 0, 70, NULL, NULL);
+    SET @FieldId_Architecture = SCOPE_IDENTITY();
+    INSERT INTO dbo.WizardOption (FieldId, OptionText, SortOrder) VALUES
+        (@FieldId_Architecture, N'Basit tek proje', 1),
+        (@FieldId_Architecture, N'Katmanlı (N-tier)', 2),
+        (@FieldId_Architecture, N'Clean Architecture', 3),
+        (@FieldId_Architecture, N'MVVM (masaüstü)', 4),
+        (@FieldId_Architecture, N'Vertical Slice', 5);
+
+    DECLARE @FieldId_BackendArchitecture INT;
+    INSERT INTO dbo.WizardField (FieldKey, Label, FieldType, AllowOther, SortOrder, ConditionalOnFieldKey, ConditionalHiddenValue)
+    VALUES (N'BackendArchitecture', N'Backend mimarisi', N'SingleSelect', 0, 80, NULL, NULL);
+    SET @FieldId_BackendArchitecture = SCOPE_IDENTITY();
+    INSERT INTO dbo.WizardOption (FieldId, OptionText, SortOrder) VALUES
+        (@FieldId_BackendArchitecture, N'Monolit (arayüzle tek proje)', 1),
+        (@FieldId_BackendArchitecture, N'Ayrı REST API + ayrı frontend', 2),
+        (@FieldId_BackendArchitecture, N'Ayrı GraphQL API + frontend', 3),
+        (@FieldId_BackendArchitecture, N'Sadece API (frontend yok)', 4);
+
+    DECLARE @FieldId_ApiDocs INT;
+    INSERT INTO dbo.WizardField (FieldKey, Label, FieldType, AllowOther, SortOrder, ConditionalOnFieldKey, ConditionalHiddenValue)
+    VALUES (N'ApiDocs', N'API dokümantasyonu', N'SingleSelect', 0, 90, N'BackendArchitecture', N'Monolit (arayüzle tek proje)');
+    SET @FieldId_ApiDocs = SCOPE_IDENTITY();
+    INSERT INTO dbo.WizardOption (FieldId, OptionText, SortOrder) VALUES
+        (@FieldId_ApiDocs, N'Swagger/OpenAPI ekle', 1),
+        (@FieldId_ApiDocs, N'Gerek yok', 2);
+
+    DECLARE @FieldId_Features INT;
+    INSERT INTO dbo.WizardField (FieldKey, Label, FieldType, AllowOther, SortOrder, ConditionalOnFieldKey, ConditionalHiddenValue)
+    VALUES (N'Features', N'Temel özellikler', N'MultiSelect', 1, 100, NULL, NULL);
+    SET @FieldId_Features = SCOPE_IDENTITY();
+    INSERT INTO dbo.WizardOption (FieldId, OptionText, SortOrder) VALUES
+        (@FieldId_Features, N'Listeleme/filtreleme', 1),
+        (@FieldId_Features, N'CRUD ekranları', 2),
+        (@FieldId_Features, N'Excel import/export', 3),
+        (@FieldId_Features, N'PDF export', 4),
+        (@FieldId_Features, N'E-posta gönderimi', 5),
+        (@FieldId_Features, N'Zamanlanmış görev', 6),
+        (@FieldId_Features, N'Dosya yükleme', 7),
+        (@FieldId_Features, N'Arama', 8),
+        (@FieldId_Features, N'Log/audit trail', 9),
+        (@FieldId_Features, N'Bildirim', 10),
+        (@FieldId_Features, N'3. parti API entegrasyonu', 11);
+
+    DECLARE @FieldId_UiStyle INT;
+    INSERT INTO dbo.WizardField (FieldKey, Label, FieldType, AllowOther, SortOrder, ConditionalOnFieldKey, ConditionalHiddenValue)
+    VALUES (N'UiStyle', N'UI stili', N'SingleSelect', 0, 110, NULL, NULL);
+    SET @FieldId_UiStyle = SCOPE_IDENTITY();
+    INSERT INTO dbo.WizardOption (FieldId, OptionText, SortOrder) VALUES
+        (@FieldId_UiStyle, N'Minimal', 1),
+        (@FieldId_UiStyle, N'Modern (Bootstrap/MudBlazor/MaterialDesign)', 2),
+        (@FieldId_UiStyle, N'Kurumsal/tablo ağırlıklı', 3),
+        (@FieldId_UiStyle, N'Dashboard/grafikli', 4);
+
+    DECLARE @FieldId_DotnetVersion INT;
+    INSERT INTO dbo.WizardField (FieldKey, Label, FieldType, AllowOther, SortOrder, ConditionalOnFieldKey, ConditionalHiddenValue)
+    VALUES (N'DotnetVersion', N'.NET sürümü', N'SingleSelect', 0, 120, NULL, NULL);
+    SET @FieldId_DotnetVersion = SCOPE_IDENTITY();
+    INSERT INTO dbo.WizardOption (FieldId, OptionText, SortOrder) VALUES
+        (@FieldId_DotnetVersion, N'.NET 8', 1),
+        (@FieldId_DotnetVersion, N'.NET 9', 2),
+        (@FieldId_DotnetVersion, N'Framework 4.8 (legacy)', 3),
+        (@FieldId_DotnetVersion, N'Farketmez', 4);
+
+    DECLARE @FieldId_Logging INT;
+    INSERT INTO dbo.WizardField (FieldKey, Label, FieldType, AllowOther, SortOrder, ConditionalOnFieldKey, ConditionalHiddenValue)
+    VALUES (N'Logging', N'Loglama', N'SingleSelect', 0, 130, NULL, NULL);
+    SET @FieldId_Logging = SCOPE_IDENTITY();
+    INSERT INTO dbo.WizardOption (FieldId, OptionText, SortOrder) VALUES
+        (@FieldId_Logging, N'Yok', 1),
+        (@FieldId_Logging, N'Built-in ILogger', 2),
+        (@FieldId_Logging, N'Serilog', 3);
+
+    DECLARE @FieldId_TestExpectation INT;
+    INSERT INTO dbo.WizardField (FieldKey, Label, FieldType, AllowOther, SortOrder, ConditionalOnFieldKey, ConditionalHiddenValue)
+    VALUES (N'TestExpectation', N'Test beklentisi', N'SingleSelect', 0, 140, NULL, NULL);
+    SET @FieldId_TestExpectation = SCOPE_IDENTITY();
+    INSERT INTO dbo.WizardOption (FieldId, OptionText, SortOrder) VALUES
+        (@FieldId_TestExpectation, N'Yok', 1),
+        (@FieldId_TestExpectation, N'Unit test (xUnit/NUnit)', 2),
+        (@FieldId_TestExpectation, N'Unit + Integration', 3);
+
+    DECLARE @FieldId_Deployment INT;
+    INSERT INTO dbo.WizardField (FieldKey, Label, FieldType, AllowOther, SortOrder, ConditionalOnFieldKey, ConditionalHiddenValue)
+    VALUES (N'Deployment', N'Deployment', N'SingleSelect', 0, 150, NULL, NULL);
+    SET @FieldId_Deployment = SCOPE_IDENTITY();
+    INSERT INTO dbo.WizardOption (FieldId, OptionText, SortOrder) VALUES
+        (@FieldId_Deployment, N'Local exe', 1),
+        (@FieldId_Deployment, N'IIS', 2),
+        (@FieldId_Deployment, N'Docker', 3),
+        (@FieldId_Deployment, N'Azure', 4),
+        (@FieldId_Deployment, N'Windows Service', 5);
+
+    DECLARE @FieldId_ExtraLibraries INT;
+    INSERT INTO dbo.WizardField (FieldKey, Label, FieldType, AllowOther, SortOrder, ConditionalOnFieldKey, ConditionalHiddenValue)
+    VALUES (N'ExtraLibraries', N'Ek kütüphaneler', N'MultiSelect', 1, 160, NULL, NULL);
+    SET @FieldId_ExtraLibraries = SCOPE_IDENTITY();
+    INSERT INTO dbo.WizardOption (FieldId, OptionText, SortOrder) VALUES
+        (@FieldId_ExtraLibraries, N'AutoMapper', 1),
+        (@FieldId_ExtraLibraries, N'MediatR', 2),
+        (@FieldId_ExtraLibraries, N'FluentValidation', 3),
+        (@FieldId_ExtraLibraries, N'Yok/farketmez', 4);
+
+    DECLARE @FieldId_Languages INT;
+    INSERT INTO dbo.WizardField (FieldKey, Label, FieldType, AllowOther, SortOrder, ConditionalOnFieldKey, ConditionalHiddenValue)
+    VALUES (N'Languages', N'Kullanılacak diller', N'MultiSelect', 1, 170, NULL, NULL);
+    SET @FieldId_Languages = SCOPE_IDENTITY();
+    INSERT INTO dbo.WizardOption (FieldId, OptionText, SortOrder) VALUES
+        (@FieldId_Languages, N'C#', 1),
+        (@FieldId_Languages, N'SQL', 2),
+        (@FieldId_Languages, N'JavaScript/TypeScript', 3),
+        (@FieldId_Languages, N'PowerShell', 4),
+        (@FieldId_Languages, N'Python', 5);
+
+    DECLARE @FieldId_ScriptInterpreter INT;
+    INSERT INTO dbo.WizardField (FieldKey, Label, FieldType, AllowOther, SortOrder, ConditionalOnFieldKey, ConditionalHiddenValue)
+    VALUES (N'ScriptInterpreter', N'Script/otomasyon interpreter''ı', N'SingleSelect', 0, 180, NULL, NULL);
+    SET @FieldId_ScriptInterpreter = SCOPE_IDENTITY();
+    INSERT INTO dbo.WizardOption (FieldId, OptionText, SortOrder) VALUES
+        (@FieldId_ScriptInterpreter, N'Yok', 1),
+        (@FieldId_ScriptInterpreter, N'PowerShell', 2),
+        (@FieldId_ScriptInterpreter, N'Python', 3),
+        (@FieldId_ScriptInterpreter, N'Roslyn C# Scripting (CSX)', 4);
+
+END;
+GO
+'@
+
 Write-Host ""
 Write-Host "Tamamlandi. Simdi 'dotnet build' deneniyor..."
 
@@ -724,5 +933,8 @@ finally {
 }
 
 Write-Host ""
-Write-Host "Calistirmak icin: dotnet run --project $projectDir"
-Write-Host "(varsayilan adres: http://localhost:5140)"
+Write-Host "Kalan adimlar:"
+Write-Host "  1) appsettings.json > ConnectionStrings:PromptBuilderDb'yi doldurun."
+Write-Host "  2) sql/promptbuilder_schema.sql'i o SQL Server veritabaninda calistirin"
+Write-Host "     (tablolari olusturur ve sorulari/secenekleri bir kere doldurur)."
+Write-Host "  3) dotnet run --project $projectDir  (varsayilan adres: http://localhost:5140)"

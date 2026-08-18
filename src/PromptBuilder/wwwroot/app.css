@@ -34,6 +34,11 @@ h1 {
     margin-bottom: 12px;
 }
 
+.field.error {
+    border-color: #d64545;
+    color: #b3261e;
+}
+
 .field-label {
     font-weight: 600;
     margin-bottom: 8px;
