@@ -26,6 +26,9 @@ public class PromptGeneratorService
             AppendLine(sb, field.Label(model.Language), value);
         }
 
+        AppendScreens(sb, ui, model.Screens);
+        AppendProcesses(sb, ui, model.Processes);
+
         if (!string.IsNullOrWhiteSpace(model.ExtraNotes))
         {
             sb.AppendLine();
@@ -37,6 +40,63 @@ public class PromptGeneratorService
         sb.AppendLine(ui.PromptOutro);
 
         return sb.ToString();
+    }
+
+    private static void AppendScreens(StringBuilder sb, UiStrings ui, List<ScreenDefinition> screens)
+    {
+        var withName = screens.Where(s => !string.IsNullOrWhiteSpace(s.Name)).ToList();
+        if (withName.Count == 0) return;
+
+        sb.AppendLine();
+        sb.AppendLine(ui.ScreensHeading);
+        for (var i = 0; i < withName.Count; i++)
+        {
+            var screen = withName[i];
+            var header = string.IsNullOrWhiteSpace(screen.Purpose)
+                ? screen.Name
+                : $"{screen.Name} — {screen.Purpose}";
+            sb.AppendLine($"{i + 1}. {header}");
+            if (!string.IsNullOrWhiteSpace(screen.Fields))
+            {
+                sb.AppendLine($"   {ui.FieldsHeading}: {screen.Fields}");
+            }
+            if (!string.IsNullOrWhiteSpace(screen.Actions))
+            {
+                sb.AppendLine($"   {ui.ActionsHeading}: {screen.Actions}");
+            }
+        }
+    }
+
+    private static void AppendProcesses(StringBuilder sb, UiStrings ui, List<ProcessDefinition> processes)
+    {
+        var withName = processes.Where(p => !string.IsNullOrWhiteSpace(p.Name)).ToList();
+        if (withName.Count == 0) return;
+
+        sb.AppendLine();
+        sb.AppendLine(ui.ProcessesHeading);
+        for (var i = 0; i < withName.Count; i++)
+        {
+            var process = withName[i];
+            var header = string.IsNullOrWhiteSpace(process.Description)
+                ? process.Name
+                : $"{process.Name} — {process.Description}";
+            sb.AppendLine($"{i + 1}. {header}");
+
+            var steps = process.Steps.Where(s => !string.IsNullOrWhiteSpace(s.Description)).ToList();
+            if (steps.Count == 0) continue;
+
+            sb.AppendLine($"   {ui.StepsHeading}:");
+            for (var j = 0; j < steps.Count; j++)
+            {
+                var step = steps[j];
+                var extras = new List<string>();
+                if (!string.IsNullOrWhiteSpace(step.Actor)) extras.Add($"{ui.OwnerLabel}: {step.Actor}");
+                if (!string.IsNullOrWhiteSpace(step.Outcome)) extras.Add($"{ui.OutcomeLabel}: {step.Outcome}");
+
+                var suffix = extras.Count > 0 ? $" ({string.Join("; ", extras)})" : "";
+                sb.AppendLine($"   {j + 1}. {step.Description}{suffix}");
+            }
+        }
     }
 
     private static bool IsHidden(WizardFieldDefinition field, WizardModel model)

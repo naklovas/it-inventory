@@ -11,5 +11,8 @@ public class WizardModel
     public Dictionary<string, string> OtherValues { get; set; } = new();
     public Dictionary<string, Dictionary<string, string>> ItemNotes { get; set; } = new();
 
+    public List<ScreenDefinition> Screens { get; set; } = [];
+    public List<ProcessDefinition> Processes { get; set; } = [];
+
     public string ExtraNotes { get; set; } = "";
 }

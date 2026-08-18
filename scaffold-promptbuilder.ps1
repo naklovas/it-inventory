@@ -16,6 +16,12 @@
     ikonuyla acilan bir yardim metni, her secenekte de hover'da tooltip
     olarak "ne ise yarar / ne zaman tercih edilmeli" aciklamasi var. Temel
     ozellikler alaninda secilen her ozellige ozel bir not da eklenebilir.
+
+    Sayfada ayrica uc tab var: Genel (mevcut sorular), Ekranlar (uygulamada
+    olmasini istediginiz her ekranin adi/amaci/alanlari/aksiyonlari, ekle-
+    cikar) ve Surecler (is akislari; her surecin adimlari, adim basina
+    sorumlu/onayci ve sonuc/sonraki adim, ekle-cikar). Bu iki tab da DB'ye
+    yazilmaz, sadece oturum icinde tutulup olusan prompt'a eklenir.
 .EXAMPLE
     .\scaffold-promptbuilder.ps1
 #>
@@ -342,49 +348,148 @@ Write-ProjectFile -Path (Join-Path $projectDir 'Components/Pages/Wizard.razor') 
     }
     else
     {
-        <div class="field">
-            <div class="field-label">@_ui.ProjectNameLabel</div>
-            <input class="text-input" placeholder="@_ui.ProjectNamePlaceholder" @bind="_model.ProjectName" @bind:event="oninput" />
+        <div class="tabs">
+            <button class="@TabClass("general")" @onclick="@(() => SetTab("general"))">@_ui.TabGeneral</button>
+            <button class="@TabClass("screens")" @onclick="@(() => SetTab("screens"))">@_ui.TabScreens</button>
+            <button class="@TabClass("processes")" @onclick="@(() => SetTab("processes"))">@_ui.TabProcesses</button>
         </div>
 
-        @foreach (var field in _fields)
+        @if (_activeTab == "general")
         {
-            if (IsHidden(field)) continue;
+            <div class="field">
+                <div class="field-label">@_ui.ProjectNameLabel</div>
+                <input class="text-input" placeholder="@_ui.ProjectNamePlaceholder" @bind="_model.ProjectName" @bind:event="oninput" />
+            </div>
 
-            var choices = field.Options
-                .Select(o => new WizardChoice(o.Tr, o.For(_model.Language), o.HelpFor(_model.Language)))
-                .ToList();
+            @foreach (var field in _fields)
+            {
+                if (IsHidden(field)) continue;
 
-            @if (field.FieldType == WizardFieldType.SingleSelect)
-            {
-                <SingleSelectField Label="@field.Label(_model.Language)" FieldHelp="@field.Help(_model.Language)"
-                                    Options="choices" AllowOther="field.AllowOther"
-                                    OtherOptionLabel="@_ui.OtherLabel" OtherPlaceholder="@_ui.OtherPlaceholder"
-                                    Value="@GetSingle(field.FieldKey)"
-                                    ValueChanged="@(v => SetSingle(field.FieldKey, v))"
-                                    OtherText="@GetOther(field.FieldKey)"
-                                    OtherTextChanged="@(v => SetOther(field.FieldKey, v))" />
+                var choices = field.Options
+                    .Select(o => new WizardChoice(o.Tr, o.For(_model.Language), o.HelpFor(_model.Language)))
+                    .ToList();
+
+                @if (field.FieldType == WizardFieldType.SingleSelect)
+                {
+                    <SingleSelectField Label="@field.Label(_model.Language)" FieldHelp="@field.Help(_model.Language)"
+                                        Options="choices" AllowOther="field.AllowOther"
+                                        OtherOptionLabel="@_ui.OtherLabel" OtherPlaceholder="@_ui.OtherPlaceholder"
+                                        Value="@GetSingle(field.FieldKey)"
+                                        ValueChanged="@(v => SetSingle(field.FieldKey, v))"
+                                        OtherText="@GetOther(field.FieldKey)"
+                                        OtherTextChanged="@(v => SetOther(field.FieldKey, v))" />
+                }
+                else
+                {
+                    <MultiSelectField Label="@field.Label(_model.Language)" FieldHelp="@field.Help(_model.Language)"
+                                       Options="choices"
+                                       Selected="@GetMulti(field.FieldKey)"
+                                       SelectedChanged="@(v => SetMulti(field.FieldKey, v))"
+                                       AllowOther="field.AllowOther" OtherPlaceholder="@_ui.OtherPlaceholderMulti"
+                                       OtherText="@GetOther(field.FieldKey)"
+                                       OtherTextChanged="@(v => SetOther(field.FieldKey, v))"
+                                       AllowItemNotes="field.AllowItemNotes" ItemNotePlaceholder="@_ui.ItemNotePlaceholder"
+                                       ItemNotes="@GetItemNotes(field.FieldKey)"
+                                       ItemNoteChanged="@(args => SetItemNote(field.FieldKey, args.Value, args.Note))" />
+                }
             }
-            else
-            {
-                <MultiSelectField Label="@field.Label(_model.Language)" FieldHelp="@field.Help(_model.Language)"
-                                   Options="choices"
-                                   Selected="@GetMulti(field.FieldKey)"
-                                   SelectedChanged="@(v => SetMulti(field.FieldKey, v))"
-                                   AllowOther="field.AllowOther" OtherPlaceholder="@_ui.OtherPlaceholderMulti"
-                                   OtherText="@GetOther(field.FieldKey)"
-                                   OtherTextChanged="@(v => SetOther(field.FieldKey, v))"
-                                   AllowItemNotes="field.AllowItemNotes" ItemNotePlaceholder="@_ui.ItemNotePlaceholder"
-                                   ItemNotes="@GetItemNotes(field.FieldKey)"
-                                   ItemNoteChanged="@(args => SetItemNote(field.FieldKey, args.Value, args.Note))" />
-            }
+
+            <div class="field">
+                <div class="field-label">@_ui.ExtraNotesLabel</div>
+                <textarea class="text-area" rows="3" placeholder="@_ui.ExtraNotesPlaceholder"
+                          @bind="_model.ExtraNotes" @bind:event="oninput"></textarea>
+            </div>
         }
+        else if (_activeTab == "screens")
+        {
+            <p class="tab-intro">@_ui.ScreensIntro</p>
 
-        <div class="field">
-            <div class="field-label">@_ui.ExtraNotesLabel</div>
-            <textarea class="text-area" rows="3" placeholder="@_ui.ExtraNotesPlaceholder"
-                      @bind="_model.ExtraNotes" @bind:event="oninput"></textarea>
-        </div>
+            @foreach (var (screen, index) in _model.Screens.Select((s, i) => (s, i)))
+            {
+                <div class="entry-card">
+                    <div class="entry-card-header">
+                        <span>#@(index + 1)</span>
+                        <button class="remove-btn" @onclick="@(() => RemoveScreen(index))">@_ui.RemoveButton</button>
+                    </div>
+                    <div class="field">
+                        <div class="field-label">@_ui.ScreenNameLabel</div>
+                        <input class="text-input" placeholder="@_ui.ScreenNamePlaceholder"
+                               @bind="screen.Name" @bind:event="oninput" />
+                    </div>
+                    <div class="field">
+                        <div class="field-label">@_ui.ScreenPurposeLabel</div>
+                        <input class="text-input" placeholder="@_ui.ScreenPurposePlaceholder"
+                               @bind="screen.Purpose" @bind:event="oninput" />
+                    </div>
+                    <div class="field">
+                        <div class="field-label">@_ui.ScreenFieldsLabel</div>
+                        <textarea class="text-area" rows="2" placeholder="@_ui.ScreenFieldsPlaceholder"
+                                  @bind="screen.Fields" @bind:event="oninput"></textarea>
+                    </div>
+                    <div class="field">
+                        <div class="field-label">@_ui.ScreenActionsLabel</div>
+                        <textarea class="text-area" rows="2" placeholder="@_ui.ScreenActionsPlaceholder"
+                                  @bind="screen.Actions" @bind:event="oninput"></textarea>
+                    </div>
+                </div>
+            }
+
+            @if (_model.Screens.Count == 0)
+            {
+                <p class="empty-hint">@_ui.ScreensEmptyHint</p>
+            }
+
+            <button class="add-btn" @onclick="AddScreen">@_ui.AddScreenButton</button>
+        }
+        else
+        {
+            <p class="tab-intro">@_ui.ProcessesIntro</p>
+
+            @foreach (var (process, pIndex) in _model.Processes.Select((p, i) => (p, i)))
+            {
+                <div class="entry-card">
+                    <div class="entry-card-header">
+                        <span>#@(pIndex + 1)</span>
+                        <button class="remove-btn" @onclick="@(() => RemoveProcess(pIndex))">@_ui.RemoveButton</button>
+                    </div>
+                    <div class="field">
+                        <div class="field-label">@_ui.ProcessNameLabel</div>
+                        <input class="text-input" placeholder="@_ui.ProcessNamePlaceholder"
+                               @bind="process.Name" @bind:event="oninput" />
+                    </div>
+                    <div class="field">
+                        <div class="field-label">@_ui.ProcessDescriptionLabel</div>
+                        <input class="text-input" placeholder="@_ui.ProcessDescriptionPlaceholder"
+                               @bind="process.Description" @bind:event="oninput" />
+                    </div>
+
+                    <div class="field-label">@_ui.StepsLabel</div>
+                    @foreach (var (step, sIndex) in process.Steps.Select((s, i) => (s, i)))
+                    {
+                        <div class="step-row">
+                            <span class="step-index">@(sIndex + 1).</span>
+                            <div class="step-inputs">
+                                <input class="text-input" placeholder="@_ui.StepDescriptionPlaceholder"
+                                       @bind="step.Description" @bind:event="oninput" />
+                                <input class="text-input" placeholder="@_ui.StepActorPlaceholder"
+                                       @bind="step.Actor" @bind:event="oninput" />
+                                <input class="text-input" placeholder="@_ui.StepOutcomePlaceholder"
+                                       @bind="step.Outcome" @bind:event="oninput" />
+                            </div>
+                            <button class="remove-btn" @onclick="@(() => RemoveStep(process, sIndex))">@_ui.RemoveButton</button>
+                        </div>
+                    }
+                    <button class="add-step-btn" @onclick="@(() => AddStep(process))">@_ui.AddStepButton</button>
+                </div>
+            }
+
+            @if (_model.Processes.Count == 0)
+            {
+                <p class="empty-hint">@_ui.ProcessesEmptyHint</p>
+            }
+
+            <button class="add-btn" @onclick="AddProcess">@_ui.AddProcessButton</button>
+        }
 
         <button class="generate-btn" @onclick="GeneratePrompt">@_ui.GenerateButton</button>
 
@@ -407,6 +512,7 @@ Write-ProjectFile -Path (Join-Path $projectDir 'Components/Pages/Wizard.razor') 
     private string? _loadError;
     private string _generatedPrompt = "";
     private UiStrings _ui = UiStrings.Tr;
+    private string _activeTab = "general";
 
     protected override async Task OnInitializedAsync()
     {
@@ -428,6 +534,11 @@ Write-ProjectFile -Path (Join-Path $projectDir 'Components/Pages/Wizard.razor') 
 
     private string LangButtonClass(UiLanguage lang) =>
         _model.Language == lang ? "lang-btn active" : "lang-btn";
+
+    private void SetTab(string tab) => _activeTab = tab;
+
+    private string TabClass(string tab) =>
+        _activeTab == tab ? "tab-btn active" : "tab-btn";
 
     private bool IsHidden(WizardFieldDefinition field)
     {
@@ -464,6 +575,15 @@ Write-ProjectFile -Path (Join-Path $projectDir 'Components/Pages/Wizard.razor') 
             notes[value] = note;
         }
     }
+
+    private void AddScreen() => _model.Screens.Add(new ScreenDefinition());
+    private void RemoveScreen(int index) => _model.Screens.RemoveAt(index);
+
+    private void AddProcess() => _model.Processes.Add(new ProcessDefinition());
+    private void RemoveProcess(int index) => _model.Processes.RemoveAt(index);
+
+    private void AddStep(ProcessDefinition process) => process.Steps.Add(new ProcessStep());
+    private void RemoveStep(ProcessDefinition process, int index) => process.Steps.RemoveAt(index);
 
     private void GeneratePrompt()
     {
@@ -510,6 +630,48 @@ public class UiStrings
     public string ExtraNotesHeading { get; init; } = "";
     public string PromptOutro { get; init; } = "";
 
+    // Tabs
+    public string TabGeneral { get; init; } = "";
+    public string TabScreens { get; init; } = "";
+    public string TabProcesses { get; init; } = "";
+
+    // Screens tab
+    public string ScreensIntro { get; init; } = "";
+    public string ScreenNameLabel { get; init; } = "";
+    public string ScreenNamePlaceholder { get; init; } = "";
+    public string ScreenPurposeLabel { get; init; } = "";
+    public string ScreenPurposePlaceholder { get; init; } = "";
+    public string ScreenFieldsLabel { get; init; } = "";
+    public string ScreenFieldsPlaceholder { get; init; } = "";
+    public string ScreenActionsLabel { get; init; } = "";
+    public string ScreenActionsPlaceholder { get; init; } = "";
+    public string AddScreenButton { get; init; } = "";
+    public string ScreensEmptyHint { get; init; } = "";
+
+    // Processes tab
+    public string ProcessesIntro { get; init; } = "";
+    public string ProcessNameLabel { get; init; } = "";
+    public string ProcessNamePlaceholder { get; init; } = "";
+    public string ProcessDescriptionLabel { get; init; } = "";
+    public string ProcessDescriptionPlaceholder { get; init; } = "";
+    public string AddProcessButton { get; init; } = "";
+    public string ProcessesEmptyHint { get; init; } = "";
+    public string StepsLabel { get; init; } = "";
+    public string StepDescriptionPlaceholder { get; init; } = "";
+    public string StepActorPlaceholder { get; init; } = "";
+    public string StepOutcomePlaceholder { get; init; } = "";
+    public string AddStepButton { get; init; } = "";
+    public string RemoveButton { get; init; } = "";
+
+    // Prompt output headings for screens/processes
+    public string ScreensHeading { get; init; } = "";
+    public string ProcessesHeading { get; init; } = "";
+    public string FieldsHeading { get; init; } = "";
+    public string ActionsHeading { get; init; } = "";
+    public string StepsHeading { get; init; } = "";
+    public string OwnerLabel { get; init; } = "";
+    public string OutcomeLabel { get; init; } = "";
+
     public static readonly UiStrings Tr = new()
     {
         PageTitle = "C# Uygulama Prompt Builder",
@@ -532,6 +694,48 @@ public class UiStrings
         ExtraNotesHeading = "Ek notlar:",
         PromptOutro = "Lütfen bu gereksinimlere uygun, iyi yapılandırılmış, best practice'lere uyan " +
                        "ve derlenebilir bir C# proje iskeleti oluştur. Varsayımların varsa belirt.",
+
+        TabGeneral = "Genel",
+        TabScreens = "Ekranlar",
+        TabProcesses = "Süreçler",
+
+        ScreensIntro = "Uygulamada olmasını istediğiniz her ekranı/sayfayı ayrı ayrı tanımlayın: adı, amacı, " +
+                        "üzerinde hangi bilgilerin/alanların olacağı ve hangi aksiyonların (kaydet, sil, " +
+                        "dışa aktar vb.) yapılabileceği.",
+        ScreenNameLabel = "Ekran adı",
+        ScreenNamePlaceholder = "Örn: Ürün Listesi",
+        ScreenPurposeLabel = "Amaç",
+        ScreenPurposePlaceholder = "Bu ekran ne için kullanılacak?",
+        ScreenFieldsLabel = "Bu ekranda hangi bilgiler/alanlar olacak",
+        ScreenFieldsPlaceholder = "Örn: Ürün adı, stok miktarı, fiyat, kategori",
+        ScreenActionsLabel = "Aksiyonlar",
+        ScreenActionsPlaceholder = "Örn: Yeni ekle, düzenle, sil, Excel'e aktar",
+        AddScreenButton = "+ Ekran Ekle",
+        ScreensEmptyHint = "Henüz ekran eklenmedi. Yukarıdaki butonla ekleyebilirsiniz.",
+
+        ProcessesIntro = "Uygulamadaki iş süreçlerini adım adım tanımlayın: süreç kimlerden geçiyor " +
+                          "(örn. onaycı var mı), her adımda ne oluyor ve süreç nasıl ilerliyor " +
+                          "(onaylanırsa/reddedilirse ne olur).",
+        ProcessNameLabel = "Süreç adı",
+        ProcessNamePlaceholder = "Örn: Satın Alma Onay Süreci",
+        ProcessDescriptionLabel = "Açıklama",
+        ProcessDescriptionPlaceholder = "Bu süreç ne için var, kısaca özetleyin",
+        AddProcessButton = "+ Süreç Ekle",
+        ProcessesEmptyHint = "Henüz süreç eklenmedi. Yukarıdaki butonla ekleyebilirsiniz.",
+        StepsLabel = "Adımlar",
+        StepDescriptionPlaceholder = "Adımda ne oluyor? (örn: Yönetici talebi inceler)",
+        StepActorPlaceholder = "Sorumlu/onaycı (örn: Departman Yöneticisi)",
+        StepOutcomePlaceholder = "Sonuç/sonraki adım (örn: Onaylanırsa 3. adıma geç, reddedilirse talep sahibine bildirim)",
+        AddStepButton = "+ Adım Ekle",
+        RemoveButton = "Kaldır",
+
+        ScreensHeading = "Ekranlar:",
+        ProcessesHeading = "Süreçler:",
+        FieldsHeading = "Alanlar",
+        ActionsHeading = "Aksiyonlar",
+        StepsHeading = "Adımlar",
+        OwnerLabel = "Sorumlu",
+        OutcomeLabel = "Sonuç",
     };
 
     public static readonly UiStrings En = new()
@@ -556,6 +760,47 @@ public class UiStrings
         ExtraNotesHeading = "Additional notes:",
         PromptOutro = "Please produce a well-structured, best-practice C# project skeleton that meets " +
                        "these requirements and compiles. State any assumptions you make.",
+
+        TabGeneral = "General",
+        TabScreens = "Screens",
+        TabProcesses = "Processes",
+
+        ScreensIntro = "Define each screen/page you want in the app: its name, purpose, what information/" +
+                        "fields it shows, and which actions (save, delete, export, etc.) are available on it.",
+        ScreenNameLabel = "Screen name",
+        ScreenNamePlaceholder = "e.g. Product List",
+        ScreenPurposeLabel = "Purpose",
+        ScreenPurposePlaceholder = "What is this screen for?",
+        ScreenFieldsLabel = "What information/fields will be on this screen",
+        ScreenFieldsPlaceholder = "e.g. Product name, stock quantity, price, category",
+        ScreenActionsLabel = "Actions",
+        ScreenActionsPlaceholder = "e.g. Add new, edit, delete, export to Excel",
+        AddScreenButton = "+ Add Screen",
+        ScreensEmptyHint = "No screens added yet. Use the button above to add one.",
+
+        ProcessesIntro = "Define the app's business processes step by step: who the process goes through " +
+                          "(e.g. is there an approver), what happens at each step, and how the process " +
+                          "moves forward (what happens if approved/rejected).",
+        ProcessNameLabel = "Process name",
+        ProcessNamePlaceholder = "e.g. Purchase Approval Process",
+        ProcessDescriptionLabel = "Description",
+        ProcessDescriptionPlaceholder = "Briefly summarize what this process is for",
+        AddProcessButton = "+ Add Process",
+        ProcessesEmptyHint = "No processes added yet. Use the button above to add one.",
+        StepsLabel = "Steps",
+        StepDescriptionPlaceholder = "What happens in this step? (e.g. Manager reviews the request)",
+        StepActorPlaceholder = "Owner/approver (e.g. Department Manager)",
+        StepOutcomePlaceholder = "Outcome/next step (e.g. If approved go to step 3, if rejected notify the requester)",
+        AddStepButton = "+ Add Step",
+        RemoveButton = "Remove",
+
+        ScreensHeading = "Screens:",
+        ProcessesHeading = "Processes:",
+        FieldsHeading = "Fields",
+        ActionsHeading = "Actions",
+        StepsHeading = "Steps",
+        OwnerLabel = "Owner",
+        OutcomeLabel = "Outcome",
     };
 
     public static UiStrings For(UiLanguage lang) => lang == UiLanguage.En ? En : Tr;
@@ -623,6 +868,9 @@ public class WizardModel
     public Dictionary<string, string> OtherValues { get; set; } = new();
     public Dictionary<string, Dictionary<string, string>> ItemNotes { get; set; } = new();
 
+    public List<ScreenDefinition> Screens { get; set; } = [];
+    public List<ProcessDefinition> Processes { get; set; } = [];
+
     public string ExtraNotes { get; set; } = "";
 }
 '@
@@ -642,6 +890,40 @@ public class WizardOptionText
 
     public string HelpFor(UiLanguage lang) =>
         lang == UiLanguage.En && !string.IsNullOrWhiteSpace(HelpEn) ? HelpEn : HelpTr;
+}
+'@
+
+Write-ProjectFile -Path (Join-Path $projectDir 'Models/ScreenDefinition.cs') -Content @'
+namespace PromptBuilder.Models;
+
+public class ScreenDefinition
+{
+    public string Name { get; set; } = "";
+    public string Purpose { get; set; } = "";
+    public string Fields { get; set; } = "";
+    public string Actions { get; set; } = "";
+}
+'@
+
+Write-ProjectFile -Path (Join-Path $projectDir 'Models/ProcessDefinition.cs') -Content @'
+namespace PromptBuilder.Models;
+
+public class ProcessDefinition
+{
+    public string Name { get; set; } = "";
+    public string Description { get; set; } = "";
+    public List<ProcessStep> Steps { get; set; } = [];
+}
+'@
+
+Write-ProjectFile -Path (Join-Path $projectDir 'Models/ProcessStep.cs') -Content @'
+namespace PromptBuilder.Models;
+
+public class ProcessStep
+{
+    public string Description { get; set; } = "";
+    public string Actor { get; set; } = "";
+    public string Outcome { get; set; } = "";
 }
 '@
 
@@ -759,6 +1041,9 @@ public class PromptGeneratorService
             AppendLine(sb, field.Label(model.Language), value);
         }
 
+        AppendScreens(sb, ui, model.Screens);
+        AppendProcesses(sb, ui, model.Processes);
+
         if (!string.IsNullOrWhiteSpace(model.ExtraNotes))
         {
             sb.AppendLine();
@@ -770,6 +1055,63 @@ public class PromptGeneratorService
         sb.AppendLine(ui.PromptOutro);
 
         return sb.ToString();
+    }
+
+    private static void AppendScreens(StringBuilder sb, UiStrings ui, List<ScreenDefinition> screens)
+    {
+        var withName = screens.Where(s => !string.IsNullOrWhiteSpace(s.Name)).ToList();
+        if (withName.Count == 0) return;
+
+        sb.AppendLine();
+        sb.AppendLine(ui.ScreensHeading);
+        for (var i = 0; i < withName.Count; i++)
+        {
+            var screen = withName[i];
+            var header = string.IsNullOrWhiteSpace(screen.Purpose)
+                ? screen.Name
+                : $"{screen.Name} — {screen.Purpose}";
+            sb.AppendLine($"{i + 1}. {header}");
+            if (!string.IsNullOrWhiteSpace(screen.Fields))
+            {
+                sb.AppendLine($"   {ui.FieldsHeading}: {screen.Fields}");
+            }
+            if (!string.IsNullOrWhiteSpace(screen.Actions))
+            {
+                sb.AppendLine($"   {ui.ActionsHeading}: {screen.Actions}");
+            }
+        }
+    }
+
+    private static void AppendProcesses(StringBuilder sb, UiStrings ui, List<ProcessDefinition> processes)
+    {
+        var withName = processes.Where(p => !string.IsNullOrWhiteSpace(p.Name)).ToList();
+        if (withName.Count == 0) return;
+
+        sb.AppendLine();
+        sb.AppendLine(ui.ProcessesHeading);
+        for (var i = 0; i < withName.Count; i++)
+        {
+            var process = withName[i];
+            var header = string.IsNullOrWhiteSpace(process.Description)
+                ? process.Name
+                : $"{process.Name} — {process.Description}";
+            sb.AppendLine($"{i + 1}. {header}");
+
+            var steps = process.Steps.Where(s => !string.IsNullOrWhiteSpace(s.Description)).ToList();
+            if (steps.Count == 0) continue;
+
+            sb.AppendLine($"   {ui.StepsHeading}:");
+            for (var j = 0; j < steps.Count; j++)
+            {
+                var step = steps[j];
+                var extras = new List<string>();
+                if (!string.IsNullOrWhiteSpace(step.Actor)) extras.Add($"{ui.OwnerLabel}: {step.Actor}");
+                if (!string.IsNullOrWhiteSpace(step.Outcome)) extras.Add($"{ui.OutcomeLabel}: {step.Outcome}");
+
+                var suffix = extras.Count > 0 ? $" ({string.Join("; ", extras)})" : "";
+                sb.AppendLine($"   {j + 1}. {step.Description}{suffix}");
+            }
+        }
     }
 
     private static bool IsHidden(WizardFieldDefinition field, WizardModel model)
@@ -876,6 +1218,112 @@ h1 {
     color: #5b6270;
     margin-top: 0;
     margin-bottom: 24px;
+}
+
+.tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid #e2e4e9;
+}
+
+.tab-btn {
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 8px 14px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #5b6270;
+    cursor: pointer;
+}
+
+.tab-btn.active {
+    color: #2f6fed;
+    border-bottom-color: #2f6fed;
+}
+
+.tab-intro {
+    color: #5b6270;
+    margin-top: 0;
+    margin-bottom: 16px;
+}
+
+.entry-card {
+    background: #fff;
+    border: 1px solid #e2e4e9;
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-bottom: 14px;
+}
+
+.entry-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-weight: 600;
+    color: #5b6270;
+    margin-bottom: 8px;
+}
+
+.remove-btn {
+    background: #fff;
+    border: 1px solid #d64545;
+    color: #d64545;
+    border-radius: 6px;
+    padding: 3px 10px;
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+
+.add-btn {
+    background: #fff;
+    border: 1px dashed #2f6fed;
+    color: #2f6fed;
+    border-radius: 6px;
+    padding: 8px 14px;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+.add-step-btn {
+    background: transparent;
+    border: none;
+    color: #2f6fed;
+    font-size: 0.85rem;
+    cursor: pointer;
+    padding: 4px 0;
+    margin-top: 4px;
+}
+
+.empty-hint {
+    color: #8a8f99;
+    font-size: 0.9rem;
+    margin-bottom: 14px;
+}
+
+.step-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.step-index {
+    padding-top: 8px;
+    color: #8a8f99;
+    font-size: 0.85rem;
+}
+
+.step-inputs {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.step-inputs .text-input {
+    margin-top: 0;
 }
 
 .field {

@@ -22,49 +22,148 @@
     }
     else
     {
-        <div class="field">
-            <div class="field-label">@_ui.ProjectNameLabel</div>
-            <input class="text-input" placeholder="@_ui.ProjectNamePlaceholder" @bind="_model.ProjectName" @bind:event="oninput" />
+        <div class="tabs">
+            <button class="@TabClass("general")" @onclick="@(() => SetTab("general"))">@_ui.TabGeneral</button>
+            <button class="@TabClass("screens")" @onclick="@(() => SetTab("screens"))">@_ui.TabScreens</button>
+            <button class="@TabClass("processes")" @onclick="@(() => SetTab("processes"))">@_ui.TabProcesses</button>
         </div>
 
-        @foreach (var field in _fields)
+        @if (_activeTab == "general")
         {
-            if (IsHidden(field)) continue;
+            <div class="field">
+                <div class="field-label">@_ui.ProjectNameLabel</div>
+                <input class="text-input" placeholder="@_ui.ProjectNamePlaceholder" @bind="_model.ProjectName" @bind:event="oninput" />
+            </div>
 
-            var choices = field.Options
-                .Select(o => new WizardChoice(o.Tr, o.For(_model.Language), o.HelpFor(_model.Language)))
-                .ToList();
+            @foreach (var field in _fields)
+            {
+                if (IsHidden(field)) continue;
 
-            @if (field.FieldType == WizardFieldType.SingleSelect)
-            {
-                <SingleSelectField Label="@field.Label(_model.Language)" FieldHelp="@field.Help(_model.Language)"
-                                    Options="choices" AllowOther="field.AllowOther"
-                                    OtherOptionLabel="@_ui.OtherLabel" OtherPlaceholder="@_ui.OtherPlaceholder"
-                                    Value="@GetSingle(field.FieldKey)"
-                                    ValueChanged="@(v => SetSingle(field.FieldKey, v))"
-                                    OtherText="@GetOther(field.FieldKey)"
-                                    OtherTextChanged="@(v => SetOther(field.FieldKey, v))" />
+                var choices = field.Options
+                    .Select(o => new WizardChoice(o.Tr, o.For(_model.Language), o.HelpFor(_model.Language)))
+                    .ToList();
+
+                @if (field.FieldType == WizardFieldType.SingleSelect)
+                {
+                    <SingleSelectField Label="@field.Label(_model.Language)" FieldHelp="@field.Help(_model.Language)"
+                                        Options="choices" AllowOther="field.AllowOther"
+                                        OtherOptionLabel="@_ui.OtherLabel" OtherPlaceholder="@_ui.OtherPlaceholder"
+                                        Value="@GetSingle(field.FieldKey)"
+                                        ValueChanged="@(v => SetSingle(field.FieldKey, v))"
+                                        OtherText="@GetOther(field.FieldKey)"
+                                        OtherTextChanged="@(v => SetOther(field.FieldKey, v))" />
+                }
+                else
+                {
+                    <MultiSelectField Label="@field.Label(_model.Language)" FieldHelp="@field.Help(_model.Language)"
+                                       Options="choices"
+                                       Selected="@GetMulti(field.FieldKey)"
+                                       SelectedChanged="@(v => SetMulti(field.FieldKey, v))"
+                                       AllowOther="field.AllowOther" OtherPlaceholder="@_ui.OtherPlaceholderMulti"
+                                       OtherText="@GetOther(field.FieldKey)"
+                                       OtherTextChanged="@(v => SetOther(field.FieldKey, v))"
+                                       AllowItemNotes="field.AllowItemNotes" ItemNotePlaceholder="@_ui.ItemNotePlaceholder"
+                                       ItemNotes="@GetItemNotes(field.FieldKey)"
+                                       ItemNoteChanged="@(args => SetItemNote(field.FieldKey, args.Value, args.Note))" />
+                }
             }
-            else
-            {
-                <MultiSelectField Label="@field.Label(_model.Language)" FieldHelp="@field.Help(_model.Language)"
-                                   Options="choices"
-                                   Selected="@GetMulti(field.FieldKey)"
-                                   SelectedChanged="@(v => SetMulti(field.FieldKey, v))"
-                                   AllowOther="field.AllowOther" OtherPlaceholder="@_ui.OtherPlaceholderMulti"
-                                   OtherText="@GetOther(field.FieldKey)"
-                                   OtherTextChanged="@(v => SetOther(field.FieldKey, v))"
-                                   AllowItemNotes="field.AllowItemNotes" ItemNotePlaceholder="@_ui.ItemNotePlaceholder"
-                                   ItemNotes="@GetItemNotes(field.FieldKey)"
-                                   ItemNoteChanged="@(args => SetItemNote(field.FieldKey, args.Value, args.Note))" />
-            }
+
+            <div class="field">
+                <div class="field-label">@_ui.ExtraNotesLabel</div>
+                <textarea class="text-area" rows="3" placeholder="@_ui.ExtraNotesPlaceholder"
+                          @bind="_model.ExtraNotes" @bind:event="oninput"></textarea>
+            </div>
         }
+        else if (_activeTab == "screens")
+        {
+            <p class="tab-intro">@_ui.ScreensIntro</p>
 
-        <div class="field">
-            <div class="field-label">@_ui.ExtraNotesLabel</div>
-            <textarea class="text-area" rows="3" placeholder="@_ui.ExtraNotesPlaceholder"
-                      @bind="_model.ExtraNotes" @bind:event="oninput"></textarea>
-        </div>
+            @foreach (var (screen, index) in _model.Screens.Select((s, i) => (s, i)))
+            {
+                <div class="entry-card">
+                    <div class="entry-card-header">
+                        <span>#@(index + 1)</span>
+                        <button class="remove-btn" @onclick="@(() => RemoveScreen(index))">@_ui.RemoveButton</button>
+                    </div>
+                    <div class="field">
+                        <div class="field-label">@_ui.ScreenNameLabel</div>
+                        <input class="text-input" placeholder="@_ui.ScreenNamePlaceholder"
+                               @bind="screen.Name" @bind:event="oninput" />
+                    </div>
+                    <div class="field">
+                        <div class="field-label">@_ui.ScreenPurposeLabel</div>
+                        <input class="text-input" placeholder="@_ui.ScreenPurposePlaceholder"
+                               @bind="screen.Purpose" @bind:event="oninput" />
+                    </div>
+                    <div class="field">
+                        <div class="field-label">@_ui.ScreenFieldsLabel</div>
+                        <textarea class="text-area" rows="2" placeholder="@_ui.ScreenFieldsPlaceholder"
+                                  @bind="screen.Fields" @bind:event="oninput"></textarea>
+                    </div>
+                    <div class="field">
+                        <div class="field-label">@_ui.ScreenActionsLabel</div>
+                        <textarea class="text-area" rows="2" placeholder="@_ui.ScreenActionsPlaceholder"
+                                  @bind="screen.Actions" @bind:event="oninput"></textarea>
+                    </div>
+                </div>
+            }
+
+            @if (_model.Screens.Count == 0)
+            {
+                <p class="empty-hint">@_ui.ScreensEmptyHint</p>
+            }
+
+            <button class="add-btn" @onclick="AddScreen">@_ui.AddScreenButton</button>
+        }
+        else
+        {
+            <p class="tab-intro">@_ui.ProcessesIntro</p>
+
+            @foreach (var (process, pIndex) in _model.Processes.Select((p, i) => (p, i)))
+            {
+                <div class="entry-card">
+                    <div class="entry-card-header">
+                        <span>#@(pIndex + 1)</span>
+                        <button class="remove-btn" @onclick="@(() => RemoveProcess(pIndex))">@_ui.RemoveButton</button>
+                    </div>
+                    <div class="field">
+                        <div class="field-label">@_ui.ProcessNameLabel</div>
+                        <input class="text-input" placeholder="@_ui.ProcessNamePlaceholder"
+                               @bind="process.Name" @bind:event="oninput" />
+                    </div>
+                    <div class="field">
+                        <div class="field-label">@_ui.ProcessDescriptionLabel</div>
+                        <input class="text-input" placeholder="@_ui.ProcessDescriptionPlaceholder"
+                               @bind="process.Description" @bind:event="oninput" />
+                    </div>
+
+                    <div class="field-label">@_ui.StepsLabel</div>
+                    @foreach (var (step, sIndex) in process.Steps.Select((s, i) => (s, i)))
+                    {
+                        <div class="step-row">
+                            <span class="step-index">@(sIndex + 1).</span>
+                            <div class="step-inputs">
+                                <input class="text-input" placeholder="@_ui.StepDescriptionPlaceholder"
+                                       @bind="step.Description" @bind:event="oninput" />
+                                <input class="text-input" placeholder="@_ui.StepActorPlaceholder"
+                                       @bind="step.Actor" @bind:event="oninput" />
+                                <input class="text-input" placeholder="@_ui.StepOutcomePlaceholder"
+                                       @bind="step.Outcome" @bind:event="oninput" />
+                            </div>
+                            <button class="remove-btn" @onclick="@(() => RemoveStep(process, sIndex))">@_ui.RemoveButton</button>
+                        </div>
+                    }
+                    <button class="add-step-btn" @onclick="@(() => AddStep(process))">@_ui.AddStepButton</button>
+                </div>
+            }
+
+            @if (_model.Processes.Count == 0)
+            {
+                <p class="empty-hint">@_ui.ProcessesEmptyHint</p>
+            }
+
+            <button class="add-btn" @onclick="AddProcess">@_ui.AddProcessButton</button>
+        }
 
         <button class="generate-btn" @onclick="GeneratePrompt">@_ui.GenerateButton</button>
 
@@ -87,6 +186,7 @@
     private string? _loadError;
     private string _generatedPrompt = "";
     private UiStrings _ui = UiStrings.Tr;
+    private string _activeTab = "general";
 
     protected override async Task OnInitializedAsync()
     {
@@ -108,6 +208,11 @@
 
     private string LangButtonClass(UiLanguage lang) =>
         _model.Language == lang ? "lang-btn active" : "lang-btn";
+
+    private void SetTab(string tab) => _activeTab = tab;
+
+    private string TabClass(string tab) =>
+        _activeTab == tab ? "tab-btn active" : "tab-btn";
 
     private bool IsHidden(WizardFieldDefinition field)
     {
@@ -144,6 +249,15 @@
             notes[value] = note;
         }
     }
+
+    private void AddScreen() => _model.Screens.Add(new ScreenDefinition());
+    private void RemoveScreen(int index) => _model.Screens.RemoveAt(index);
+
+    private void AddProcess() => _model.Processes.Add(new ProcessDefinition());
+    private void RemoveProcess(int index) => _model.Processes.RemoveAt(index);
+
+    private void AddStep(ProcessDefinition process) => process.Steps.Add(new ProcessStep());
+    private void RemoveStep(ProcessDefinition process, int index) => process.Steps.RemoveAt(index);
 
     private void GeneratePrompt()
     {
