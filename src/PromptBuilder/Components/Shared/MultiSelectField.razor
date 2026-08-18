@@ -1,0 +1,44 @@
+@namespace PromptBuilder.Components.Shared
+
+<div class="field">
+    <div class="field-label">@Label</div>
+    <div class="options">
+        @foreach (var opt in Options)
+        {
+            <label class="option">
+                <input type="checkbox" checked="@Selected.Contains(opt)"
+                       @onchange="@(e => Toggle(opt, (bool)(e.Value ?? false)))" />
+                <span>@opt</span>
+            </label>
+        }
+    </div>
+    @if (AllowOther)
+    {
+        <input class="other-input" placeholder="Diğer (virgülle ayırın)..." value="@OtherText"
+               @oninput="@(e => OtherTextChanged.InvokeAsync((string?)e.Value ?? ""))" />
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter, EditorRequired] public string[] Options { get; set; } = [];
+    [Parameter] public List<string> Selected { get; set; } = [];
+    [Parameter] public EventCallback<List<string>> SelectedChanged { get; set; }
+    [Parameter] public bool AllowOther { get; set; } = true;
+    [Parameter] public string OtherText { get; set; } = "";
+    [Parameter] public EventCallback<string> OtherTextChanged { get; set; }
+
+    private Task Toggle(string opt, bool isChecked)
+    {
+        var updated = new List<string>(Selected);
+        if (isChecked)
+        {
+            if (!updated.Contains(opt)) updated.Add(opt);
+        }
+        else
+        {
+            updated.Remove(opt);
+        }
+        return SelectedChanged.InvokeAsync(updated);
+    }
+}
