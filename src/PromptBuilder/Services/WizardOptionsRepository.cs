@@ -22,7 +22,7 @@ public class WizardOptionsRepository
         await connection.OpenAsync(ct);
 
         const string fieldSql = """
-            SELECT FieldId, FieldKey, Label, FieldType, AllowOther, SortOrder,
+            SELECT FieldId, FieldKey, Label, LabelEn, FieldType, AllowOther, SortOrder,
                    ConditionalOnFieldKey, ConditionalHiddenValue
             FROM dbo.WizardField
             ORDER BY SortOrder;
@@ -33,22 +33,24 @@ public class WizardOptionsRepository
         {
             while (await reader.ReadAsync(ct))
             {
+                var labelTr = reader.GetString(2);
                 var definition = new WizardFieldDefinition
                 {
                     FieldKey = reader.GetString(1),
-                    Label = reader.GetString(2),
-                    FieldType = Enum.Parse<WizardFieldType>(reader.GetString(3)),
-                    AllowOther = reader.GetBoolean(4),
-                    SortOrder = reader.GetInt32(5),
-                    ConditionalOnFieldKey = reader.IsDBNull(6) ? null : reader.GetString(6),
-                    ConditionalHiddenValue = reader.IsDBNull(7) ? null : reader.GetString(7),
+                    LabelTr = labelTr,
+                    LabelEn = reader.IsDBNull(3) ? labelTr : reader.GetString(3),
+                    FieldType = Enum.Parse<WizardFieldType>(reader.GetString(4)),
+                    AllowOther = reader.GetBoolean(5),
+                    SortOrder = reader.GetInt32(6),
+                    ConditionalOnFieldKey = reader.IsDBNull(7) ? null : reader.GetString(7),
+                    ConditionalHiddenValue = reader.IsDBNull(8) ? null : reader.GetString(8),
                 };
                 fields.Add((reader.GetInt32(0), definition));
             }
         }
 
         const string optionSql = """
-            SELECT OptionText
+            SELECT OptionText, OptionTextEn
             FROM dbo.WizardOption
             WHERE FieldId = @FieldId
             ORDER BY SortOrder;
@@ -61,7 +63,12 @@ public class WizardOptionsRepository
             await using var reader = await command.ExecuteReaderAsync(ct);
             while (await reader.ReadAsync(ct))
             {
-                definition.Options.Add(reader.GetString(0));
+                var tr = reader.GetString(0);
+                definition.Options.Add(new WizardOptionText
+                {
+                    Tr = tr,
+                    En = reader.IsDBNull(1) ? tr : reader.GetString(1),
+                });
             }
         }
 

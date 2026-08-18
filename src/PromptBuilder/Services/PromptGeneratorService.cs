@@ -7,34 +7,34 @@ public class PromptGeneratorService
 {
     public string Generate(WizardModel model, List<WizardFieldDefinition> fields)
     {
+        var ui = UiStrings.For(model.Language);
         var sb = new StringBuilder();
 
-        sb.AppendLine("Aşağıdaki gereksinimlere uygun bir C# uygulaması geliştirmeni istiyorum:");
+        sb.AppendLine(ui.PromptIntro);
         sb.AppendLine();
 
-        AppendLine(sb, "Proje adı", model.ProjectName);
+        AppendLine(sb, ui.ProjectNameLabel, model.ProjectName);
 
         foreach (var field in fields)
         {
             if (IsHidden(field, model)) continue;
 
             var value = field.FieldType == WizardFieldType.MultiSelect
-                ? ResolveMulti(model, field.FieldKey)
-                : ResolveSingle(model, field.FieldKey);
+                ? ResolveMulti(model, field)
+                : ResolveSingle(model, field);
 
-            AppendLine(sb, field.Label, value);
+            AppendLine(sb, field.Label(model.Language), value);
         }
 
         if (!string.IsNullOrWhiteSpace(model.ExtraNotes))
         {
             sb.AppendLine();
-            sb.AppendLine("Ek notlar:");
+            sb.AppendLine(ui.ExtraNotesHeading);
             sb.AppendLine(model.ExtraNotes.Trim());
         }
 
         sb.AppendLine();
-        sb.AppendLine("Lütfen bu gereksinimlere uygun, iyi yapılandırılmış, best practice'lere uyan " +
-                       "ve derlenebilir bir C# proje iskeleti oluştur. Varsayımların varsa belirt.");
+        sb.AppendLine(ui.PromptOutro);
 
         return sb.ToString();
     }
@@ -46,21 +46,34 @@ public class PromptGeneratorService
         return parentValue == field.ConditionalHiddenValue;
     }
 
-    private static string ResolveSingle(WizardModel model, string fieldKey)
+    private static string ResolveSingle(WizardModel model, WizardFieldDefinition field)
     {
-        var value = model.SingleValues.GetValueOrDefault(fieldKey, "");
-        var other = model.OtherValues.GetValueOrDefault(fieldKey, "");
-        return value == "Diğer" && !string.IsNullOrWhiteSpace(other) ? other : value;
+        var value = model.SingleValues.GetValueOrDefault(field.FieldKey, "");
+        if (value == WizardConstants.OtherSentinel)
+        {
+            return model.OtherValues.GetValueOrDefault(field.FieldKey, "");
+        }
+
+        var option = field.Options.FirstOrDefault(o => o.Tr == value);
+        return option?.For(model.Language) ?? "";
     }
 
-    private static string ResolveMulti(WizardModel model, string fieldKey)
+    private static string ResolveMulti(WizardModel model, WizardFieldDefinition field)
     {
-        var items = new List<string>(model.MultiValues.GetValueOrDefault(fieldKey, []));
-        var other = model.OtherValues.GetValueOrDefault(fieldKey, "");
+        var selected = model.MultiValues.GetValueOrDefault(field.FieldKey, []);
+        var items = new List<string>();
+        foreach (var value in selected)
+        {
+            var option = field.Options.FirstOrDefault(o => o.Tr == value);
+            if (option is not null) items.Add(option.For(model.Language));
+        }
+
+        var other = model.OtherValues.GetValueOrDefault(field.FieldKey, "");
         if (!string.IsNullOrWhiteSpace(other))
         {
             items.AddRange(other.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
         }
+
         return items.Count > 0 ? string.Join(", ", items) : "";
     }
 

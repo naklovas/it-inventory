@@ -3,41 +3,42 @@
 <div class="field">
     <div class="field-label">@Label</div>
     <div class="options">
-        @foreach (var opt in Options)
+        @foreach (var choice in Options)
         {
             <label class="option">
-                <input type="radio" name="@GroupName" checked="@(Value == opt)"
-                       @onchange="@(() => OnSelect(opt))" />
-                <span>@opt</span>
+                <input type="radio" name="@GroupName" checked="@(Value == choice.Value)"
+                       @onchange="@(() => OnSelect(choice.Value))" />
+                <span>@choice.Display</span>
             </label>
         }
         @if (AllowOther)
         {
             <label class="option">
-                <input type="radio" name="@GroupName" checked="@(Value == OtherOptionLabel)"
-                       @onchange="@(() => OnSelect(OtherOptionLabel))" />
+                <input type="radio" name="@GroupName" checked="@(Value == WizardConstants.OtherSentinel)"
+                       @onchange="@(() => OnSelect(WizardConstants.OtherSentinel))" />
                 <span>@OtherOptionLabel</span>
             </label>
         }
     </div>
-    @if (AllowOther && Value == OtherOptionLabel)
+    @if (AllowOther && Value == WizardConstants.OtherSentinel)
     {
-        <input class="other-input" placeholder="Belirtin..." value="@OtherText"
+        <input class="other-input" placeholder="@OtherPlaceholder" value="@OtherText"
                @oninput="@(e => OtherTextChanged.InvokeAsync((string?)e.Value ?? ""))" />
     }
 </div>
 
 @code {
     [Parameter, EditorRequired] public string Label { get; set; } = "";
-    [Parameter, EditorRequired] public string[] Options { get; set; } = [];
+    [Parameter, EditorRequired] public List<WizardChoice> Options { get; set; } = [];
     [Parameter] public string Value { get; set; } = "";
     [Parameter] public EventCallback<string> ValueChanged { get; set; }
     [Parameter] public bool AllowOther { get; set; } = true;
     [Parameter] public string OtherOptionLabel { get; set; } = "Diğer";
+    [Parameter] public string OtherPlaceholder { get; set; } = "Belirtin...";
     [Parameter] public string OtherText { get; set; } = "";
     [Parameter] public EventCallback<string> OtherTextChanged { get; set; }
 
     private string GroupName => "grp-" + Label.GetHashCode();
 
-    private Task OnSelect(string opt) => ValueChanged.InvokeAsync(opt);
+    private Task OnSelect(string value) => ValueChanged.InvokeAsync(value);
 }

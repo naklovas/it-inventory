@@ -4,9 +4,13 @@
 @inject IJSRuntime JS
 
 <div class="wizard">
-    <h1>C# Uygulama Prompt Builder</h1>
-    <p class="intro">Alanları seçin, en altta hazır bir prompt oluşturulacak. Sorular SQL Server'daki
-        dbo.WizardField / dbo.WizardOption tablolarından geliyor.</p>
+    <div class="lang-toggle">
+        <button class="@LangButtonClass(UiLanguage.Tr)" @onclick="@(() => SetLanguage(UiLanguage.Tr))">TR</button>
+        <button class="@LangButtonClass(UiLanguage.En)" @onclick="@(() => SetLanguage(UiLanguage.En))">EN</button>
+    </div>
+
+    <h1>@_ui.PageTitle</h1>
+    <p class="intro">@_ui.Intro</p>
 
     @if (_loadError is not null)
     {
@@ -14,22 +18,25 @@
     }
     else if (_fields is null)
     {
-        <p>Yükleniyor...</p>
+        <p>@_ui.LoadingText</p>
     }
     else
     {
         <div class="field">
-            <div class="field-label">Proje adı</div>
-            <input class="text-input" placeholder="Örn: StokTakip" @bind="_model.ProjectName" @bind:event="oninput" />
+            <div class="field-label">@_ui.ProjectNameLabel</div>
+            <input class="text-input" placeholder="@_ui.ProjectNamePlaceholder" @bind="_model.ProjectName" @bind:event="oninput" />
         </div>
 
         @foreach (var field in _fields)
         {
             if (IsHidden(field)) continue;
 
+            var choices = field.Options.Select(o => new WizardChoice(o.Tr, o.For(_model.Language))).ToList();
+
             @if (field.FieldType == WizardFieldType.SingleSelect)
             {
-                <SingleSelectField Label="@field.Label" Options="field.Options.ToArray()" AllowOther="field.AllowOther"
+                <SingleSelectField Label="@field.Label(_model.Language)" Options="choices" AllowOther="field.AllowOther"
+                                    OtherOptionLabel="@_ui.OtherLabel" OtherPlaceholder="@_ui.OtherPlaceholder"
                                     Value="@GetSingle(field.FieldKey)"
                                     ValueChanged="@(v => SetSingle(field.FieldKey, v))"
                                     OtherText="@GetOther(field.FieldKey)"
@@ -37,29 +44,29 @@
             }
             else
             {
-                <MultiSelectField Label="@field.Label" Options="field.Options.ToArray()"
+                <MultiSelectField Label="@field.Label(_model.Language)" Options="choices"
                                    Selected="@GetMulti(field.FieldKey)"
                                    SelectedChanged="@(v => SetMulti(field.FieldKey, v))"
-                                   AllowOther="field.AllowOther"
+                                   AllowOther="field.AllowOther" OtherPlaceholder="@_ui.OtherPlaceholderMulti"
                                    OtherText="@GetOther(field.FieldKey)"
                                    OtherTextChanged="@(v => SetOther(field.FieldKey, v))" />
             }
         }
 
         <div class="field">
-            <div class="field-label">Ek notlar (opsiyonel)</div>
-            <textarea class="text-area" rows="3" placeholder="Yukarıdaki alanlara sığmayan özel istekler..."
+            <div class="field-label">@_ui.ExtraNotesLabel</div>
+            <textarea class="text-area" rows="3" placeholder="@_ui.ExtraNotesPlaceholder"
                       @bind="_model.ExtraNotes" @bind:event="oninput"></textarea>
         </div>
 
-        <button class="generate-btn" @onclick="GeneratePrompt">Prompt Oluştur</button>
+        <button class="generate-btn" @onclick="GeneratePrompt">@_ui.GenerateButton</button>
 
         @if (!string.IsNullOrEmpty(_generatedPrompt))
         {
             <div class="output">
                 <div class="output-header">
-                    <span>Oluşan Prompt</span>
-                    <button class="copy-btn" @onclick="CopyToClipboard">Kopyala</button>
+                    <span>@_ui.OutputHeader</span>
+                    <button class="copy-btn" @onclick="CopyToClipboard">@_ui.CopyButton</button>
                 </div>
                 <textarea class="output-area" rows="16" readonly>@_generatedPrompt</textarea>
             </div>
@@ -72,6 +79,7 @@
     private List<WizardFieldDefinition>? _fields;
     private string? _loadError;
     private string _generatedPrompt = "";
+    private UiStrings _ui = UiStrings.Tr;
 
     protected override async Task OnInitializedAsync()
     {
@@ -81,9 +89,18 @@
         }
         catch (Exception ex)
         {
-            _loadError = $"Alanlar veritabanından yüklenemedi: {ex.Message}";
+            _loadError = $"{UiStrings.Tr.LoadErrorPrefix} {ex.Message}";
         }
     }
+
+    private void SetLanguage(UiLanguage lang)
+    {
+        _model.Language = lang;
+        _ui = UiStrings.For(lang);
+    }
+
+    private string LangButtonClass(UiLanguage lang) =>
+        _model.Language == lang ? "lang-btn active" : "lang-btn";
 
     private bool IsHidden(WizardFieldDefinition field)
     {

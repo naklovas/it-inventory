@@ -2,6 +2,8 @@ namespace PromptBuilder.Models;
 
 public class WizardModel
 {
+    public UiLanguage Language { get; set; } = UiLanguage.Tr;
+
     public string ProjectName { get; set; } = "";
 
     public Dictionary<string, string> SingleValues { get; set; } = new();
