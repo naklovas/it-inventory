@@ -1,0 +1,229 @@
+@model TaskCardModel
+@{
+    var t = Model.Task;
+    var acl = Model.Page;
+    var isDone = t.Status is RunbookTaskStatus.Completed or RunbookTaskStatus.Skipped;
+    var isBlocked = t.Status == RunbookTaskStatus.Blocked;
+    var statusKey = t.Status.ToString().ToLowerInvariant();
+    var bodyId = $"task-body-{t.Id}";
+}
+
+<div class="br-task @(isDone ? "is-done" : string.Empty) @(isBlocked ? "is-blocked" : string.Empty)"
+     id="task-@t.Id" data-task-id="@t.Id" draggable="@acl.CanWrite.ToString().ToLowerInvariant()">
+    <span class="br-task-bar" style="background:@t.ColorHex"></span>
+
+    <div class="br-task-body">
+        <div class="d-flex align-items-start gap-2">
+            @if (acl.CanWrite)
+            {
+                <i class="bi bi-grip-vertical br-drag-handle mt-1" title="Suruklerek siralayin"></i>
+            }
+
+            <span class="br-task-order" style="background:@t.ColorHex">@t.Order</span>
+
+            <div class="flex-grow-1">
+                <div class="d-flex flex-wrap align-items-center gap-2">
+                    <span class="br-task-title" data-bs-toggle="collapse" data-bs-target="#@bodyId"
+                          aria-expanded="false" title="Detay ve tarihce icin tiklayin">
+                        @t.Title
+                        <i class="bi bi-chevron-down small br-muted"></i>
+                    </span>
+
+                    <span class="br-chip br-chip-@statusKey">@t.StatusText</span>
+
+                    @if (t.Priority >= TaskPriority.High)
+                    {
+                        <span class="small br-priority-@t.Priority.ToString().ToLowerInvariant()">
+                            <i class="bi bi-flag-fill"></i> @t.PriorityText
+                        </span>
+                    }
+
+                    @if (t.EstimatedMinutes.HasValue)
+                    {
+                        <span class="small br-muted"><i class="bi bi-stopwatch"></i> @t.EstimatedMinutes dk</span>
+                    }
+
+                    @if (t.DependsOnTaskId.HasValue)
+                    {
+                        <span class="small br-muted" title="Onkosul">
+                            <i class="bi bi-diagram-3"></i> @t.DependsOnTaskTitle
+                        </span>
+                    }
+
+                    @if (t.CommentCount > 0)
+                    {
+                        <span class="small br-muted"><i class="bi bi-chat-dots"></i> @t.CommentCount</span>
+                    }
+                </div>
+
+                @if (t.PlannedStart.HasValue || t.PlannedEnd.HasValue)
+                {
+                    <small class="br-muted d-block mt-1">
+                        <i class="bi bi-calendar3"></i>
+                        @(t.PlannedStart?.ToLocalTime().ToString("dd.MM HH:mm") ?? "-")
+                        &rarr;
+                        @(t.PlannedEnd?.ToLocalTime().ToString("dd.MM HH:mm") ?? "-")
+                    </small>
+                }
+            </div>
+
+            @* Atanan kisi/grup rozetleri; gruplarda bas harfler kare rozette gosterilir. *@
+            <div class="d-flex align-items-center gap-2">
+                <span class="br-avatar-stack">
+                    @foreach (var assignment in t.Assignments)
+                    {
+                        if (assignment.AssigneeType == AssigneeType.User && assignment.User is not null)
+                        {
+                            <partial name="_Avatar" model="@(new AvatarModel(assignment.User.Id, assignment.User.DisplayName, assignment.User.Initials, assignment.User.AvatarColor, assignment.User.HasPhoto, AvatarSize.Normal, false, assignment.User.Title))" />
+                        }
+                        else if (assignment.Group is not null)
+                        {
+                            <partial name="_Avatar" model="@(new AvatarModel(null, assignment.Group.DisplayName ?? assignment.Group.Name, assignment.Group.Initials, assignment.Group.AvatarColor, false, AvatarSize.Normal, true, "AD grubu"))" />
+                        }
+                    }
+                </span>
+
+                @if (acl.CanAssign)
+                {
+                    <button class="btn btn-sm btn-outline-secondary rounded-circle br-assign-btn"
+                            data-task-id="@t.Id" title="Kisi veya grup ata">
+                        <i class="bi bi-person-plus"></i>
+                    </button>
+                }
+            </div>
+        </div>
+
+        @if (t.EstimatedMinutes is > 0)
+        {
+            <div class="br-timeline mt-2">
+                <span style="background:@t.ColorHex;width:@(isDone ? 100 : t.Status == RunbookTaskStatus.InProgress ? 50 : 8)%"></span>
+            </div>
+        }
+
+        @* ------------------------------------------------ akordiyon: detay + tarihce *@
+        <div class="collapse mt-3" id="@bodyId" data-task-id="@t.Id">
+            @if (!string.IsNullOrWhiteSpace(t.Description))
+            {
+                <p style="white-space:pre-wrap;">@t.Description</p>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(t.RollbackNotes))
+            {
+                <div class="alert alert-warning py-2 px-3 small">
+                    <strong>Geri alma:</strong> @t.RollbackNotes
+                </div>
+            }
+
+            <div class="d-flex flex-wrap gap-2 mb-3">
+                @if (acl.CanExecute)
+                {
+                    foreach (var status in new[] { RunbookTaskStatus.InProgress, RunbookTaskStatus.Completed, RunbookTaskStatus.Blocked, RunbookTaskStatus.Failed, RunbookTaskStatus.Skipped })
+                    {
+                        if (status != t.Status)
+                        {
+                            <button class="btn btn-sm btn-outline-secondary br-status-btn"
+                                    data-task-id="@t.Id" data-status="@status">
+                                @DisplayText.Status(status)
+                            </button>
+                        }
+                    }
+                }
+
+                @if (t.Assignments.Count > 0 && acl.CanExecute)
+                {
+                    <div class="dropdown">
+                        <button class="btn btn-sm btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown">
+                            <i class="bi bi-arrow-left-right me-1"></i>Devret
+                        </button>
+                        <ul class="dropdown-menu">
+                            @foreach (var assignment in t.Assignments)
+                            {
+                                <li>
+                                    <button class="dropdown-item br-handover-btn"
+                                            data-task-id="@t.Id"
+                                            data-assignment-id="@assignment.Id"
+                                            data-from="@assignment.DisplayName">
+                                        @assignment.DisplayName
+                                    </button>
+                                </li>
+                            }
+                        </ul>
+                    </div>
+                }
+
+                @if (acl.CanAssign)
+                {
+                    foreach (var assignment in t.Assignments)
+                    {
+                        <button class="btn btn-sm btn-outline-danger br-unassign-btn"
+                                data-task-id="@t.Id" data-assignment-id="@assignment.Id"
+                                title="Atamayi kaldir">
+                            <i class="bi bi-person-dash"></i> @assignment.DisplayName
+                        </button>
+                    }
+                }
+
+                @if (t.ScriptId.HasValue && acl.CanRunScript)
+                {
+                    <button class="btn btn-sm btn-outline-dark br-script-btn"
+                            data-script-id="@t.ScriptId" data-task-id="@t.Id">
+                        <i class="bi bi-terminal me-1"></i>@t.ScriptName calistir
+                    </button>
+                }
+
+                @if (acl.CanWrite)
+                {
+                    <button class="btn btn-sm btn-outline-danger br-delete-task-btn" data-task-id="@t.Id">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                }
+            </div>
+
+            <div class="row g-3">
+                <div class="col-lg-6">
+                    <h6 class="small text-uppercase br-muted">Tarihce</h6>
+                    <div class="br-history" data-history-for="@t.Id">
+                        <div class="br-muted small">Yukleniyor...</div>
+                    </div>
+                </div>
+                <div class="col-lg-6">
+                    <h6 class="small text-uppercase br-muted">Ayrintilar</h6>
+                    <dl class="row small mb-0">
+                        <dt class="col-5 br-muted">Olusturan</dt><dd class="col-7">@t.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</dd>
+                        <dt class="col-5 br-muted">Gerceklesen baslangic</dt><dd class="col-7">@(t.ActualStart?.ToLocalTime().ToString("dd.MM.yyyy HH:mm") ?? "-")</dd>
+                        <dt class="col-5 br-muted">Gerceklesen bitis</dt><dd class="col-7">@(t.ActualEnd?.ToLocalTime().ToString("dd.MM.yyyy HH:mm") ?? "-")</dd>
+                        <dt class="col-5 br-muted">Oncelik</dt><dd class="col-7">@t.PriorityText</dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+
+        @* --------------------------------------------------------- yorumlar *@
+        <div class="br-comments" data-comments-for="@t.Id">
+            @foreach (var comment in t.Comments)
+            {
+                <div class="br-comment">
+                    <partial name="_Avatar" model="@(new AvatarModel(comment.Author.Id, comment.Author.DisplayName, comment.Author.Initials, comment.Author.AvatarColor, comment.Author.HasPhoto, AvatarSize.Small, false, comment.Author.Title))" />
+                    <div class="br-comment-bubble">
+                        <div class="br-comment-meta">
+                            <strong class="text-body">@comment.Author.DisplayName</strong>
+                            &middot; @comment.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")
+                        </div>
+                        <div style="white-space:pre-wrap;">@comment.Body</div>
+                    </div>
+                </div>
+            }
+        </div>
+
+        @if (acl.CanComment)
+        {
+            <div class="d-flex gap-2 mt-2">
+                <input class="form-control form-control-sm br-comment-input" data-task-id="@t.Id"
+                       placeholder="Yorum yazin, Enter ile gonderin..." />
+                <button class="btn btn-sm btn-primary br-comment-btn" data-task-id="@t.Id">
+                    <i class="bi bi-send"></i>
+                </button>
+            </div>
+        }
+    </div>
+</div>

@@ -1,0 +1,112 @@
+@model object
+@{
+    var page = Model as PageViewModel;
+    var me = page?.CurrentUser ?? ViewData["CurrentUser"] as CurrentUserDto;
+    var controller = ViewContext.RouteData.Values["controller"]?.ToString();
+    string NavClass(string name) => string.Equals(controller, name, StringComparison.OrdinalIgnoreCase) ? "nav-link active" : "nav-link";
+}
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - BookRunner</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/lib/bootstrap-icons/font/bootstrap-icons.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+</head>
+<body>
+<nav class="navbar navbar-expand-lg navbar-dark br-navbar">
+    <div class="container-xl">
+        <a class="navbar-brand d-flex align-items-center gap-2" asp-controller="Home" asp-action="Index">
+            <i class="bi bi-journal-code"></i> BookRunner
+        </a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#brNav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="brNav">
+            <ul class="navbar-nav me-auto gap-1">
+                <li class="nav-item">
+                    <a class="@NavClass("Home")" asp-controller="Home" asp-action="Index">
+                        <i class="bi bi-speedometer2 me-1"></i>Panel
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="@NavClass("Runbooks")" asp-controller="Runbooks" asp-action="Index">
+                        <i class="bi bi-list-check me-1"></i>Runbook'lar
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="@NavClass("Templates")" asp-controller="Templates" asp-action="Index">
+                        <i class="bi bi-collection me-1"></i>Sablonlar
+                    </a>
+                </li>
+                @if (page?.CanViewAudit == true)
+                {
+                    <li class="nav-item">
+                        <a class="@NavClass("Admin")" asp-controller="Admin" asp-action="Audit">
+                            <i class="bi bi-shield-check me-1"></i>Denetim
+                        </a>
+                    </li>
+                }
+            </ul>
+
+            @if (me is not null)
+            {
+                <div class="dropdown">
+                    <a href="#" class="d-flex align-items-center gap-2 text-white text-decoration-none dropdown-toggle"
+                       data-bs-toggle="dropdown">
+                        <partial name="_Avatar" model="@(new AvatarModel(me.Id, me.DisplayName, me.Initials, me.AvatarColor, me.HasPhoto))" />
+                        <span class="d-none d-lg-inline">
+                            @me.DisplayName
+                            <small class="d-block text-white-50" style="font-size:.7rem;">@me.Role</small>
+                        </span>
+                    </a>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><h6 class="dropdown-header">@me.UserName</h6></li>
+                        @if (!string.IsNullOrWhiteSpace(me.Title))
+                        {
+                            <li><span class="dropdown-item-text small br-muted">@me.Title</span></li>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(me.Department))
+                        {
+                            <li><span class="dropdown-item-text small br-muted">@me.Department</span></li>
+                        }
+                        <li><hr class="dropdown-divider" /></li>
+                        <li><span class="dropdown-item-text small">Rol: <strong>@me.Role</strong></span></li>
+                        <li><span class="dropdown-item-text small br-muted">@me.Groups.Count AD grubu</span></li>
+                    </ul>
+                </div>
+            }
+        </div>
+    </div>
+</nav>
+
+<main class="container-xl py-4">
+    @if (TempData["Success"] is string success)
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="bi bi-check-circle me-1"></i>@success
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+    @if (TempData["Error"] is string error)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="bi bi-exclamation-triangle me-1"></i>@error
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    }
+
+    @RenderBody()
+</main>
+
+<footer class="container-xl pb-4 br-muted small">
+    BookRunner &middot; Runbook hazirlama ve isbirligi platformu
+</footer>
+
+<script src="~/lib/bootstrap/js/bootstrap.bundle.min.js"></script>
+@await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

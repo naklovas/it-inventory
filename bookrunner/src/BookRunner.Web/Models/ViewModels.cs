@@ -1,0 +1,100 @@
+using BookRunner.Application.Common;
+using BookRunner.Application.Dtos;
+using BookRunner.Application.Security;
+
+namespace BookRunner.Web.Models;
+
+/// <summary>Tum sayfalarin ortak ihtiyaci: oturum acan kullanici ve yetkileri.</summary>
+public class PageViewModel
+{
+    public CurrentUserDto? CurrentUser { get; init; }
+
+    public bool Can(string permission)
+        => CurrentUser?.Permissions.Contains(permission, StringComparer.OrdinalIgnoreCase) == true;
+
+    public bool CanWrite => Can(Permissions.RunbookWrite);
+    public bool CanAssign => Can(Permissions.TaskAssign);
+    public bool CanComment => Can(Permissions.TaskComment);
+    public bool CanExecute => Can(Permissions.TaskExecute);
+    public bool CanExport => Can(Permissions.ExportData);
+    public bool CanImport => Can(Permissions.ImportData);
+    public bool CanPublishTemplate => Can(Permissions.RunbookPublishTemplate);
+    public bool CanDelete => Can(Permissions.RunbookDelete);
+    public bool CanViewAudit => Can(Permissions.AuditRead);
+    public bool CanRunScript => Can(Permissions.ScriptExecute);
+}
+
+/// <summary>Ana ekran.</summary>
+public sealed class DashboardViewModel : PageViewModel
+{
+    public DashboardDto Dashboard { get; init; } = new();
+}
+
+/// <summary>Runbook listesi ve filtreleri.</summary>
+public sealed class RunbookListViewModel : PageViewModel
+{
+    public RunbookFilter Filter { get; init; } = new();
+    public PagedResult<RunbookListItemDto> Results { get; init; } = PagedResult<RunbookListItemDto>.Create([], 1, 25, 0);
+    public bool TemplatesView { get; init; }
+}
+
+/// <summary>Runbook detay ekrani (gorev barlari, yorumlar, tarihce).</summary>
+public sealed class RunbookDetailViewModel : PageViewModel
+{
+    public required RunbookDetailDto Runbook { get; init; }
+
+    /// <summary>SignalR hub adresi; canli guncellemeler icin.</summary>
+    public string HubUrl { get; init; } = string.Empty;
+
+    public IReadOnlyList<ScriptDto> Scripts { get; init; } = Array.Empty<ScriptDto>();
+
+    public int TotalTasks => Runbook.Tasks.Count;
+
+    public int CompletedTasks => Runbook.Tasks.Count(t =>
+        t.Status is Domain.Enums.RunbookTaskStatus.Completed or Domain.Enums.RunbookTaskStatus.Skipped);
+
+    public int ProgressPercent => TotalTasks == 0 ? 0 : (int)Math.Round(CompletedTasks * 100.0 / TotalTasks);
+}
+
+/// <summary>Runbook olusturma/duzenleme formu.</summary>
+public sealed class RunbookFormViewModel : PageViewModel
+{
+    public Guid? Id { get; set; }
+    public string? Code { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public Domain.Enums.RunbookStatus Status { get; set; } = Domain.Enums.RunbookStatus.Draft;
+    public bool IsTemplate { get; set; }
+    public string? TemplateCategory { get; set; }
+    public DateTime? PlannedStart { get; set; }
+    public DateTime? PlannedEnd { get; set; }
+    public string? ServiceManagerWorkItemId { get; set; }
+    public string? TagsText { get; set; }
+    public string? RowVersion { get; set; }
+
+    public IReadOnlyList<string> Tags => string.IsNullOrWhiteSpace(TagsText)
+        ? Array.Empty<string>()
+        : TagsText.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+}
+
+/// <summary>Audit trail ekrani.</summary>
+public sealed class AuditViewModel : PageViewModel
+{
+    public AuditFilter Filter { get; init; } = new();
+    public PagedResult<AuditLogDto> Results { get; init; } = PagedResult<AuditLogDto>.Create([], 1, 50, 0);
+}
+
+/// <summary>Yonetim / entegrasyon durumu ekrani.</summary>
+public sealed class AdminViewModel : PageViewModel
+{
+    public ServiceManagerHealth? ServiceManager { get; init; }
+    public IReadOnlyList<ScriptDto> Scripts { get; init; } = Array.Empty<ScriptDto>();
+}
+
+/// <summary>Hata sayfasi.</summary>
+public sealed class ErrorViewModel
+{
+    public string? RequestId { get; init; }
+    public string? Message { get; init; }
+    public bool ShowRequestId => !string.IsNullOrEmpty(RequestId);
+}

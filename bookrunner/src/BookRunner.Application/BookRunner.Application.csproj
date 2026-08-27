@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>BookRunner.Application</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\BookRunner.Domain\BookRunner.Domain.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Is katmani sorgulari IQueryable uzerinden kurdugu icin EF Core soyutlamalarina
+         ihtiyac duyar; somut saglayici (SQL Server) yalnizca Infrastructure'dadir. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
+  </ItemGroup>
+
+</Project>

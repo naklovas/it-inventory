@@ -1,0 +1,149 @@
+@model RunbookListViewModel
+@{
+    ViewData["Title"] = "Sablonlar";
+    var categories = Model.Results.Items
+        .Select(item => item.TemplateCategory ?? "Kategorisiz")
+        .Distinct()
+        .OrderBy(name => name)
+        .ToList();
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div>
+        <h1 class="br-page-title h3 mb-1">Sablon kutuphanesi</h1>
+        <p class="br-muted mb-0">
+            Tekrarlayan calismalar icin hazir adim listeleri. Bir sablonu secip yeni runbook uretin.
+        </p>
+    </div>
+    @if (Model.CanWrite)
+    {
+        <a class="btn btn-primary" asp-controller="Runbooks" asp-action="Create" asp-route-isTemplate="true">
+            <i class="bi bi-plus-lg me-1"></i>Yeni sablon
+        </a>
+    }
+</div>
+
+<form class="br-card p-3 mb-3" method="get">
+    <div class="row g-2 align-items-end">
+        <div class="col-md-6">
+            <label class="form-label small br-muted">Ara</label>
+            <input class="form-control" name="search" value="@Model.Filter.Search" placeholder="Sablon adi veya aciklama" />
+        </div>
+        <div class="col-md-4">
+            <label class="form-label small br-muted">Kategori</label>
+            <select class="form-select" name="templateCategory">
+                <option value="">Tumu</option>
+                @foreach (var category in categories)
+                {
+                    <option value="@category" selected="@(Model.Filter.TemplateCategory == category)">@category</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-2 d-grid">
+            <button class="btn btn-primary"><i class="bi bi-search me-1"></i>Filtrele</button>
+        </div>
+    </div>
+</form>
+
+@if (Model.Results.Items.Count == 0)
+{
+    <div class="br-card p-5 text-center">
+        <i class="bi bi-collection display-6 br-muted"></i>
+        <p class="br-muted mt-2 mb-0">
+            Henuz sablon yok. Bir runbook'u tamamladiktan sonra "Sablon yap" ile kutuphaneye ekleyebilirsiniz.
+        </p>
+    </div>
+}
+else
+{
+    <div class="row g-3">
+        @foreach (var template in Model.Results.Items)
+        {
+            <div class="col-md-6 col-xl-4">
+                <div class="br-card h-100 p-3 d-flex flex-column">
+                    <div class="d-flex justify-content-between align-items-start gap-2">
+                        <div>
+                            <h2 class="h6 mb-1">@template.Title</h2>
+                            <code class="br-muted small">@template.Code</code>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(template.TemplateCategory))
+                        {
+                            <span class="badge text-bg-light border">@template.TemplateCategory</span>
+                        }
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(template.Description))
+                    {
+                        <p class="small br-muted mt-2 mb-2">@template.Description</p>
+                    }
+
+                    <div class="small br-muted mb-3">
+                        <i class="bi bi-list-ol"></i> @template.TaskCount adim
+                        @if (template.Owner is not null)
+                        {
+                            <span class="ms-2"><i class="bi bi-person"></i> @template.Owner.DisplayName</span>
+                        }
+                    </div>
+
+                    <div class="mt-auto d-flex gap-2">
+                        <a class="btn btn-sm btn-outline-secondary" asp-controller="Runbooks" asp-action="Details" asp-route-id="@template.Id">
+                            <i class="bi bi-eye me-1"></i>Incele
+                        </a>
+                        @if (Model.CanWrite)
+                        {
+                            <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#use-@template.Id">
+                                <i class="bi bi-magic me-1"></i>Bu sablonu kullan
+                            </button>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            @if (Model.CanWrite)
+            {
+                <div class="modal fade" id="use-@template.Id" tabindex="-1">
+                    <div class="modal-dialog">
+                        <form class="modal-content" method="post" asp-action="Use" asp-route-id="@template.Id">
+                            @Html.AntiForgeryToken()
+                            <div class="modal-header">
+                                <h5 class="modal-title">Sablondan runbook uret</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <p class="small br-muted">
+                                    <strong>@template.Title</strong> sablonundaki @template.TaskCount adim yeni runbook'a kopyalanir.
+                                </p>
+                                <label class="form-label small br-muted">Runbook basligi *</label>
+                                <input class="form-control mb-2" name="title" required value="@template.Title" />
+
+                                <div class="row g-2">
+                                    <div class="col-6">
+                                        <label class="form-label small br-muted">Planlanan baslangic</label>
+                                        <input class="form-control" type="datetime-local" name="plannedStart" />
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label small br-muted">Planlanan bitis</label>
+                                        <input class="form-control" type="datetime-local" name="plannedEnd" />
+                                    </div>
+                                </div>
+
+                                <label class="form-label small br-muted mt-2">Service Manager kaydi</label>
+                                <input class="form-control" name="serviceManagerWorkItemId" placeholder="orn. CR12345" />
+
+                                <div class="form-check mt-3">
+                                    <input class="form-check-input" type="checkbox" name="copyAssignments" value="true" id="copy-@template.Id" />
+                                    <label class="form-check-label small" for="copy-@template.Id">
+                                        Sablondaki atamalari da kopyala
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button class="btn btn-primary">Olustur</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+}

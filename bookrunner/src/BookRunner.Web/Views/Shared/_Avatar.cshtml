@@ -1,0 +1,23 @@
+@model AvatarModel
+@{
+    var size = Model.Size switch
+    {
+        AvatarSize.Small => "br-avatar-sm",
+        AvatarSize.Large => "br-avatar-lg",
+        _ => string.Empty
+    };
+    var shape = Model.IsGroup ? "br-avatar-group" : string.Empty;
+    var tooltip = string.IsNullOrWhiteSpace(Model.Subtitle) ? Model.DisplayName : $"{Model.DisplayName} - {Model.Subtitle}";
+}
+@if (Model.HasPhoto && Model.UserId.HasValue)
+{
+    @* Fotograf Active Directory'den gelir; API uzerinden vekillenerek sunulur. *@
+    <img class="br-avatar @size @shape"
+         src="@Url.Action("Photo", "Home", new { id = Model.UserId })"
+         alt="@Model.DisplayName" title="@tooltip"
+         onerror="this.outerHTML='<span class=\'br-avatar @size @shape\' style=\'background:@Model.Color\'>@Model.Initials</span>';" />
+}
+else
+{
+    <span class="br-avatar @size @shape" style="background:@Model.Color" title="@tooltip">@Model.Initials</span>
+}

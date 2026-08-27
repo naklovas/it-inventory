@@ -1,0 +1,372 @@
+# BookRunner
+
+Buyuk altyapi gecislerinde ve altyapi + kod yayginlastirmanin birlikte yurudugu
+calismalarda kullanilan **runbook hazirlama ve isbirligi platformu**.
+
+Amac: yapilacak isi bir baslik altinda tarif etmek, adimlari (task) tanimlamak,
+adimlari Active Directory'deki kisilere ve gruplara atamak, calisma sirasinda
+herkesin ayni tabloyu gormesini saglamak ve her hareketin izini birakmak.
+
+---
+
+## Icindekiler
+
+- [Ozellikler](#ozellikler)
+- [Mimari](#mimari)
+- [Cozum yapisi](#cozum-yapisi)
+- [Yetkilendirme modeli](#yetkilendirme-modeli)
+- [Kurulum](#kurulum)
+- [Yapilandirma](#yapilandirma)
+- [Calistirma ve dagitim](#calistirma-ve-dagitim)
+- [API](#api)
+- [Varsayimlar](#varsayimlar)
+
+---
+
+## Ozellikler
+
+| Alan | Karsiligi |
+| --- | --- |
+| Kimlik dogrulama | Windows Entegre Kimlik Dogrulama (Negotiate/Kerberos) - SSO, ayrica oturum acilmaz |
+| Kullanici yonetimi | Tamamen Active Directory: kisi, grup, uyelik, unvan, departman ve **fotograf** AD'den okunur |
+| Runbook | Baslik + aciklama + planlanan zaman + etiketler + SCSM kaydi |
+| Gorev (task) | Sirali adimlar, her adim **kendi renginde bir bar**, oncelik, sure, bagimlilik, geri alma notu |
+| Atama | Kisiye veya dogrudan **AD grubuna**; gruptaki kisilere e-posta gider |
+| Devir (handover) | Goreve atanan kisi gorevi baska kisiye/gruba devredebilir, devir zinciri saklanir |
+| Yorum | Her gorevin altinda yorum akisi, @ ile kisi anma, anilan kisilere e-posta |
+| Tarihce | Goreve tiklaninca **akordiyon** icinde acilan degismez olay gecmisi |
+| Sablon | Runbook sablona cevrilir, sablondan yeni runbook uretilir |
+| Listeleme/filtreleme | Arama, durum, etiket, SCSM kaydi, tarih araligi, siralama, sayfalama |
+| Excel | Runbook ve liste disa aktarimi + sablonla gorev ice aktarimi (dogrulamali) |
+| PDF | Yazdirmaya uygun runbook ciktisi (gorev barlari, atananlar, yorumlar) |
+| E-posta | Atama, devir, yorum ve durum degisikliginde bildirim (outbox + tekrar deneme) |
+| Audit trail | Varlik degisiklikleri otomatik, disa aktarim/script gibi islemler acikca kaydedilir |
+| Service Manager | SCSM veritabanina **salt-okunur**, dogrudan SQL erisimi |
+| 3. parti API | Runbook/gorev olaylarinin dis bir REST ucuna iletilmesi (webhook/ITSM/sohbet kanali) |
+| Otomasyon | Roslyn C# Scripting (CSX) ile gorevlere baglanan script'ler |
+| Canli isbirligi | SignalR: gorev/yorum degisiklikleri acik ekranlara aninda yansir |
+
+---
+
+## Mimari
+
+Katmanli (N-tier), **ayri REST API + ayri frontend**:
+
+```
+┌──────────────────┐        HTTPS + Negotiate        ┌──────────────────┐
+│  BookRunner.Web  │ ──────────────────────────────► │  BookRunner.Api  │
+│  (MVC / Razor)   │ ◄────────────────────────────── │  (REST + Swagger)│
+│  Bootstrap 5     │        JSON + SignalR           │                  │
+└──────────────────┘                                 └────────┬─────────┘
+                                                              │
+                                            ┌─────────────────┼─────────────────┐
+                                            ▼                 ▼                 ▼
+                                   ┌────────────────┐ ┌──────────────┐ ┌────────────────┐
+                                   │ SQL Server     │ │ Active       │ │ Service        │
+                                   │ (EF Core 9)    │ │ Directory    │ │ Manager DB     │
+                                   │                │ │ (salt okuma) │ │ (salt okuma)   │
+                                   └────────────────┘ └──────────────┘ └────────────────┘
+```
+
+Katmanlar ve bagimlilik yonu:
+
+```
+BookRunner.Web ─┐
+                ├─► BookRunner.Application ─► BookRunner.Domain
+BookRunner.Api ─┤              ▲
+                └─► BookRunner.Infrastructure ─┘
+```
+
+- **Domain** - varliklar ve enum'lar. Hicbir seye bagimli degil.
+- **Application** - is kurallari, DTO'lar, servis sozlesmeleri, izin modeli.
+  Veri erisimini `IAppDbContext` soyutlamasi uzerinden yapar; SQL Server'i tanimaz.
+- **Infrastructure** - EF Core/SQL Server, Active Directory, SMTP, Excel, PDF,
+  Service Manager, Roslyn scripting, dis API entegrasyonu.
+- **Api** - REST uclari, Swagger, Negotiate kimlik dogrulama, izin politikalari,
+  SignalR hub'i.
+- **Web** - MVC/Razor arayuz. Is mantigina dogrudan erisimi yoktur; tum veriyi
+  REST uzerinden alir.
+
+### Tarayici neden API'ye dogrudan gitmiyor?
+
+Ekran ici etkilesimler (gorev ekleme, atama, yorum, tarihce) tarayicidan
+**Web katmanindaki JSON uclarina** gider, Web de istegi kullanicinin Windows
+kimligiyle API'ye iletir. Bunun nedeni Kerberos ve CORS karmasikligini tek
+noktada toplamak. API yine de dogrudan cagrilabilir (CORS politikasi
+`Cors:AllowedOrigins` ile acik) - Swagger UI, PowerShell veya baska bir istemci
+bu yolu kullanabilir.
+
+---
+
+## Cozum yapisi
+
+```
+bookrunner/
+├── BookRunner.sln
+├── Directory.Build.props          # ortak derleme ayarlari (net9.0, nullable, XML doc)
+├── Directory.Packages.props       # merkezi paket surum yonetimi
+├── publish.ps1                    # tek dosyalik Windows exe uretir
+├── run-local.ps1                  # API + Web'i birlikte baslatir
+├── sql/
+│   ├── 01_CreateDatabase.sql      # veritabani, sema ve uygulama hesabi
+│   ├── 02_BookRunner_Schema.sql   # EF Core migration'indan uretilen idempotent script
+│   ├── 03_ServiceManager_ReadOnly.sql
+│   └── 04_RoleMappings.sql        # AD grubu -> rol eslemesi
+├── scripts/                       # ornek CSX script'leri
+└── src/
+    ├── BookRunner.Domain/
+    ├── BookRunner.Application/
+    ├── BookRunner.Infrastructure/
+    ├── BookRunner.Api/
+    └── BookRunner.Web/
+```
+
+---
+
+## Yetkilendirme modeli
+
+Uygulamada ayri bir kullanici/rol ekrani **yoktur**. Yetki tamamen AD grup
+uyeliginden turetilir:
+
+```
+AD grubu ──(RoleMappings tablosu)──► AppRole ──(Permissions)──► izin claim'leri
+```
+
+| Rol | Ozet | Baslica izinler |
+| --- | --- | --- |
+| `Viewer` | Sadece okur | `runbook.read` |
+| `Contributor` | Kendi gorevlerini yurutur, yorum yazar, devreder | `task.execute`, `task.comment`, `data.export` |
+| `RunbookAuthor` | Runbook/gorev olusturur, atar, sablon yayinlar | + `runbook.write`, `task.assign`, `data.import` |
+| `Administrator` | Tam yetki | + `runbook.delete`, `script.manage`, `audit.read`, `admin.manage` |
+
+Eslemeler `appsettings.json` icindeki `Authorization:RoleMappings` bolumunden
+(ilk acilista tohumlanir) veya `sql/04_RoleMappings.sql` ile yonetilir.
+Hicbir eslemeye uymayan kullanici `Viewer` olur.
+
+Bir kullanici birden fazla gruba uye ise **en yuksek rol** gecerlidir.
+Ek olarak, goreve atanmis kisiler `task.assign` yetkileri olmasa da kendi
+gorevlerinin durumunu degistirebilir ve gorevi devredebilir.
+
+Kullanici profili ve grup uyelikleri her istekte AD'ye gidilmeden, 15 dakikalik
+bellek onbelleginden okunur.
+
+---
+
+## Kurulum
+
+### Gereksinimler
+
+- .NET 9 SDK (gelistirme) / Windows Server (calisma)
+- SQL Server 2019+
+- Etki alanina uye bir sunucu (Windows kimlik dogrulama icin)
+- SMTP sunucusu (bildirimler icin)
+
+### Adimlar
+
+```powershell
+# 1. Veritabani
+sqlcmd -S localhost -i sql\01_CreateDatabase.sql
+sqlcmd -S localhost -d BookRunner -i sql\02_BookRunner_Schema.sql
+
+# 2. AD grup -> rol eslemesi (SID degerlerini kendi gruplarinizla degistirin)
+#    Grup SID'ini ogrenmek icin:  (Get-ADGroup 'BookRunner-Authors').SID.Value
+sqlcmd -S localhost -d BookRunner -i sql\04_RoleMappings.sql
+
+# 3. (opsiyonel) Service Manager salt-okunur erisimi
+sqlcmd -S scsm-dw -i sql\03_ServiceManager_ReadOnly.sql
+
+# 4. Calistir
+.\run-local.ps1
+```
+
+> `Database:MigrateOnStartup` varsayilan olarak `true`'dur; API acilista bekleyen
+> EF Core migration'larini kendisi uygular. Sema degisikliklerini elle yonetmek
+> isterseniz bu ayari `false` yapin ve yalnizca `sqlcmd` ile ilerleyin.
+
+Sema degisikligi uretmek icin:
+
+```powershell
+dotnet ef migrations add <Ad> `
+    --project src/BookRunner.Infrastructure `
+    --startup-project src/BookRunner.Api `
+    --output-dir Persistence/Migrations
+```
+
+---
+
+## Yapilandirma
+
+Tum ayarlar `src/BookRunner.Api/appsettings.json` ve
+`src/BookRunner.Web/appsettings.json` dosyalarindadir.
+
+### API
+
+| Bolum | Anahtar | Aciklama |
+| --- | --- | --- |
+| `ConnectionStrings` | `BookRunner` | SQL Server baglanti dizesi |
+| `Database` | `MigrateOnStartup` | Acilista migration uygula |
+| `Cors` | `AllowedOrigins` | Frontend adresleri |
+| `ActiveDirectory` | `Domain`, `SearchRoot` | Bos birakilirsa sunucunun etki alani kullanilir |
+| | `ServiceAccountUserName/Password` | Bos ise uygulama havuzu kimligiyle baglanilir (onerilen) |
+| | `PhotoAttributes` | Fotograf niteligi sirasi (`thumbnailPhoto`, `jpegPhoto`) |
+| | `Disabled` | AD'siz gelistirme ortami icin |
+| `Authorization` | `RoleMappings` | AD grubu -> rol tohumlamasi |
+| `Email` | `Host`, `Port`, `UseStartTls`, `FromAddress` | SMTP |
+| | `WebBaseUrl` | E-postalardaki baglantilarin taban adresi |
+| | `RedirectAllTo` | Doluysa tum posta bu adrese gider (test ortami) |
+| `ServiceManager` | `Enabled`, `ConnectionString` | SCSM salt-okunur erisim |
+| | `SearchQuery`, `GetByIdQuery` | SCSM sorgulari **yapilandirmadan** degistirilebilir |
+| `Scripting` | `Enabled`, `BlockedPatterns` | CSX calistirici |
+| `Integration` | `Enabled`, `BaseUrl`, `ApiKey` | 3. parti REST entegrasyonu |
+
+### Web
+
+| Anahtar | Aciklama |
+| --- | --- |
+| `Api:BaseUrl` | API adresi |
+| `Api:HubUrl` | Bos ise `BaseUrl/hubs/runbook` olarak turetilir |
+
+Sifre gibi degerleri dosyaya yazmak yerine ortam degiskeni veya
+`dotnet user-secrets` kullanin:
+
+```powershell
+setx Email__Password "..." /M
+setx ConnectionStrings__BookRunner "Server=...;Integrated Security=true" /M
+```
+
+---
+
+## Calistirma ve dagitim
+
+### Gelistirme
+
+```powershell
+.\run-local.ps1
+# Web    : https://localhost:7080
+# API    : https://localhost:7443
+# Swagger: https://localhost:7443/swagger
+```
+
+### Local exe (self-contained tek dosya)
+
+```powershell
+.\publish.ps1 -OutputPath C:\BookRunner
+```
+
+Cikan iki klasor hedef sunucuya kopyalanip dogrudan calistirilabilir; makinede
+.NET kurulu olmasi gerekmez. Windows servisi olarak kaydetmek icin:
+
+```powershell
+sc.exe create BookRunnerApi binPath= "C:\BookRunner\BookRunner.Api\BookRunner.Api.exe" obj= "CONTOSO\svc-bookrunner" start= auto
+sc.exe create BookRunnerWeb binPath= "C:\BookRunner\BookRunner.Web\BookRunner.Web.exe" obj= "CONTOSO\svc-bookrunner" start= auto
+```
+
+Her iki uygulama `UseWindowsService()` ile yapilandirildigi icin hem konsoldan
+hem de servis olarak calisir.
+
+### Kerberos notu
+
+Web ve API **ayni sunucuda** calisiyorsa ek yapilandirma gerekmez.
+**Ayri sunuculardaysa**, Web'in kullanicinin kimligini API'ye tasiyabilmesi icin
+Kerberos kisitlanmis yetki devri (constrained delegation) gerekir:
+
+```powershell
+# API icin SPN
+setspn -S HTTP/bookrunner-api.contoso.com CONTOSO\svc-bookrunner
+
+# Web hesabinin API'ye delege etmesine izin ver
+Set-ADUser svc-bookrunner-web -Add @{
+    'msDS-AllowedToDelegateTo' = 'HTTP/bookrunner-api.contoso.com'
+}
+```
+
+Delegasyon kurulmazsa Web'den API'ye giden istekler 401 doner. Bu durumda ya
+iki uygulamayi ayni sunucuda calistirin ya da delegasyonu yapilandirin.
+
+---
+
+## API
+
+Swagger UI: `https://<api-host>/swagger`
+
+| Grup | Uc |
+| --- | --- |
+| Runbook | `GET/POST /api/runbooks`, `GET/PUT/DELETE /api/runbooks/{id}`, `GET /api/runbooks/dashboard` |
+| Sablon | `POST /api/runbooks/{id}/save-as-template`, `POST /api/runbooks/templates/{id}/instantiate` |
+| Gorev | `POST /api/runbooks/{id}/tasks`, `PUT /api/tasks/{id}`, `POST /api/tasks/{id}/status`, `POST /api/runbooks/{id}/tasks/reorder` |
+| Tarihce | `GET /api/tasks/{id}/history` |
+| Atama | `GET/POST /api/tasks/{id}/assignments`, `POST /api/tasks/{id}/assignments/handover` |
+| Yorum | `GET/POST /api/tasks/{id}/comments` |
+| Dizin | `GET /api/directory/me`, `/users`, `/groups`, `/users/{id}/photo` |
+| Disa aktarim | `GET /api/runbooks/{id}/export/excel`, `/export/pdf`, `POST /api/runbooks/{id}/import/excel` |
+| Denetim | `GET /api/audit` |
+| Service Manager | `GET /api/service-manager/work-items`, `/health` |
+| Script | `GET/POST /api/scripts`, `POST /api/scripts/{id}/run` |
+| SignalR | `/hubs/runbook` |
+
+Hatalar RFC 7807 `ProblemDetails` olarak doner:
+`404` bulunamadi, `403` yetkisiz, `400` dogrulama, `409` is kurali ihlali.
+
+---
+
+## Varsayimlar
+
+Gereksinimlerde acikca belirtilmeyen, tasarim sirasinda alinan kararlar:
+
+1. **AD salt-okunur.** Uygulama Active Directory'ye hicbir sey yazmaz. Kisi,
+   grup, uyelik ve fotograf bilgisi AD'den okunup yerel tablolara yansitilir
+   (12 saatlik tazeleme). Boylece raporlar hizli calisir ve AD'ye gecici olarak
+   erisilemedigi anlarda uygulama okunabilir kalir.
+
+2. **Yetki AD grubundan gelir.** Ayri bir kullanici/rol yonetimi ekrani
+   yapilmadi; roller `RoleMappings` tablosundaki AD grubu eslemelerinden
+   turetiliyor. Hicbir eslemeye uymayan kullanici `Viewer` olur.
+
+3. **Sablon ile runbook ayni varliktir.** `IsTemplate` bayragi ile ayrilir.
+   Bu, "runbook template hale getirilebilir" gereksinimini kod ve sema
+   tekrarlamadan karsilar.
+
+4. **Silme mantiksaldir.** Runbook, gorev ve yorumlar `IsDeleted` ile
+   isaretlenir; denetim izleri ve gecmis atamalar kaybolmaz.
+
+5. **E-posta once kuyruga yazilir.** SMTP arizasi kullanici islemini bozmaz;
+   arka plan servisi ustel bekleme ile tekrar dener. Hangi bildirimin kime
+   gittigi `EmailOutbox` tablosundan denetlenebilir.
+
+6. **Grup atamasinda alicilar.** Grubun kendi e-posta adresi varsa dagitim
+   listesi olarak kullanilir; yoksa AD'deki (ic ice gruplar dahil) uyelerin
+   adresleri cozulur.
+
+7. **Service Manager sorgulari yapilandirilabilir.** Varsayilan sorgular SCSM
+   Data Warehouse'daki `ChangeRequestDimvw` gorunumune gore yazildi. Ortamdaki
+   sema/ozellestirme farkliysa `ServiceManager:SearchQuery` ve `GetByIdQuery`
+   ayarlarindan degistirilir - kod degistirmek gerekmez. Erisim yalnizca
+   `SELECT`; `03_ServiceManager_ReadOnly.sql` yazma yetkisini acikca reddeder.
+
+8. **CSX script'leri tam guvenle calisir.** Roslyn scripting bir guvenlik
+   siniri saglamaz. Bu yuzden script **yazma** yetkisi yalnizca
+   `Administrator` rolunde, her calistirma audit'e yaziliyor,
+   `Scripting:BlockedPatterns` listesindeki ifadeler reddediliyor ve zaman
+   asimi uygulaniyor. Guvenilmeyen kullanicilara `script.manage` izni vermeyin.
+
+9. **Frontend, API sozlesmelerini yeniden kullanir.** `BookRunner.Web` projesi
+   DTO'lar icin `BookRunner.Application`'a referans verir; is mantigina
+   dogrudan erisimi yoktur, tum veri REST uzerinden gelir. Ayri bir
+   `Contracts` projesi tercih edilirse DTO'lar oraya tasinabilir.
+
+10. **Tarayici API'ye dogrudan gitmez.** Ekran ici etkilesimler Web katmanindaki
+    JSON uclari uzerinden vekillenir (Kerberos/CORS karmasikligini tek noktada
+    tutmak icin). API dogrudan cagrilara da aciktir.
+
+11. **Frontend kutuphaneleri yerelde.** Bootstrap 5, Bootstrap Icons ve SignalR
+    istemcisi `wwwroot/lib` altinda gomulu; internet erisimi olmayan ic aglarda
+    da arayuz eksiksiz calisir.
+
+12. **Test yok.** Gereksinimde belirtildigi gibi otomatik test projesi
+    eklenmedi. Is kurallari `Application` katmaninda toplandigi icin sonradan
+    test eklemek icin mimari degisiklik gerekmez.
+
+13. **Turkce metinler ASCII ile yazildi.** Farkli kod sayfalari ve konsol
+    ortamlarinda bozulma yasanmamasi icin arayuz metinlerinde ve yorumlarda
+    Turkce karakter kullanilmadi. Tam Turkce metin istenirse kaynak dosyalar
+    UTF-8 oldugu icin dogrudan degistirilebilir.

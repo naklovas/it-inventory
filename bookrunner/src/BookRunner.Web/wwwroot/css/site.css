@@ -1,0 +1,332 @@
+/* ==========================================================================
+   BookRunner - kurumsal ama sikici olmayan, isbirligini one cikaran arayuz.
+   Bootstrap 5 uzerine ince bir katman; renk sistemi gorev barlarindan gelir.
+   ========================================================================== */
+
+:root {
+    --br-bg: #f4f6fa;
+    --br-surface: #ffffff;
+    --br-border: #e2e8f0;
+    --br-text: #1f2933;
+    --br-muted: #7b8794;
+    --br-primary: #2f5bd7;
+    --br-primary-soft: #eaf0ff;
+    --br-radius: 14px;
+    --br-shadow: 0 1px 2px rgba(16, 24, 40, .04), 0 8px 24px rgba(16, 24, 40, .06);
+}
+
+body {
+    background: var(--br-bg);
+    color: var(--br-text);
+    font-family: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    font-size: .94rem;
+}
+
+/* ------------------------------------------------------------------ kabuk */
+
+.br-navbar {
+    background: linear-gradient(120deg, #1f3a93 0%, #2f5bd7 55%, #3f7ad9 100%);
+    box-shadow: 0 2px 12px rgba(31, 58, 147, .18);
+}
+
+.br-navbar .navbar-brand {
+    font-weight: 700;
+    letter-spacing: -.02em;
+}
+
+.br-navbar .nav-link {
+    color: rgba(255, 255, 255, .82);
+    border-radius: 8px;
+    padding: .35rem .75rem;
+}
+
+.br-navbar .nav-link:hover,
+.br-navbar .nav-link.active {
+    color: #fff;
+    background: rgba(255, 255, 255, .14);
+}
+
+.br-card {
+    background: var(--br-surface);
+    border: 1px solid var(--br-border);
+    border-radius: var(--br-radius);
+    box-shadow: var(--br-shadow);
+}
+
+.br-page-title {
+    font-weight: 700;
+    letter-spacing: -.02em;
+}
+
+.br-muted {
+    color: var(--br-muted);
+}
+
+/* ----------------------------------------------------------------- avatar */
+
+.br-avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    color: #fff;
+    font-size: .72rem;
+    font-weight: 700;
+    letter-spacing: .02em;
+    border: 2px solid #fff;
+    object-fit: cover;
+    flex: 0 0 auto;
+    text-decoration: none;
+}
+
+.br-avatar-sm { width: 26px; height: 26px; font-size: .62rem; }
+.br-avatar-lg { width: 44px; height: 44px; font-size: .9rem; }
+
+/* Rozetler ust uste binerek yer kazanir; ilk rozet en ustte durur. */
+.br-avatar-stack { display: inline-flex; flex-direction: row-reverse; }
+.br-avatar-stack .br-avatar:not(:last-child) { margin-left: -10px; }
+
+.br-avatar-group {
+    border-radius: 9px;                 /* gruplar kare-yuvarlak, kisiler daire */
+}
+
+/* ------------------------------------------------------------- gorev bari */
+
+.br-task {
+    position: relative;
+    background: var(--br-surface);
+    border: 1px solid var(--br-border);
+    border-radius: var(--br-radius);
+    margin-bottom: .85rem;
+    overflow: hidden;
+    transition: box-shadow .15s ease, transform .15s ease;
+}
+
+.br-task:hover {
+    box-shadow: var(--br-shadow);
+}
+
+/* Her gorevin kendi rengindeki dikey bari; renk satir ici stil ile gelir. */
+.br-task-bar {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 6px;
+}
+
+.br-task-body {
+    padding: .85rem 1rem .85rem 1.4rem;
+}
+
+.br-task-title {
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.br-task-title:hover { color: var(--br-primary); }
+
+.br-task-order {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 26px;
+    height: 26px;
+    padding: 0 .4rem;
+    border-radius: 8px;
+    color: #fff;
+    font-size: .74rem;
+    font-weight: 700;
+}
+
+.br-task.is-done .br-task-title {
+    text-decoration: line-through;
+    color: var(--br-muted);
+}
+
+.br-task.is-blocked {
+    background: #fff8f6;
+}
+
+/* Zaman cizelgesi seridi: planlanan sureyi gorsellestirir. */
+.br-timeline {
+    height: 8px;
+    border-radius: 99px;
+    background: #edf1f7;
+    overflow: hidden;
+}
+
+.br-timeline > span {
+    display: block;
+    height: 100%;
+    border-radius: 99px;
+}
+
+/* ---------------------------------------------------------------- durumlar */
+
+.br-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: .3rem;
+    padding: .15rem .6rem;
+    border-radius: 99px;
+    font-size: .74rem;
+    font-weight: 600;
+    border: 1px solid transparent;
+}
+
+.br-chip-notstarted { background: #eef1f5; color: #52606d; }
+.br-chip-inprogress { background: #e6f0ff; color: #1c4ec4; }
+.br-chip-blocked    { background: #fdecea; color: #b3261e; }
+.br-chip-completed  { background: #e6f6ec; color: #17693a; }
+.br-chip-failed     { background: #fdecea; color: #8c1d18; }
+.br-chip-skipped    { background: #f3eefb; color: #6b3fa0; }
+
+.br-priority-critical { color: #b3261e; }
+.br-priority-high     { color: #c26a00; }
+
+/* ---------------------------------------------------------------- yorumlar */
+
+.br-comments {
+    border-top: 1px dashed var(--br-border);
+    margin-top: .7rem;
+    padding-top: .7rem;
+}
+
+.br-comment {
+    display: flex;
+    gap: .6rem;
+    padding: .35rem 0;
+}
+
+.br-comment-bubble {
+    background: #f7f9fc;
+    border: 1px solid var(--br-border);
+    border-radius: 12px;
+    padding: .45rem .7rem;
+    flex: 1 1 auto;
+}
+
+.br-comment-meta {
+    font-size: .74rem;
+    color: var(--br-muted);
+}
+
+.br-mention {
+    background: var(--br-primary-soft);
+    color: var(--br-primary);
+    border-radius: 6px;
+    padding: 0 .25rem;
+    font-weight: 600;
+}
+
+/* --------------------------------------------------------------- tarihce */
+
+.br-history {
+    border-left: 2px solid var(--br-border);
+    margin-left: .55rem;
+    padding-left: .9rem;
+}
+
+.br-history-item {
+    position: relative;
+    padding: .3rem 0;
+}
+
+.br-history-item::before {
+    content: "";
+    position: absolute;
+    left: -1.18rem;
+    top: .72rem;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--br-primary);
+    border: 2px solid #fff;
+}
+
+/* ------------------------------------------------------------ ozet kartlar */
+
+.br-stat {
+    display: flex;
+    align-items: center;
+    gap: .85rem;
+    padding: 1rem 1.1rem;
+}
+
+.br-stat-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    font-size: 1.2rem;
+}
+
+.br-stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+/* --------------------------------------------------------------- arama */
+
+.br-suggest {
+    position: absolute;
+    z-index: 1080;
+    width: 100%;
+    max-height: 260px;
+    overflow-y: auto;
+    background: #fff;
+    border: 1px solid var(--br-border);
+    border-radius: 10px;
+    box-shadow: var(--br-shadow);
+    display: none;
+}
+
+.br-suggest.show { display: block; }
+
+.br-suggest-item {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    padding: .45rem .7rem;
+    cursor: pointer;
+}
+
+.br-suggest-item:hover,
+.br-suggest-item.active { background: var(--br-primary-soft); }
+
+/* ------------------------------------------------------------ surukle-birak */
+
+.br-task.dragging { opacity: .55; }
+.br-drag-handle { cursor: grab; color: var(--br-muted); }
+.br-drag-handle:active { cursor: grabbing; }
+
+/* ------------------------------------------------------------ canli gosterge */
+
+.br-live {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    font-size: .74rem;
+    color: var(--br-muted);
+}
+
+.br-live-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #b0b8c4;
+}
+
+.br-live.is-online .br-live-dot {
+    background: #2e9e68;
+    box-shadow: 0 0 0 3px rgba(46, 158, 104, .18);
+}
+
+@media (max-width: 767.98px) {
+    .br-task-body { padding-left: 1.1rem; }
+    .br-stat-value { font-size: 1.25rem; }
+}

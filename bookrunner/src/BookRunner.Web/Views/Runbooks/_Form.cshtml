@@ -1,0 +1,66 @@
+@model RunbookFormViewModel
+@{
+    var isEdit = Model.Id.HasValue;
+}
+
+<div class="row g-3">
+    <div class="col-md-8">
+        <label class="form-label small br-muted">Baslik *</label>
+        <input class="form-control" asp-for="Title" required minlength="3" maxlength="250"
+               placeholder="Yapilacak isin kisa adi" />
+        <span class="text-danger small" asp-validation-for="Title"></span>
+    </div>
+
+    <div class="col-md-4">
+        <label class="form-label small br-muted">Tur</label>
+        <div class="form-check form-switch mt-2">
+            <input class="form-check-input" type="checkbox" asp-for="IsTemplate" disabled="@isEdit" />
+            <label class="form-check-label" asp-for="IsTemplate">Sablon olarak olustur</label>
+        </div>
+    </div>
+
+    <div class="col-12">
+        <label class="form-label small br-muted">Aciklama</label>
+        <textarea class="form-control" rows="5" asp-for="Description"
+                  placeholder="Bu calisma neden yapiliyor, kapsami ne, hangi sistemleri etkiliyor?"></textarea>
+    </div>
+
+    @if (isEdit)
+    {
+        <div class="col-md-3">
+            <label class="form-label small br-muted">Durum</label>
+            <select class="form-select" asp-for="Status"
+                    asp-items="@Html.GetEnumSelectList<RunbookStatus>()"></select>
+        </div>
+    }
+
+    <div class="col-md-3">
+        <label class="form-label small br-muted">Kategori (sablonlar icin)</label>
+        <input class="form-control" asp-for="TemplateCategory" placeholder="orn. Veritabani Gecisi" />
+    </div>
+
+    <div class="col-md-3">
+        <label class="form-label small br-muted">Planlanan baslangic</label>
+        <input class="form-control" type="datetime-local" asp-for="PlannedStart" />
+    </div>
+
+    <div class="col-md-3">
+        <label class="form-label small br-muted">Planlanan bitis</label>
+        <input class="form-control" type="datetime-local" asp-for="PlannedEnd" />
+    </div>
+
+    <div class="col-md-4 position-relative">
+        <label class="form-label small br-muted">Service Manager kaydi</label>
+        <input class="form-control" asp-for="ServiceManagerWorkItemId" id="scsmInput"
+               autocomplete="off" placeholder="orn. CR12345" />
+        <div class="br-suggest" id="scsmSuggest"></div>
+        <small class="br-muted">Kayit numarasi yazdikca Service Manager veritabanindan oneri gelir.</small>
+    </div>
+
+    <div class="col-md-8">
+        <label class="form-label small br-muted">Etiketler</label>
+        <input class="form-control" asp-for="TagsText" placeholder="virgulle ayirin: veritabani, gece-bakim" />
+    </div>
+</div>
+
+<input type="hidden" asp-for="RowVersion" />

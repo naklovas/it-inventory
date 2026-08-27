@@ -1,0 +1,97 @@
+@model AdminViewModel
+@{
+    ViewData["Title"] = "Entegrasyonlar";
+    var scsm = Model.ServiceManager;
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h1 class="br-page-title h3 mb-1">Entegrasyonlar</h1>
+        <p class="br-muted mb-0">Dis sistem baglantilari ve otomasyon script'leri.</p>
+    </div>
+    <a class="btn btn-outline-secondary btn-sm" asp-action="Audit">
+        <i class="bi bi-shield-check me-1"></i>Denetim kayitlari
+    </a>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-6">
+        <div class="br-card p-3 h-100">
+            <h2 class="h6"><i class="bi bi-database me-1"></i>Service Manager (veritabani seviyesinde)</h2>
+
+            @if (scsm is null)
+            {
+                <p class="br-muted mb-0">Durum bilgisi alinamadi.</p>
+            }
+            else if (!scsm.IsEnabled)
+            {
+                <p class="br-muted mb-0">
+                    Entegrasyon kapali. Etkinlestirmek icin <code>ServiceManager:Enabled</code> ayarini
+                    <code>true</code> yapin ve salt-okunur baglanti dizesini tanimlayin.
+                </p>
+            }
+            else
+            {
+                <dl class="row small mb-0">
+                    <dt class="col-4 br-muted">Durum</dt>
+                    <dd class="col-8">
+                        @if (scsm.IsReachable)
+                        {
+                            <span class="br-chip br-chip-completed">Erisilebilir</span>
+                        }
+                        else
+                        {
+                            <span class="br-chip br-chip-failed">Erisilemiyor</span>
+                        }
+                    </dd>
+                    <dt class="col-4 br-muted">Sunucu</dt><dd class="col-8">@(scsm.Server ?? "-")</dd>
+                    <dt class="col-4 br-muted">Veritabani</dt><dd class="col-8">@(scsm.Database ?? "-")</dd>
+                    <dt class="col-4 br-muted">Yanit suresi</dt><dd class="col-8">@scsm.ElapsedMs ms</dd>
+                    @if (!string.IsNullOrWhiteSpace(scsm.Error))
+                    {
+                        <dt class="col-4 br-muted">Hata</dt>
+                        <dd class="col-8 text-danger">@scsm.Error</dd>
+                    }
+                </dl>
+            }
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="br-card p-3 h-100">
+            <h2 class="h6"><i class="bi bi-terminal me-1"></i>Script kutuphanesi (Roslyn / CSX)</h2>
+
+            @if (Model.Scripts.Count == 0)
+            {
+                <p class="br-muted mb-0">Tanimli script yok.</p>
+            }
+            else
+            {
+                <ul class="list-group list-group-flush">
+                    @foreach (var script in Model.Scripts)
+                    {
+                        <li class="list-group-item px-0">
+                            <div class="d-flex justify-content-between align-items-start gap-2">
+                                <span>
+                                    <strong>@script.Name</strong>
+                                    <small class="d-block br-muted">@script.Description</small>
+                                </span>
+                                <span class="text-nowrap">
+                                    <span class="badge text-bg-light border">@script.TimeoutSeconds sn</span>
+                                    @if (script.IsEnabled)
+                                    {
+                                        <span class="br-chip br-chip-completed">Aktif</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="br-chip br-chip-notstarted">Pasif</span>
+                                    }
+                                </span>
+                            </div>
+                        </li>
+                    }
+                </ul>
+            }
+        </div>
+    </div>
+</div>

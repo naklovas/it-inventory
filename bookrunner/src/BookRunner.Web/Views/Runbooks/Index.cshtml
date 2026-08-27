@@ -1,0 +1,198 @@
+@model RunbookListViewModel
+@{
+    ViewData["Title"] = "Runbook'lar";
+    var f = Model.Filter;
+    var selected = f.Statuses ?? Array.Empty<RunbookStatus>();
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div>
+        <h1 class="br-page-title h3 mb-1">Runbook'lar</h1>
+        <p class="br-muted mb-0">@Model.Results.TotalCount kayit bulundu.</p>
+    </div>
+    <div class="d-flex gap-2">
+        @if (Model.CanExport)
+        {
+            <a class="btn btn-outline-secondary"
+               asp-action="ExportList"
+               asp-all-route-data="@RouteValues(f)">
+                <i class="bi bi-file-earmark-excel me-1"></i>Excel
+            </a>
+        }
+        @if (Model.CanWrite)
+        {
+            <a class="btn btn-primary" asp-action="Create"><i class="bi bi-plus-lg me-1"></i>Yeni runbook</a>
+        }
+    </div>
+</div>
+
+<form class="br-card p-3 mb-3" method="get">
+    <div class="row g-2 align-items-end">
+        <div class="col-md-4">
+            <label class="form-label small br-muted">Ara</label>
+            <input class="form-control" name="search" value="@f.Search" placeholder="Baslik, kod veya aciklama" />
+        </div>
+        <div class="col-md-3">
+            <label class="form-label small br-muted">Durum</label>
+            <select class="form-select" name="statuses" multiple size="4">
+                @foreach (RunbookStatus status in Enum.GetValues<RunbookStatus>())
+                {
+                    <option value="@status" selected="@selected.Contains(status)">@DisplayText.Status(status)</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small br-muted">Etiket</label>
+            <input class="form-control" name="tag" value="@f.Tag" placeholder="orn. veritabani" />
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small br-muted">SCSM kaydi</label>
+            <input class="form-control" name="serviceManagerWorkItemId" value="@f.ServiceManagerWorkItemId" placeholder="CR12345" />
+        </div>
+        <div class="col-md-1 d-grid">
+            <button class="btn btn-primary"><i class="bi bi-search"></i></button>
+        </div>
+    </div>
+    <div class="row g-2 align-items-end mt-1">
+        <div class="col-md-3">
+            <label class="form-label small br-muted">Planlanan baslangic (baslangic)</label>
+            <input class="form-control" type="date" name="plannedStartFrom"
+                   value="@(f.PlannedStartFrom?.ToString("yyyy-MM-dd"))" />
+        </div>
+        <div class="col-md-3">
+            <label class="form-label small br-muted">Planlanan baslangic (bitis)</label>
+            <input class="form-control" type="date" name="plannedStartTo"
+                   value="@(f.PlannedStartTo?.ToString("yyyy-MM-dd"))" />
+        </div>
+        <div class="col-md-3">
+            <label class="form-label small br-muted">Siralama</label>
+            <select class="form-select" name="sortBy">
+                @foreach (var option in new[] { ("updatedAt", "Son guncelleme"), ("createdAt", "Olusturma"), ("code", "Kod"), ("title", "Baslik"), ("plannedStart", "Planlanan baslangic"), ("status", "Durum") })
+                {
+                    <option value="@option.Item1" selected="@(f.SortBy == option.Item1)">@option.Item2</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small br-muted">Yon</label>
+            <select class="form-select" name="sortDescending">
+                <option value="true" selected="@f.SortDescending">Azalan</option>
+                <option value="false" selected="@(!f.SortDescending)">Artan</option>
+            </select>
+        </div>
+        <div class="col-md-1 d-grid">
+            <a class="btn btn-outline-secondary" asp-action="Index"><i class="bi bi-x-lg"></i></a>
+        </div>
+    </div>
+</form>
+
+@if (Model.Results.Items.Count == 0)
+{
+    <div class="br-card p-5 text-center">
+        <i class="bi bi-inbox display-6 br-muted"></i>
+        <p class="br-muted mt-2 mb-0">Filtrelere uyan runbook bulunamadi.</p>
+    </div>
+}
+else
+{
+    <div class="br-card">
+        <div class="table-responsive">
+            <table class="table align-middle mb-0">
+                <thead class="table-light">
+                <tr>
+                    <th style="width:120px;">Kod</th>
+                    <th>Baslik</th>
+                    <th style="width:140px;">Durum</th>
+                    <th style="width:170px;">Ilerleme</th>
+                    <th style="width:150px;">Ekip</th>
+                    <th style="width:150px;">Planlanan</th>
+                    <th style="width:60px;"></th>
+                </tr>
+                </thead>
+                <tbody>
+                @foreach (var runbook in Model.Results.Items)
+                {
+                    <tr>
+                        <td><code>@runbook.Code</code></td>
+                        <td>
+                            <a class="fw-semibold text-decoration-none" asp-action="Details" asp-route-id="@runbook.Id">@runbook.Title</a>
+                            @if (runbook.Tags.Count > 0)
+                            {
+                                <div class="mt-1">
+                                    @foreach (var tag in runbook.Tags)
+                                    {
+                                        <span class="badge text-bg-light border">@tag</span>
+                                    }
+                                </div>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(runbook.ServiceManagerWorkItemId))
+                            {
+                                <small class="d-block br-muted"><i class="bi bi-link-45deg"></i> @runbook.ServiceManagerWorkItemId</small>
+                            }
+                        </td>
+                        <td><span class="br-chip br-chip-@runbook.Status.ToString().ToLowerInvariant()">@runbook.StatusText</span></td>
+                        <td>
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="progress flex-grow-1" style="height:6px;">
+                                    <div class="progress-bar" style="width:@runbook.ProgressPercent%"></div>
+                                </div>
+                                <small class="br-muted text-nowrap">@runbook.CompletedTaskCount/@runbook.TaskCount</small>
+                            </div>
+                            @if (runbook.CommentCount > 0)
+                            {
+                                <small class="br-muted"><i class="bi bi-chat-dots"></i> @runbook.CommentCount yorum</small>
+                            }
+                        </td>
+                        <td>
+                            <span class="br-avatar-stack">
+                                @foreach (var person in runbook.Participants.Take(4))
+                                {
+                                    <partial name="_Avatar" model="@(new AvatarModel(person.Id, person.DisplayName, person.Initials, person.AvatarColor, person.HasPhoto, AvatarSize.Small, false, person.Title))" />
+                                }
+                            </span>
+                        </td>
+                        <td class="small br-muted">
+                            @(runbook.PlannedStart?.ToLocalTime().ToString("dd.MM.yyyy HH:mm") ?? "-")
+                        </td>
+                        <td class="text-end">
+                            <a class="btn btn-sm btn-outline-secondary" asp-action="Details" asp-route-id="@runbook.Id">
+                                <i class="bi bi-arrow-right"></i>
+                            </a>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <partial name="_Pager" model="@(new PagerModel(Model.Results.Page, Model.Results.TotalPages, RouteValues(f)))" />
+}
+
+@functions {
+    /// <summary>Filtre degerlerini sayfalama ve disa aktarim baglantilarina tasir.</summary>
+    private static Dictionary<string, string> RouteValues(RunbookFilter filter)
+    {
+        var values = new Dictionary<string, string>();
+
+        if (!string.IsNullOrWhiteSpace(filter.Search)) values["search"] = filter.Search;
+        if (!string.IsNullOrWhiteSpace(filter.Tag)) values["tag"] = filter.Tag;
+        if (!string.IsNullOrWhiteSpace(filter.ServiceManagerWorkItemId)) values["serviceManagerWorkItemId"] = filter.ServiceManagerWorkItemId;
+        if (!string.IsNullOrWhiteSpace(filter.TemplateCategory)) values["templateCategory"] = filter.TemplateCategory;
+        if (filter.PlannedStartFrom.HasValue) values["plannedStartFrom"] = filter.PlannedStartFrom.Value.ToString("O");
+        if (filter.PlannedStartTo.HasValue) values["plannedStartTo"] = filter.PlannedStartTo.Value.ToString("O");
+
+        values["sortBy"] = filter.SortBy;
+        values["sortDescending"] = filter.SortDescending.ToString();
+
+        if (filter.Statuses is { Length: > 0 })
+        {
+            for (var i = 0; i < filter.Statuses.Length; i++)
+            {
+                values[$"statuses[{i}]"] = filter.Statuses[i].ToString();
+            }
+        }
+
+        return values;
+    }
+}

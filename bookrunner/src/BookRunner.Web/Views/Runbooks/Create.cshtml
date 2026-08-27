@@ -1,0 +1,23 @@
+@model RunbookFormViewModel
+@{
+    ViewData["Title"] = Model.IsTemplate ? "Yeni sablon" : "Yeni runbook";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="br-page-title h3 mb-0">@ViewData["Title"]</h1>
+    <a class="btn btn-outline-secondary btn-sm" asp-action="Index"><i class="bi bi-arrow-left me-1"></i>Vazgec</a>
+</div>
+
+<form method="post" class="br-card p-3 p-lg-4">
+    @Html.AntiForgeryToken()
+    <partial name="_Form" model="Model" />
+
+    <div class="mt-4 d-flex gap-2">
+        <button class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Olustur</button>
+        <a class="btn btn-outline-secondary" asp-action="Index">Vazgec</a>
+    </div>
+</form>
+
+@section Scripts {
+    <script src="~/js/scsm-lookup.js" asp-append-version="true"></script>
+}

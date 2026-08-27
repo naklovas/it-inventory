@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <RootNamespace>BookRunner.Web</RootNamespace>
+    <UserSecretsId>bookrunner-web</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Frontend, API'nin sozlesmelerini (DTO) yeniden kullanir; is mantigina
+         dogrudan erisim yoktur, tum veri REST uzerinden gelir. -->
+    <ProjectReference Include="..\BookRunner.Application\BookRunner.Application.csproj" />
+    <ProjectReference Include="..\BookRunner.Domain\BookRunner.Domain.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.Negotiate" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" />
+  </ItemGroup>
+
+</Project>

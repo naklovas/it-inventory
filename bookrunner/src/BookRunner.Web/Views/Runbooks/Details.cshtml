@@ -1,0 +1,349 @@
+@model RunbookDetailViewModel
+@inject Microsoft.AspNetCore.Antiforgery.IAntiforgery Xsrf
+@{
+    var r = Model.Runbook;
+    ViewData["Title"] = r.Title;
+    var isTemplate = r.IsTemplate;
+}
+
+<div class="br-card p-3 p-lg-4 mb-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+        <div class="flex-grow-1">
+            <div class="d-flex align-items-center gap-2 mb-1">
+                <code class="br-muted">@r.Code</code>
+                <span class="br-chip br-chip-@r.Status.ToString().ToLowerInvariant()">@r.StatusText</span>
+                @if (isTemplate)
+                {
+                    <span class="badge text-bg-info"><i class="bi bi-collection me-1"></i>Sablon</span>
+                }
+                @if (!string.IsNullOrWhiteSpace(r.TemplateCategory))
+                {
+                    <span class="badge text-bg-light border">@r.TemplateCategory</span>
+                }
+                <span class="br-live" id="liveIndicator">
+                    <span class="br-live-dot"></span><span id="liveText">baglaniyor...</span>
+                </span>
+            </div>
+
+            <h1 class="br-page-title h3 mb-2">@r.Title</h1>
+
+            @if (!string.IsNullOrWhiteSpace(r.Description))
+            {
+                <p class="mb-2" style="white-space:pre-wrap;">@r.Description</p>
+            }
+
+            <div class="d-flex flex-wrap gap-3 align-items-center small br-muted">
+                @if (r.Owner is not null)
+                {
+                    <span class="d-inline-flex align-items-center gap-2">
+                        <partial name="_Avatar" model="@(new AvatarModel(r.Owner.Id, r.Owner.DisplayName, r.Owner.Initials, r.Owner.AvatarColor, r.Owner.HasPhoto, AvatarSize.Small, false, r.Owner.Title))" />
+                        Sahip: <strong class="text-body">@r.Owner.DisplayName</strong>
+                    </span>
+                }
+                <span><i class="bi bi-calendar-event"></i> Plan: @Fmt(r.PlannedStart) - @Fmt(r.PlannedEnd)</span>
+                @if (r.ActualStart.HasValue)
+                {
+                    <span><i class="bi bi-play-circle"></i> Baslangic: @Fmt(r.ActualStart)</span>
+                }
+                @if (!string.IsNullOrWhiteSpace(r.ServiceManagerWorkItemId))
+                {
+                    <span><i class="bi bi-link-45deg"></i> SCSM: <strong class="text-body">@r.ServiceManagerWorkItemId</strong></span>
+                }
+                @foreach (var tag in r.Tags)
+                {
+                    <span class="badge text-bg-light border">@tag</span>
+                }
+            </div>
+        </div>
+
+        <div class="text-end">
+            <div class="mb-2">
+                <span class="br-stat-value">%@Model.ProgressPercent</span>
+                <small class="d-block br-muted">@Model.CompletedTasks / @Model.TotalTasks gorev</small>
+            </div>
+            <div class="progress" style="width:180px;height:8px;">
+                <div class="progress-bar" style="width:@Model.ProgressPercent%"></div>
+            </div>
+        </div>
+    </div>
+
+    <hr />
+
+    <div class="d-flex flex-wrap gap-2">
+        @if (Model.CanWrite)
+        {
+            <a class="btn btn-sm btn-outline-secondary" asp-action="Edit" asp-route-id="@r.Id">
+                <i class="bi bi-pencil me-1"></i>Duzenle
+            </a>
+        }
+        @if (Model.CanExport)
+        {
+            <a class="btn btn-sm btn-outline-success" asp-action="ExportExcel" asp-route-id="@r.Id">
+                <i class="bi bi-file-earmark-excel me-1"></i>Excel
+            </a>
+            <a class="btn btn-sm btn-outline-danger" asp-action="ExportPdf" asp-route-id="@r.Id">
+                <i class="bi bi-file-earmark-pdf me-1"></i>PDF
+            </a>
+        }
+        @if (Model.CanImport)
+        {
+            <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#importModal">
+                <i class="bi bi-upload me-1"></i>Excel'den gorev aktar
+            </button>
+        }
+        @if (Model.CanPublishTemplate && !isTemplate)
+        {
+            <button class="btn btn-sm btn-outline-info" data-bs-toggle="modal" data-bs-target="#templateModal">
+                <i class="bi bi-bookmark-plus me-1"></i>Sablon yap
+            </button>
+        }
+        @if (Model.CanDelete)
+        {
+            <form method="post" asp-action="Delete" asp-route-id="@r.Id" class="d-inline"
+                  onsubmit="return confirm('Bu runbook silinecek. Emin misiniz?');">
+                @Html.AntiForgeryToken()
+                <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash me-1"></i>Sil</button>
+            </form>
+        }
+    </div>
+</div>
+
+@* ----------------------------------------------------------------- gorevler *@
+
+<div class="d-flex justify-content-between align-items-center mb-2">
+    <h2 class="h5 mb-0"><i class="bi bi-list-ol me-1"></i>Gorevler</h2>
+    @if (Model.CanWrite)
+    {
+        <button class="btn btn-primary btn-sm" data-bs-toggle="collapse" data-bs-target="#newTaskPanel">
+            <i class="bi bi-plus-lg me-1"></i>Gorev ekle
+        </button>
+    }
+</div>
+
+<div id="taskList" data-sortable="@Model.CanWrite.ToString().ToLowerInvariant()">
+    @foreach (var task in r.Tasks)
+    {
+        <partial name="_Task" model="@(new TaskCardModel(task, Model))" />
+    }
+</div>
+
+@if (r.Tasks.Count == 0)
+{
+    <div class="br-card p-5 text-center mb-3">
+        <i class="bi bi-clipboard-plus display-6 br-muted"></i>
+        <p class="br-muted mt-2 mb-0">Henuz gorev eklenmemis. Ilk adimi ekleyerek baslayin.</p>
+    </div>
+}
+
+@if (Model.CanWrite)
+{
+    <div class="collapse @(r.Tasks.Count == 0 ? "show" : string.Empty)" id="newTaskPanel">
+        <div class="br-card p-3 mb-3">
+            <h3 class="h6 mb-3">Yeni gorev</h3>
+            <div class="row g-2">
+                <div class="col-md-6">
+                    <label class="form-label small br-muted">Baslik *</label>
+                    <input class="form-control" id="newTaskTitle" placeholder="orn. Veritabani yedegini al" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small br-muted">Oncelik</label>
+                    <select class="form-select" id="newTaskPriority">
+                        @foreach (TaskPriority priority in Enum.GetValues<TaskPriority>())
+                        {
+                            <option value="@priority" selected="@(priority == TaskPriority.Normal)">@DisplayText.Priority(priority)</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small br-muted">Sure (dk)</label>
+                    <input class="form-control" type="number" min="0" id="newTaskMinutes" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small br-muted">Renk</label>
+                    <input class="form-control form-control-color w-100" type="color" id="newTaskColor" value="#4F86F7" />
+                </div>
+                <div class="col-12">
+                    <label class="form-label small br-muted">Aciklama</label>
+                    <textarea class="form-control" rows="2" id="newTaskDescription"
+                              placeholder="Adimin nasil yapilacagini yazin."></textarea>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small br-muted">Planlanan baslangic</label>
+                    <input class="form-control" type="datetime-local" id="newTaskStart" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small br-muted">Planlanan bitis</label>
+                    <input class="form-control" type="datetime-local" id="newTaskEnd" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label small br-muted">Geri alma notu</label>
+                    <input class="form-control" id="newTaskRollback" placeholder="Adim geri alinacaksa ne yapilmali?" />
+                </div>
+            </div>
+            <div class="mt-3 d-flex gap-2">
+                <button class="btn btn-primary btn-sm" id="btnAddTask"><i class="bi bi-check-lg me-1"></i>Ekle</button>
+                <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="collapse" data-bs-target="#newTaskPanel">Vazgec</button>
+            </div>
+        </div>
+    </div>
+}
+
+@* ------------------------------------------------------------------ modaller *@
+
+<div class="modal fade" id="assignModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Goreve ata</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="assignTaskId" />
+                <ul class="nav nav-pills mb-3" role="tablist">
+                    <li class="nav-item"><button class="nav-link active" data-bs-toggle="pill" data-bs-target="#assignUserPane">Kisi</button></li>
+                    <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#assignGroupPane">AD grubu</button></li>
+                </ul>
+                <div class="tab-content">
+                    <div class="tab-pane fade show active" id="assignUserPane">
+                        <label class="form-label small br-muted">Active Directory'de kisi ara</label>
+                        <div class="position-relative">
+                            <input class="form-control br-search" id="assignUserSearch" data-target="user"
+                                   autocomplete="off" placeholder="En az 2 harf yazin" />
+                            <div class="br-suggest" id="assignUserSuggest"></div>
+                        </div>
+                    </div>
+                    <div class="tab-pane fade" id="assignGroupPane">
+                        <label class="form-label small br-muted">Active Directory'de grup ara</label>
+                        <div class="position-relative">
+                            <input class="form-control br-search" id="assignGroupSearch" data-target="group"
+                                   autocomplete="off" placeholder="En az 2 harf yazin" />
+                            <div class="br-suggest" id="assignGroupSuggest"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <label class="form-label small br-muted">Not (opsiyonel)</label>
+                    <input class="form-control" id="assignNote" placeholder="Atama ile ilgili kisa not" />
+                </div>
+                <div class="form-check mt-2">
+                    <input class="form-check-input" type="checkbox" id="assignNotify" checked />
+                    <label class="form-check-label small" for="assignNotify">Atanan kisilere e-posta gonder</label>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="handoverModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Gorevi devret</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="handoverTaskId" />
+                <input type="hidden" id="handoverAssignmentId" />
+                <p class="small br-muted" id="handoverFromText"></p>
+                <ul class="nav nav-pills mb-3" role="tablist">
+                    <li class="nav-item"><button class="nav-link active" data-bs-toggle="pill" data-bs-target="#handoverUserPane">Kisi</button></li>
+                    <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#handoverGroupPane">AD grubu</button></li>
+                </ul>
+                <div class="tab-content">
+                    <div class="tab-pane fade show active" id="handoverUserPane">
+                        <div class="position-relative">
+                            <input class="form-control br-search" id="handoverUserSearch" data-target="user"
+                                   autocomplete="off" placeholder="Devredilecek kisiyi arayin" />
+                            <div class="br-suggest" id="handoverUserSuggest"></div>
+                        </div>
+                    </div>
+                    <div class="tab-pane fade" id="handoverGroupPane">
+                        <div class="position-relative">
+                            <input class="form-control br-search" id="handoverGroupSearch" data-target="group"
+                                   autocomplete="off" placeholder="Devredilecek grubu arayin" />
+                            <div class="br-suggest" id="handoverGroupSuggest"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <label class="form-label small br-muted">Devir notu *</label>
+                    <textarea class="form-control" rows="2" id="handoverNote"
+                              placeholder="Neden devrediyorsunuz? Karsi taraf ne bilmeli?"></textarea>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (Model.CanImport)
+{
+    <div class="modal fade" id="importModal" tabindex="-1">
+        <div class="modal-dialog">
+            <form class="modal-content" method="post" asp-action="Import" asp-route-id="@r.Id" enctype="multipart/form-data">
+                @Html.AntiForgeryToken()
+                <div class="modal-header">
+                    <h5 class="modal-title">Excel'den gorev aktar</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="small br-muted">
+                        Once sablonu indirin, gorevleri doldurun ve dosyayi buradan yukleyin.
+                        Hatali satir varsa hicbir kayit yazilmaz.
+                    </p>
+                    <a class="btn btn-sm btn-outline-secondary mb-3" asp-action="ImportTemplate">
+                        <i class="bi bi-download me-1"></i>Bos sablonu indir
+                    </a>
+                    <input class="form-control" type="file" name="file" accept=".xlsx" required />
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-primary"><i class="bi bi-upload me-1"></i>Yukle</button>
+                </div>
+            </form>
+        </div>
+    </div>
+}
+
+@if (Model.CanPublishTemplate && !isTemplate)
+{
+    <div class="modal fade" id="templateModal" tabindex="-1">
+        <div class="modal-dialog">
+            <form class="modal-content" method="post" asp-action="SaveAsTemplate" asp-route-id="@r.Id">
+                @Html.AntiForgeryToken()
+                <div class="modal-header">
+                    <h5 class="modal-title">Sablon olustur</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="small br-muted">Gorevler sablona kopyalanir; atamalar ve gecmis kopyalanmaz.</p>
+                    <label class="form-label small br-muted">Sablon adi *</label>
+                    <input class="form-control mb-2" name="title" value="@r.Title (Sablon)" required />
+                    <label class="form-label small br-muted">Kategori</label>
+                    <input class="form-control" name="category" value="@r.TemplateCategory" placeholder="orn. Veritabani Gecisi" />
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-primary">Olustur</button>
+                </div>
+            </form>
+        </div>
+    </div>
+}
+
+@section Scripts {
+    <script src="~/lib/signalr/signalr.min.js"></script>
+    <script id="brConfig" type="application/json">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(new
+    {
+        runbookId = r.Id,
+        hubUrl = Model.HubUrl,
+        canWrite = Model.CanWrite,
+        canAssign = Model.CanAssign,
+        canComment = Model.CanComment,
+        canExecute = Model.CanExecute,
+        antiforgery = Xsrf.GetAndStoreTokens(Context).RequestToken
+    }))</script>
+    <script src="~/js/runbook.js" asp-append-version="true"></script>
+}
+
+@functions {
+    private static string Fmt(DateTimeOffset? value)
+        => value?.ToLocalTime().ToString("dd.MM.yyyy HH:mm") ?? "-";
+}

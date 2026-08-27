@@ -1,0 +1,143 @@
+@model DashboardViewModel
+@{
+    ViewData["Title"] = "Panel";
+    var d = Model.Dashboard;
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div>
+        <h1 class="br-page-title h3 mb-1">
+            Merhaba@(Model.CurrentUser is null ? "" : ", " + Model.CurrentUser.DisplayName.Split(' ')[0])
+        </h1>
+        <p class="br-muted mb-0">Devam eden calismalar ve size dusen gorevler.</p>
+    </div>
+    @if (Model.CanWrite)
+    {
+        <div class="d-flex gap-2">
+            <a class="btn btn-primary" asp-controller="Runbooks" asp-action="Create">
+                <i class="bi bi-plus-lg me-1"></i>Yeni runbook
+            </a>
+            <a class="btn btn-outline-secondary" asp-controller="Templates" asp-action="Index">
+                <i class="bi bi-collection me-1"></i>Sablondan basla
+            </a>
+        </div>
+    }
+</div>
+
+<div class="row g-3 mb-4">
+    @{
+        var stats = new (string Icon, string Label, int Value, string Color)[]
+        {
+            ("bi-play-circle", "Devam eden runbook", d.ActiveRunbooks, "#2f5bd7"),
+            ("bi-pencil-square", "Taslak", d.DraftRunbooks, "#7b8794"),
+            ("bi-person-check", "Bana atanan acik gorev", d.MyOpenTasks, "#2e9e68"),
+            ("bi-people", "Ekiplerime atanan", d.MyTeamsOpenTasks, "#7a5aa8"),
+            ("bi-exclamation-octagon", "Bloke gorev", d.BlockedTasks, "#c0504d"),
+            ("bi-collection", "Sablon", d.TemplateCount, "#0f7c8a")
+        };
+    }
+    @foreach (var stat in stats)
+    {
+        <div class="col-6 col-lg-2">
+            <div class="br-card h-100">
+                <div class="br-stat">
+                    <span class="br-stat-icon" style="background:@(stat.Color)1a;color:@stat.Color">
+                        <i class="bi @stat.Icon"></i>
+                    </span>
+                    <span>
+                        <span class="br-stat-value">@stat.Value</span>
+                        <small class="d-block br-muted">@stat.Label</small>
+                    </span>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-7">
+        <div class="br-card h-100">
+            <div class="d-flex justify-content-between align-items-center px-3 pt-3">
+                <h2 class="h6 mb-0"><i class="bi bi-person-workspace me-1"></i>Bana atanan gorevler</h2>
+                <span class="badge text-bg-light">@d.MyTasks.Count</span>
+            </div>
+            <div class="p-3">
+                @if (d.MyTasks.Count == 0)
+                {
+                    <p class="br-muted mb-0">Su an size atanmis acik gorev yok.</p>
+                }
+                else
+                {
+                    foreach (var task in d.MyTasks)
+                    {
+                        <a class="br-task d-block text-decoration-none text-reset"
+                           asp-controller="Runbooks" asp-action="Details"
+                           asp-route-id="@task.RunbookId" asp-fragment="task-@task.TaskId">
+                            <span class="br-task-bar" style="background:@task.ColorHex"></span>
+                            <div class="br-task-body d-flex justify-content-between align-items-center gap-2">
+                                <span>
+                                    <span class="fw-semibold">@task.Title</span>
+                                    <small class="d-block br-muted">
+                                        @task.RunbookCode &middot; @task.RunbookTitle &middot;
+                                        <i class="bi bi-@(task.AssignedVia == "Dogrudan" ? "person" : "people")"></i> @task.AssignedVia
+                                    </small>
+                                </span>
+                                <span class="text-nowrap">
+                                    @if (task.Priority >= TaskPriority.High)
+                                    {
+                                        <i class="bi bi-flag-fill br-priority-@task.Priority.ToString().ToLowerInvariant() me-1"
+                                           title="@DisplayText.Priority(task.Priority)"></i>
+                                    }
+                                    <span class="br-chip br-chip-@task.Status.ToString().ToLowerInvariant()">@task.StatusText</span>
+                                </span>
+                            </div>
+                        </a>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="br-card h-100">
+            <div class="d-flex justify-content-between align-items-center px-3 pt-3">
+                <h2 class="h6 mb-0"><i class="bi bi-clock-history me-1"></i>Son hareket goren runbook'lar</h2>
+                <a class="small" asp-controller="Runbooks" asp-action="Index">Tumu</a>
+            </div>
+            <div class="list-group list-group-flush">
+                @if (d.RecentRunbooks.Count == 0)
+                {
+                    <div class="p-3 br-muted">Henuz runbook olusturulmamis.</div>
+                }
+                else
+                {
+                    foreach (var runbook in d.RecentRunbooks)
+                    {
+                        <a class="list-group-item list-group-item-action"
+                           asp-controller="Runbooks" asp-action="Details" asp-route-id="@runbook.Id">
+                            <div class="d-flex justify-content-between align-items-start gap-2">
+                                <span>
+                                    <span class="fw-semibold">@runbook.Title</span>
+                                    <small class="d-block br-muted">@runbook.Code</small>
+                                </span>
+                                <span class="br-chip br-chip-@runbook.Status.ToString().ToLowerInvariant()">@runbook.StatusText</span>
+                            </div>
+                            <div class="d-flex align-items-center gap-2 mt-2">
+                                <div class="progress flex-grow-1" style="height:6px;">
+                                    <div class="progress-bar" style="width:@runbook.ProgressPercent%"></div>
+                                </div>
+                                <small class="br-muted text-nowrap">@runbook.CompletedTaskCount/@runbook.TaskCount</small>
+                                <span class="br-avatar-stack">
+                                    @foreach (var person in runbook.Participants.Take(4))
+                                    {
+                                        <partial name="_Avatar" model="@(new AvatarModel(person.Id, person.DisplayName, person.Initials, person.AvatarColor, person.HasPhoto, AvatarSize.Small, false, person.Title))" />
+                                    }
+                                </span>
+                            </div>
+                        </a>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+</div>
