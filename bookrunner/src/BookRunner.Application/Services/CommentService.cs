@@ -12,6 +12,7 @@ namespace BookRunner.Application.Services;
 public sealed class CommentService(
     IAppDbContext db,
     ICurrentUser currentUser,
+    IRunbookAccess access,
     IAuditService audit,
     INotificationService notifications,
     IRealtimeNotifier realtime) : ICommentService
@@ -31,10 +32,8 @@ public sealed class CommentService(
 
     public async Task<TaskCommentDto> AddAsync(Guid taskId, CreateCommentRequest request, CancellationToken ct = default)
     {
-        if (!Permissions.Has(currentUser.Role, Permissions.TaskComment))
-        {
-            throw new ForbiddenException("Yorum yazma yetkiniz yok.");
-        }
+        // Yorum yazmak icin rol izni ya da runbook sahipligi yeterlidir.
+        await access.EnsureForTaskAsync(taskId, Permissions.TaskComment, ct);
 
         var task = await db.Tasks.FirstOrDefaultAsync(t => t.Id == taskId, ct)
             ?? throw new NotFoundException("Gorev", taskId);

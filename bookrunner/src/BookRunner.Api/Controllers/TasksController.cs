@@ -12,6 +12,11 @@ namespace BookRunner.Api.Controllers;
 [Produces("application/json")]
 public sealed class TasksController(ITaskService tasks) : ControllerBase
 {
+    // Not: Asagidaki uclarda politika, her rolde bulunan "runbook.read" iznidir.
+    // Asil yetki karari is katmanindaki IRunbookAccess tarafindan verilir; cunku
+    // runbook'un sahibi, rol izni olmasa da kendi runbook'unda her degisikligi
+    // yapabilir. Boylece yetki kurali tek yerde toplanir.
+
     /// <summary>Tek bir gorevi atamalari ve yorumlariyla getirir.</summary>
     [HttpGet("tasks/{taskId:guid}")]
     [Authorize(Policy = Permissions.RunbookRead)]
@@ -21,7 +26,7 @@ public sealed class TasksController(ITaskService tasks) : ControllerBase
 
     /// <summary>Runbook'a yeni gorev ekler.</summary>
     [HttpPost("runbooks/{runbookId:guid}/tasks")]
-    [Authorize(Policy = Permissions.TaskWrite)]
+    [Authorize(Policy = Permissions.RunbookRead)]
     [ProducesResponseType(typeof(RunbookTaskDto), StatusCodes.Status201Created)]
     public async Task<ActionResult<RunbookTaskDto>> Create(
         Guid runbookId, [FromBody] CreateTaskRequest request, CancellationToken ct)
@@ -32,7 +37,7 @@ public sealed class TasksController(ITaskService tasks) : ControllerBase
 
     /// <summary>Gorev detaylarini gunceller.</summary>
     [HttpPut("tasks/{taskId:guid}")]
-    [Authorize(Policy = Permissions.TaskWrite)]
+    [Authorize(Policy = Permissions.RunbookRead)]
     [ProducesResponseType(typeof(RunbookTaskDto), StatusCodes.Status200OK)]
     public async Task<ActionResult<RunbookTaskDto>> Update(
         Guid taskId, [FromBody] UpdateTaskRequest request, CancellationToken ct)
@@ -43,7 +48,7 @@ public sealed class TasksController(ITaskService tasks) : ControllerBase
     /// yazma yetkisi olmadan da ilerletebilir.
     /// </summary>
     [HttpPost("tasks/{taskId:guid}/status")]
-    [Authorize(Policy = Permissions.TaskExecute)]
+    [Authorize(Policy = Permissions.RunbookRead)]
     [ProducesResponseType(typeof(RunbookTaskDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<RunbookTaskDto>> ChangeStatus(
@@ -52,7 +57,7 @@ public sealed class TasksController(ITaskService tasks) : ControllerBase
 
     /// <summary>Gorevleri surukle-birak sonrasi yeniden siralar.</summary>
     [HttpPost("runbooks/{runbookId:guid}/tasks/reorder")]
-    [Authorize(Policy = Permissions.TaskWrite)]
+    [Authorize(Policy = Permissions.RunbookRead)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> Reorder(
         Guid runbookId, [FromBody] ReorderTasksRequest request, CancellationToken ct)
@@ -62,8 +67,9 @@ public sealed class TasksController(ITaskService tasks) : ControllerBase
     }
 
     /// <summary>Gorevi mantiksal olarak siler.</summary>
+    /// <remarks>Yalnizca yonetici rolu veya runbook sahibi silebilir.</remarks>
     [HttpDelete("tasks/{taskId:guid}")]
-    [Authorize(Policy = Permissions.TaskWrite)]
+    [Authorize(Policy = Permissions.RunbookRead)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> Delete(Guid taskId, CancellationToken ct)
     {

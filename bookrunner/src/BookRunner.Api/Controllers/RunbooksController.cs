@@ -13,6 +13,11 @@ namespace BookRunner.Api.Controllers;
 [Produces("application/json")]
 public sealed class RunbooksController(IRunbookService runbooks) : ControllerBase
 {
+    // Not: Asagidaki uclarda politika, her rolde bulunan "runbook.read" iznidir.
+    // Asil yetki karari is katmanindaki IRunbookAccess tarafindan verilir; cunku
+    // runbook'un sahibi, rol izni olmasa da kendi runbook'unda her degisikligi
+    // yapabilir. Boylece yetki kurali tek yerde toplanir.
+
     /// <summary>Runbook'lari filtreleyerek sayfali biçimde listeler.</summary>
     [HttpGet]
     [Authorize(Policy = Permissions.RunbookRead)]
@@ -49,8 +54,9 @@ public sealed class RunbooksController(IRunbookService runbooks) : ControllerBas
     }
 
     /// <summary>Runbook basligini, aciklamasini, planini ve durumunu gunceller.</summary>
+    /// <remarks>Runbook sahibi veya <c>runbook.write</c> yetkisi olanlar guncelleyebilir.</remarks>
     [HttpPut("{id:guid}")]
-    [Authorize(Policy = Permissions.RunbookWrite)]
+    [Authorize(Policy = Permissions.RunbookRead)]
     [ProducesResponseType(typeof(RunbookDetailDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<RunbookDetailDto>> Update(
@@ -58,8 +64,9 @@ public sealed class RunbooksController(IRunbookService runbooks) : ControllerBas
         => Ok(await runbooks.UpdateAsync(id, request, ct));
 
     /// <summary>Runbook'u mantiksal olarak siler (gecmis kayitlar korunur).</summary>
+    /// <remarks>Yalnizca yonetici rolu veya runbook sahibi silebilir.</remarks>
     [HttpDelete("{id:guid}")]
-    [Authorize(Policy = Permissions.RunbookDelete)]
+    [Authorize(Policy = Permissions.RunbookRead)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {
@@ -69,7 +76,7 @@ public sealed class RunbooksController(IRunbookService runbooks) : ControllerBas
 
     /// <summary>Mevcut runbook'u yeniden kullanilabilir bir sablona donusturur.</summary>
     [HttpPost("{id:guid}/save-as-template")]
-    [Authorize(Policy = Permissions.RunbookPublishTemplate)]
+    [Authorize(Policy = Permissions.RunbookRead)]
     [ProducesResponseType(typeof(RunbookDetailDto), StatusCodes.Status201Created)]
     public async Task<ActionResult<RunbookDetailDto>> SaveAsTemplate(
         Guid id, [FromBody] SaveAsTemplateRequest request, CancellationToken ct)
@@ -80,7 +87,7 @@ public sealed class RunbooksController(IRunbookService runbooks) : ControllerBas
 
     /// <summary>Sablondan yeni bir calisir runbook uretir.</summary>
     [HttpPost("templates/{templateId:guid}/instantiate")]
-    [Authorize(Policy = Permissions.RunbookWrite)]
+    [Authorize(Policy = Permissions.RunbookRead)]
     [ProducesResponseType(typeof(RunbookDetailDto), StatusCodes.Status201Created)]
     public async Task<ActionResult<RunbookDetailDto>> CreateFromTemplate(
         Guid templateId, [FromBody] CreateFromTemplateRequest request, CancellationToken ct)

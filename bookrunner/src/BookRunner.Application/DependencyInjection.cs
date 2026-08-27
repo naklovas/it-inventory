@@ -1,4 +1,5 @@
 using BookRunner.Application.Abstractions;
+using BookRunner.Application.Security;
 using BookRunner.Application.Services;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -9,6 +10,7 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
+        services.AddScoped<IRunbookAccess, RunbookAccess>();
         services.AddScoped<IDirectorySyncService, DirectorySyncService>();
         services.AddScoped<IRunbookService, RunbookService>();
         services.AddScoped<ITaskService, TaskService>();

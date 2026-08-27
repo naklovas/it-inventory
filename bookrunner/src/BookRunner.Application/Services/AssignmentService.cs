@@ -15,6 +15,7 @@ namespace BookRunner.Application.Services;
 public sealed class AssignmentService(
     IAppDbContext db,
     ICurrentUser currentUser,
+    IRunbookAccess access,
     IDirectorySyncService directorySync,
     IAuditService audit,
     INotificationService notifications,
@@ -22,7 +23,8 @@ public sealed class AssignmentService(
 {
     public async Task<TaskAssignmentDto> AssignAsync(Guid taskId, AssignTaskRequest request, CancellationToken ct = default)
     {
-        RequirePermission(Permissions.TaskAssign);
+        // Atama yetkisi rolden ya da runbook sahipliginden gelir.
+        await access.EnsureForTaskAsync(taskId, Permissions.TaskAssign, ct);
 
         var task = await LoadTaskAsync(taskId, ct);
         var (userId, groupId) = await ResolveTargetAsync(request.AssigneeType, request.UserSid, request.UserId, request.GroupSid, request.GroupId, ct);
@@ -126,7 +128,7 @@ public sealed class AssignmentService(
 
     public async Task RemoveAsync(Guid taskId, Guid assignmentId, CancellationToken ct = default)
     {
-        RequirePermission(Permissions.TaskAssign);
+        await access.EnsureForTaskAsync(taskId, Permissions.TaskAssign, ct);
 
         var task = await LoadTaskAsync(taskId, ct);
 
@@ -265,14 +267,6 @@ public sealed class AssignmentService(
             Summary = summary
         };
 
-    private void RequirePermission(string permission)
-    {
-        if (!Permissions.Has(currentUser.Role, permission))
-        {
-            throw new ForbiddenException($"Bu islem icin '{permission}' yetkisi gerekiyor.");
-        }
-    }
-
     /// <summary>
     /// Devir kurali: atama yetkisi olanlar her atamayi devredebilir; digerleri
     /// yalnizca kendilerine ya da uyesi olduklari gruba ait atamayi devredebilir.
@@ -280,6 +274,12 @@ public sealed class AssignmentService(
     private async Task RequireHandoverPermissionAsync(TaskAssignment source, CancellationToken ct)
     {
         if (Permissions.Has(currentUser.Role, Permissions.TaskAssign))
+        {
+            return;
+        }
+
+        // Runbook sahibi kendi runbook'undaki atamalari devredebilir.
+        if (await access.IsOwnerOfTaskAsync(source.TaskId, ct))
         {
             return;
         }

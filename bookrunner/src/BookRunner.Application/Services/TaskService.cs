@@ -15,6 +15,7 @@ namespace BookRunner.Application.Services;
 public sealed class TaskService(
     IAppDbContext db,
     ICurrentUser currentUser,
+    IRunbookAccess access,
     IAuditService audit,
     INotificationService notifications,
     IRealtimeNotifier realtime,
@@ -30,7 +31,7 @@ public sealed class TaskService(
 
     public async Task<RunbookTaskDto> CreateAsync(Guid runbookId, CreateTaskRequest request, CancellationToken ct = default)
     {
-        RequirePermission(Permissions.TaskWrite);
+        await access.EnsureForRunbookAsync(runbookId, Permissions.TaskWrite, ct);
 
         var runbook = await db.Runbooks.FirstOrDefaultAsync(r => r.Id == runbookId, ct)
             ?? throw new NotFoundException("Runbook", runbookId);
@@ -91,7 +92,7 @@ public sealed class TaskService(
 
     public async Task<RunbookTaskDto> UpdateAsync(Guid taskId, UpdateTaskRequest request, CancellationToken ct = default)
     {
-        RequirePermission(Permissions.TaskWrite);
+        await access.EnsureForTaskAsync(taskId, Permissions.TaskWrite, ct);
 
         var task = await db.Tasks.FirstOrDefaultAsync(t => t.Id == taskId, ct)
             ?? throw new NotFoundException("Gorev", taskId);
@@ -249,7 +250,7 @@ public sealed class TaskService(
 
     public async Task ReorderAsync(Guid runbookId, ReorderTasksRequest request, CancellationToken ct = default)
     {
-        RequirePermission(Permissions.TaskWrite);
+        await access.EnsureForRunbookAsync(runbookId, Permissions.TaskWrite, ct);
 
         var tasks = await db.Tasks.Where(t => t.RunbookId == runbookId).ToListAsync(ct);
         var byId = tasks.ToDictionary(t => t.Id);
@@ -280,7 +281,8 @@ public sealed class TaskService(
 
     public async Task DeleteAsync(Guid taskId, CancellationToken ct = default)
     {
-        RequirePermission(Permissions.TaskWrite);
+        // Gorev silme yetkisi yonetici rolunde; runbook sahibi de kendi gorevlerini silebilir.
+        await access.EnsureForTaskAsync(taskId, Permissions.TaskDelete, ct);
 
         var task = await db.Tasks.FirstOrDefaultAsync(t => t.Id == taskId, ct)
             ?? throw new NotFoundException("Gorev", taskId);
@@ -357,14 +359,6 @@ public sealed class TaskService(
             Summary = summary
         });
 
-    private void RequirePermission(string permission)
-    {
-        if (!Permissions.Has(currentUser.Role, permission))
-        {
-            throw new ForbiddenException($"Bu islem icin '{permission}' yetkisi gerekiyor.");
-        }
-    }
-
     /// <summary>
     /// Durum degistirmek icin ya gorev yazma yetkisi ya da goreve (dogrudan veya
     /// grubu uzerinden) atanmis olmak gerekir.
@@ -372,6 +366,12 @@ public sealed class TaskService(
     private async Task RequireExecutePermissionAsync(RunbookTask task, CancellationToken ct)
     {
         if (Permissions.Has(currentUser.Role, Permissions.TaskWrite))
+        {
+            return;
+        }
+
+        // Runbook sahibi kendi runbook'undaki her gorevi ilerletebilir.
+        if (await access.IsOwnerOfTaskAsync(task.Id, ct))
         {
             return;
         }

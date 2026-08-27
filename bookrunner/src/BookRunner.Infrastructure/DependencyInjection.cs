@@ -32,6 +32,16 @@ public static class DependencyInjection
             .ValidateDataAnnotations();
 
         services.Configure<ServiceManagerOptions>(configuration.GetSection(ServiceManagerOptions.SectionName));
+
+        // Tum SQL Server baglanti dizeleri appsettings icindeki "ConnectionStrings"
+        // bolumunde toplansin diye, SCSM baglantisi de oradan okunabilir.
+        services.PostConfigure<ServiceManagerOptions>(options =>
+        {
+            if (string.IsNullOrWhiteSpace(options.ConnectionString))
+            {
+                options.ConnectionString = configuration.GetConnectionString("ServiceManager") ?? string.Empty;
+            }
+        });
         services.Configure<ScriptingOptions>(configuration.GetSection(ScriptingOptions.SectionName));
         services.Configure<IntegrationOptions>(configuration.GetSection(IntegrationOptions.SectionName));
 

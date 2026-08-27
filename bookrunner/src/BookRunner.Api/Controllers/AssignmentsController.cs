@@ -12,6 +12,11 @@ namespace BookRunner.Api.Controllers;
 [Produces("application/json")]
 public sealed class AssignmentsController(IAssignmentService assignments) : ControllerBase
 {
+    // Not: Asagidaki uclarda politika, her rolde bulunan "runbook.read" iznidir.
+    // Asil yetki karari is katmanindaki IRunbookAccess tarafindan verilir; cunku
+    // runbook'un sahibi, rol izni olmasa da kendi runbook'unda her degisikligi
+    // yapabilir. Boylece yetki kurali tek yerde toplanir.
+
     /// <summary>Gorevin atamalarini listeler.</summary>
     /// <param name="taskId">Gorev kimligi.</param>
     /// <param name="includeInactive">true ise devredilmis/kaldirilmis atamalar da doner.</param>
@@ -25,7 +30,7 @@ public sealed class AssignmentsController(IAssignmentService assignments) : Cont
 
     /// <summary>Goreve kisi veya AD grubu atar ve ilgililere bildirim gonderir.</summary>
     [HttpPost]
-    [Authorize(Policy = Permissions.TaskAssign)]
+    [Authorize(Policy = Permissions.RunbookRead)]
     [ProducesResponseType(typeof(TaskAssignmentDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<TaskAssignmentDto>> Assign(
@@ -37,7 +42,7 @@ public sealed class AssignmentsController(IAssignmentService assignments) : Cont
     /// bu islemi atama yetkisi olmadan da yapabilir.
     /// </summary>
     [HttpPost("handover")]
-    [Authorize(Policy = Permissions.TaskExecute)]
+    [Authorize(Policy = Permissions.RunbookRead)]
     [ProducesResponseType(typeof(TaskAssignmentDto), StatusCodes.Status200OK)]
     public async Task<ActionResult<TaskAssignmentDto>> Handover(
         Guid taskId, [FromBody] HandoverTaskRequest request, CancellationToken ct)
@@ -45,7 +50,7 @@ public sealed class AssignmentsController(IAssignmentService assignments) : Cont
 
     /// <summary>Atamayi kaldirir (kayit tarihce icin saklanir).</summary>
     [HttpDelete("{assignmentId:guid}")]
-    [Authorize(Policy = Permissions.TaskAssign)]
+    [Authorize(Policy = Permissions.RunbookRead)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> Remove(Guid taskId, Guid assignmentId, CancellationToken ct)
     {

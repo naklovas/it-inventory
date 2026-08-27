@@ -13,6 +13,7 @@ namespace BookRunner.Infrastructure.Directory;
 /// <summary>
 /// Active Directory'yi salt-okunur kullanan dizin servisi. Kullanici, grup, uyelik
 /// ve fotograf bilgisi buradan gelir; uygulama AD'ye hicbir sey yazmaz.
+/// Yapilandirmada birden fazla etki alani tanimliysa sorgular hepsinde calisir.
 /// </summary>
 [SupportedOSPlatform("windows")]
 public sealed class ActiveDirectoryService(
@@ -48,7 +49,7 @@ public sealed class ActiveDirectoryService(
 
         return Task.FromResult(CacheOrQuery(
             $"ad:users:{escaped}:{take}",
-            () => Search(filter, UserProperties, Math.Min(take, _options.MaxSearchResults), ReadUser)));
+            () => SearchAllDomains(filter, UserProperties, Math.Min(take, _options.MaxSearchResults), ReadUser)));
     }
 
     public Task<IReadOnlyList<DirectoryGroup>> SearchGroupsAsync(string term, int take, CancellationToken ct = default)
@@ -63,7 +64,7 @@ public sealed class ActiveDirectoryService(
 
         return Task.FromResult(CacheOrQuery(
             $"ad:groups:{escaped}:{take}",
-            () => Search(filter, GroupProperties, Math.Min(take, _options.MaxSearchResults), ReadGroup)));
+            () => SearchAllDomains(filter, GroupProperties, Math.Min(take, _options.MaxSearchResults), ReadGroup)));
     }
 
     public Task<DirectoryUser?> FindUserBySamAccountNameAsync(string samAccountName, CancellationToken ct = default)
@@ -73,10 +74,12 @@ public sealed class ActiveDirectoryService(
             return Task.FromResult<DirectoryUser?>(null);
         }
 
-        var filter = $"(&(objectCategory=person)(objectClass=user)(sAMAccountName={EscapeLdapFilter(samAccountName)}))";
+        var (netBiosHint, accountName) = SplitAccountName(samAccountName);
+        var filter = $"(&(objectCategory=person)(objectClass=user)(sAMAccountName={EscapeLdapFilter(accountName)}))";
+
         return Task.FromResult(CacheOrQuery(
             $"ad:user:sam:{samAccountName.ToLowerInvariant()}",
-            () => Search(filter, UserProperties, 1, ReadUser).FirstOrDefault()));
+            () => SearchUntilFound(filter, UserProperties, ReadUser, netBiosHint)));
     }
 
     public Task<DirectoryUser?> FindUserBySidAsync(string sid, CancellationToken ct = default)
@@ -89,7 +92,7 @@ public sealed class ActiveDirectoryService(
         var filter = $"(&(objectCategory=person)(objectClass=user)(objectSid={sid}))";
         return Task.FromResult(CacheOrQuery(
             $"ad:user:sid:{sid}",
-            () => Search(filter, UserProperties, 1, ReadUser).FirstOrDefault()));
+            () => SearchUntilFound(filter, UserProperties, ReadUser)));
     }
 
     public Task<DirectoryGroup?> FindGroupBySidAsync(string sid, CancellationToken ct = default)
@@ -102,7 +105,7 @@ public sealed class ActiveDirectoryService(
         var filter = $"(&(objectCategory=group)(objectSid={sid}))";
         return Task.FromResult(CacheOrQuery(
             $"ad:group:sid:{sid}",
-            () => Search(filter, GroupProperties, 1, ReadGroup).FirstOrDefault()));
+            () => SearchUntilFound(filter, GroupProperties, ReadGroup)));
     }
 
     public Task<IReadOnlyList<string>> GetUserGroupSidsAsync(string samAccountName, CancellationToken ct = default)
@@ -112,42 +115,23 @@ public sealed class ActiveDirectoryService(
             return Task.FromResult<IReadOnlyList<string>>(Array.Empty<string>());
         }
 
+        var (netBiosHint, accountName) = SplitAccountName(samAccountName);
+
         return Task.FromResult(CacheOrQuery($"ad:groupsof:{samAccountName.ToLowerInvariant()}", () =>
         {
-            using var context = CreateContext();
-            using var user = UserPrincipal.FindByIdentity(context, IdentityType.SamAccountName, samAccountName);
-            if (user is null)
+            foreach (var domain in OrderDomains(netBiosHint))
             {
-                return (IReadOnlyList<string>)Array.Empty<string>();
+                using var context = CreateContext(domain);
+                using var user = UserPrincipal.FindByIdentity(context, IdentityType.SamAccountName, accountName);
+                if (user is null)
+                {
+                    continue;
+                }
+
+                return ReadAuthorizationGroups(user, accountName);
             }
 
-            var sids = new List<string>();
-
-            // GetAuthorizationGroups ic ice grup uyeliklerini de cozer; bir uyelik
-            // cozulemezse (orn. guven iliskisi kopuksa) o kayit atlanir.
-            using var groups = user.GetAuthorizationGroups();
-            var enumerator = groups.GetEnumerator();
-            while (true)
-            {
-                try
-                {
-                    if (!enumerator.MoveNext())
-                    {
-                        break;
-                    }
-
-                    if (enumerator.Current?.Sid is { } sid)
-                    {
-                        sids.Add(sid.Value);
-                    }
-                }
-                catch (Exception ex) when (ex is PrincipalOperationException or NoMatchingPrincipalException)
-                {
-                    logger.LogDebug(ex, "{User} icin bir grup uyeligi cozulemedi, atlaniyor.", samAccountName);
-                }
-            }
-
-            return sids;
+            return (IReadOnlyList<string>)Array.Empty<string>();
         }));
     }
 
@@ -160,37 +144,42 @@ public sealed class ActiveDirectoryService(
 
         return Task.FromResult(CacheOrQuery($"ad:members:{groupSid}", () =>
         {
-            using var context = CreateContext();
-            using var group = GroupPrincipal.FindByIdentity(context, IdentityType.Sid, groupSid);
-            if (group is null)
+            foreach (var domain in _options.ResolveDomains())
             {
-                return (IReadOnlyList<DirectoryUser>)Array.Empty<DirectoryUser>();
-            }
-
-            var members = new List<DirectoryUser>();
-
-            // recursive: true -> ic ice gruplardaki kisiler de bildirim alsin.
-            foreach (var principal in group.GetMembers(recursive: true))
-            {
-                using (principal)
+                using var context = CreateContext(domain);
+                using var group = GroupPrincipal.FindByIdentity(context, IdentityType.Sid, groupSid);
+                if (group is null)
                 {
-                    if (principal is not UserPrincipal userPrincipal)
-                    {
-                        continue;
-                    }
+                    continue;
+                }
 
-                    if (userPrincipal.GetUnderlyingObject() is DirectoryEntry entry)
+                var members = new List<DirectoryUser>();
+
+                // recursive: true -> ic ice gruplardaki kisiler de bildirim alsin.
+                foreach (var principal in group.GetMembers(recursive: true))
+                {
+                    using (principal)
                     {
-                        var user = ReadUser(entry.Properties);
-                        if (user is not null)
+                        if (principal is not UserPrincipal userPrincipal)
                         {
-                            members.Add(user);
+                            continue;
+                        }
+
+                        if (userPrincipal.GetUnderlyingObject() is DirectoryEntry entry)
+                        {
+                            var user = ReadUser(entry.Properties);
+                            if (user is not null)
+                            {
+                                members.Add(user);
+                            }
                         }
                     }
                 }
+
+                return (IReadOnlyList<DirectoryUser>)members;
             }
 
-            return members;
+            return Array.Empty<DirectoryUser>();
         }));
     }
 
@@ -201,42 +190,45 @@ public sealed class ActiveDirectoryService(
             return Task.FromResult<byte[]?>(null);
         }
 
-        try
+        foreach (var domain in _options.ResolveDomains())
         {
-            using var root = CreateSearchRoot();
-            using var searcher = new DirectorySearcher(root)
+            try
             {
-                Filter = $"(&(objectCategory=person)(objectClass=user)(objectSid={sid}))",
-                SizeLimit = 1
-            };
+                using var root = CreateSearchRoot(domain);
+                using var searcher = new DirectorySearcher(root)
+                {
+                    Filter = $"(&(objectCategory=person)(objectClass=user)(objectSid={sid}))",
+                    SizeLimit = 1
+                };
 
-            foreach (var attribute in _options.PhotoAttributes)
-            {
-                searcher.PropertiesToLoad.Add(attribute);
-            }
-
-            using var results = searcher.FindAll();
-            foreach (SearchResult result in results)
-            {
                 foreach (var attribute in _options.PhotoAttributes)
                 {
-                    if (result.Properties[attribute].Count > 0 &&
-                        result.Properties[attribute][0] is byte[] { Length: > 0 } photo)
+                    searcher.PropertiesToLoad.Add(attribute);
+                }
+
+                using var results = searcher.FindAll();
+                foreach (SearchResult result in results)
+                {
+                    foreach (var attribute in _options.PhotoAttributes)
                     {
-                        return Task.FromResult<byte[]?>(photo);
+                        if (result.Properties[attribute].Count > 0 &&
+                            result.Properties[attribute][0] is byte[] { Length: > 0 } photo)
+                        {
+                            return Task.FromResult<byte[]?>(photo);
+                        }
                     }
                 }
             }
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "{Sid} icin AD fotografi okunamadi.", sid);
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "{Sid} icin AD fotografi {Domain} etki alanindan okunamadi.", sid, domain.Name);
+            }
         }
 
         return Task.FromResult<byte[]?>(null);
     }
 
-    /// <summary>Sorguyu onbellekten karsilar; AD hatalarinda bos sonuc dondurup uygulamayi ayakta tutar.</summary>
+    /// <summary>Sorguyu onbellekten karsilar.</summary>
     private T CacheOrQuery<T>(string cacheKey, Func<T> query) where T : class?
     {
         if (cache.TryGetValue(cacheKey, out T? cached))
@@ -259,10 +251,64 @@ public sealed class ActiveDirectoryService(
         return result;
     }
 
-    private IReadOnlyList<T> Search<T>(string filter, string[] properties, int take, Func<ResultPropertyCollection, T?> map)
+    /// <summary>Tum etki alanlarinda arar ve sonuclari birlestirir.</summary>
+    private IReadOnlyList<T> SearchAllDomains<T>(
+        string filter, string[] properties, int take, Func<ResultPropertyCollection, T?> map)
         where T : class
     {
-        using var root = CreateSearchRoot();
+        var items = new List<T>();
+
+        foreach (var domain in _options.ResolveDomains())
+        {
+            if (items.Count >= take)
+            {
+                break;
+            }
+
+            try
+            {
+                items.AddRange(SearchDomain(domain, filter, properties, take - items.Count, map));
+            }
+            catch (Exception ex)
+            {
+                // Bir etki alanina erisilemezse digerlerinin sonucu yine de donmelidir.
+                logger.LogWarning(ex, "{Domain} etki alaninda arama basarisiz oldu; atlaniyor.", domain.Name);
+            }
+        }
+
+        return items;
+    }
+
+    /// <summary>Etki alanlarini sirayla dener, ilk eslesmede durur.</summary>
+    private T? SearchUntilFound<T>(
+        string filter, string[] properties, Func<ResultPropertyCollection, T?> map, string? netBiosHint = null)
+        where T : class
+    {
+        foreach (var domain in OrderDomains(netBiosHint))
+        {
+            try
+            {
+                var match = SearchDomain(domain, filter, properties, 1, map).FirstOrDefault();
+                if (match is not null)
+                {
+                    return match;
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "{Domain} etki alaninda sorgu basarisiz oldu; atlaniyor.", domain.Name);
+            }
+        }
+
+        return null;
+    }
+
+    private IReadOnlyList<T> SearchDomain<T>(
+        DirectoryDomainOptions domain, string filter, string[] properties, int take,
+        Func<ResultPropertyCollection, T?> map)
+        where T : class
+    {
+        using var root = CreateSearchRoot(domain);
         using var searcher = new DirectorySearcher(root)
         {
             Filter = filter,
@@ -294,22 +340,95 @@ public sealed class ActiveDirectoryService(
         return items;
     }
 
-    private PrincipalContext CreateContext()
-        => string.IsNullOrWhiteSpace(_options.ServiceAccountUserName)
-            ? new PrincipalContext(ContextType.Domain, _options.Domain)
-            : new PrincipalContext(ContextType.Domain, _options.Domain, _options.ServiceAccountUserName, _options.ServiceAccountPassword);
-
-    private DirectoryEntry CreateSearchRoot()
+    /// <summary>
+    /// Kullanicinin oturum actigi etki alani biliniyorsa o etki alanini basa alir;
+    /// boylece cok domainli ormanlarda gereksiz sorgu yapilmaz.
+    /// </summary>
+    private IEnumerable<DirectoryDomainOptions> OrderDomains(string? netBiosHint)
     {
-        var path = !string.IsNullOrWhiteSpace(_options.SearchRoot)
-            ? $"LDAP://{_options.SearchRoot}"
-            : !string.IsNullOrWhiteSpace(_options.Domain)
-                ? $"LDAP://{_options.Domain}"
+        var domains = _options.ResolveDomains();
+
+        if (string.IsNullOrWhiteSpace(netBiosHint) || domains.Count <= 1)
+        {
+            return domains;
+        }
+
+        return domains
+            .OrderByDescending(d => Matches(d, netBiosHint))
+            .ToList();
+
+        static bool Matches(DirectoryDomainOptions domain, string hint)
+            => string.Equals(domain.NetBiosName, hint, StringComparison.OrdinalIgnoreCase)
+               || (domain.Name is not null &&
+                   domain.Name.StartsWith(hint + ".", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Ic ice grup uyeliklerini cozer. Bir uyelik cozulemezse (orn. guven iliskisi
+    /// kopuksa) o kayit atlanir, islem devam eder.
+    /// </summary>
+    private IReadOnlyList<string> ReadAuthorizationGroups(UserPrincipal user, string accountName)
+    {
+        var sids = new List<string>();
+
+        using var groups = user.GetAuthorizationGroups();
+        var enumerator = groups.GetEnumerator();
+
+        while (true)
+        {
+            try
+            {
+                if (!enumerator.MoveNext())
+                {
+                    break;
+                }
+
+                if (enumerator.Current?.Sid is { } sid)
+                {
+                    sids.Add(sid.Value);
+                }
+            }
+            catch (Exception ex) when (ex is PrincipalOperationException or NoMatchingPrincipalException)
+            {
+                logger.LogDebug(ex, "{User} icin bir grup uyeligi cozulemedi, atlaniyor.", accountName);
+            }
+        }
+
+        return sids;
+    }
+
+    private static PrincipalContext CreateContext(DirectoryDomainOptions domain)
+        => string.IsNullOrWhiteSpace(domain.ServiceAccountUserName)
+            ? new PrincipalContext(ContextType.Domain, domain.Name)
+            : new PrincipalContext(ContextType.Domain, domain.Name,
+                domain.ServiceAccountUserName, domain.ServiceAccountPassword);
+
+    private static DirectoryEntry CreateSearchRoot(DirectoryDomainOptions domain)
+    {
+        var path = !string.IsNullOrWhiteSpace(domain.SearchRoot)
+            ? $"LDAP://{domain.SearchRoot}"
+            : !string.IsNullOrWhiteSpace(domain.Name)
+                ? $"LDAP://{domain.Name}"
                 : null;
 
-        return string.IsNullOrWhiteSpace(_options.ServiceAccountUserName)
+        return string.IsNullOrWhiteSpace(domain.ServiceAccountUserName)
             ? (path is null ? new DirectoryEntry() : new DirectoryEntry(path))
-            : new DirectoryEntry(path, _options.ServiceAccountUserName, _options.ServiceAccountPassword);
+            : new DirectoryEntry(path, domain.ServiceAccountUserName, domain.ServiceAccountPassword);
+    }
+
+    /// <summary>"CONTOSO\ali" -> ("CONTOSO", "ali"); "ali@contoso.com" -> (null, "ali").</summary>
+    private static (string? NetBios, string AccountName) SplitAccountName(string value)
+    {
+        var name = value.Trim();
+
+        var slash = name.LastIndexOf('\\');
+        if (slash >= 0)
+        {
+            return (name[..slash], name[(slash + 1)..]);
+        }
+
+        var at = name.IndexOf('@');
+        return (null, at > 0 ? name[..at] : name);
     }
 
     private static DirectoryUser? ReadUser(ResultPropertyCollection properties)

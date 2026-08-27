@@ -13,6 +13,7 @@ namespace BookRunner.Application.Services;
 public sealed class RunbookService(
     IAppDbContext db,
     ICurrentUser currentUser,
+    IRunbookAccess access,
     IAuditService audit,
     IRealtimeNotifier realtime,
     IExternalIntegrationClient integration,
@@ -156,7 +157,7 @@ public sealed class RunbookService(
 
     public async Task<RunbookDetailDto> CreateAsync(CreateRunbookRequest request, CancellationToken ct = default)
     {
-        RequirePermission(Permissions.RunbookWrite);
+        access.Ensure(Permissions.RunbookWrite);
         ValidatePlannedRange(request.PlannedStart, request.PlannedEnd);
 
         var ownerId = request.OwnerUserId ?? currentUser.UserId
@@ -195,7 +196,8 @@ public sealed class RunbookService(
 
     public async Task<RunbookDetailDto> UpdateAsync(Guid id, UpdateRunbookRequest request, CancellationToken ct = default)
     {
-        RequirePermission(Permissions.RunbookWrite);
+        // Runbook'un sahibi, rol izni olmasa da kendi runbook'unu duzenleyebilir.
+        await access.EnsureForRunbookAsync(id, Permissions.RunbookWrite, ct);
         ValidatePlannedRange(request.PlannedStart, request.PlannedEnd);
 
         var runbook = await db.Runbooks.FirstOrDefaultAsync(r => r.Id == id, ct)
@@ -254,7 +256,8 @@ public sealed class RunbookService(
 
     public async Task DeleteAsync(Guid id, CancellationToken ct = default)
     {
-        RequirePermission(Permissions.RunbookDelete);
+        // Silme yetkisi yonetici rolunde; runbook sahibi de kendi runbook'unu silebilir.
+        await access.EnsureForRunbookAsync(id, Permissions.RunbookDelete, ct);
 
         var runbook = await db.Runbooks.FirstOrDefaultAsync(r => r.Id == id, ct)
             ?? throw new NotFoundException("Runbook", id);
@@ -278,7 +281,7 @@ public sealed class RunbookService(
     public async Task<RunbookDetailDto> SaveAsTemplateAsync(
         Guid runbookId, string templateTitle, string? category, CancellationToken ct = default)
     {
-        RequirePermission(Permissions.RunbookPublishTemplate);
+        await access.EnsureForRunbookAsync(runbookId, Permissions.RunbookPublishTemplate, ct);
 
         var source = await LoadDetailAsync(runbookId, tracking: false, ct)
             ?? throw new NotFoundException("Runbook", runbookId);
@@ -314,7 +317,7 @@ public sealed class RunbookService(
     public async Task<RunbookDetailDto> CreateFromTemplateAsync(
         Guid templateId, CreateFromTemplateRequest request, CancellationToken ct = default)
     {
-        RequirePermission(Permissions.RunbookWrite);
+        await access.EnsureForRunbookAsync(templateId, Permissions.RunbookWrite, ct);
         ValidatePlannedRange(request.PlannedStart, request.PlannedEnd);
 
         var template = await LoadDetailAsync(templateId, tracking: false, ct)
@@ -608,14 +611,6 @@ public sealed class RunbookService(
         {
             throw ValidationException.Single(nameof(CreateRunbookRequest.PlannedEnd),
                 "Planlanan bitis, planlanan baslangictan once olamaz.");
-        }
-    }
-
-    private void RequirePermission(string permission)
-    {
-        if (!Permissions.Has(currentUser.Role, permission))
-        {
-            throw new ForbiddenException($"Bu islem icin '{permission}' yetkisi gerekiyor.");
         }
     }
 

@@ -13,6 +13,7 @@ public class PageViewModel
         => CurrentUser?.Permissions.Contains(permission, StringComparer.OrdinalIgnoreCase) == true;
 
     public bool CanWrite => Can(Permissions.RunbookWrite);
+    public bool CanDeleteTask => Can(Permissions.TaskDelete);
     public bool CanAssign => Can(Permissions.TaskAssign);
     public bool CanComment => Can(Permissions.TaskComment);
     public bool CanExecute => Can(Permissions.TaskExecute);
@@ -42,6 +43,26 @@ public sealed class RunbookListViewModel : PageViewModel
 public sealed class RunbookDetailViewModel : PageViewModel
 {
     public required RunbookDetailDto Runbook { get; init; }
+
+    /// <summary>
+    /// Oturum acan kullanici bu runbook'un sahibi mi. Sahip, rol izni olmasa da
+    /// kendi runbook'unda her degisikligi yapabilir (API tarafinda da ayni kural
+    /// IRunbookAccess ile uygulanir; buradaki bayraklar yalnizca arayuzu sekillendirir).
+    /// </summary>
+    public bool IsOwner => CurrentUser?.Id is { } userId && Runbook.Owner?.Id == userId;
+
+    public bool CanEditThis => IsOwner || CanWrite;
+    public bool CanAssignThis => IsOwner || CanAssign;
+    public bool CanExecuteThis => IsOwner || CanExecute;
+    public bool CanCommentThis => IsOwner || CanComment;
+    public bool CanImportThis => IsOwner || CanImport;
+    public bool CanPublishTemplateThis => IsOwner || CanPublishTemplate;
+
+    /// <summary>Runbook silme: yonetici rolu veya runbook sahibi.</summary>
+    public bool CanDeleteRunbookThis => IsOwner || CanDelete;
+
+    /// <summary>Gorev silme: yonetici rolu veya runbook sahibi.</summary>
+    public bool CanDeleteTaskThis => IsOwner || CanDeleteTask;
 
     /// <summary>SignalR hub adresi; canli guncellemeler icin.</summary>
     public string HubUrl { get; init; } = string.Empty;

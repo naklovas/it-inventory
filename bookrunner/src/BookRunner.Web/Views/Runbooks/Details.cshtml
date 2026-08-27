@@ -39,6 +39,13 @@
                         <partial name="_Avatar" model="@(new AvatarModel(r.Owner.Id, r.Owner.DisplayName, r.Owner.Initials, r.Owner.AvatarColor, r.Owner.HasPhoto, AvatarSize.Small, false, r.Owner.Title))" />
                         Sahip: <strong class="text-body">@r.Owner.DisplayName</strong>
                     </span>
+                    @if (Model.IsOwner)
+                    {
+                        <span class="badge text-bg-success-subtle border border-success-subtle text-success-emphasis"
+                              title="Runbook sahibi olarak bu runbook uzerinde tum degisiklikleri yapabilirsiniz.">
+                            <i class="bi bi-key me-1"></i>Sahibi sizsiniz
+                        </span>
+                    }
                 }
                 <span><i class="bi bi-calendar-event"></i> Plan: @Fmt(r.PlannedStart) - @Fmt(r.PlannedEnd)</span>
                 @if (r.ActualStart.HasValue)
@@ -70,7 +77,7 @@
     <hr />
 
     <div class="d-flex flex-wrap gap-2">
-        @if (Model.CanWrite)
+        @if (Model.CanEditThis)
         {
             <a class="btn btn-sm btn-outline-secondary" asp-action="Edit" asp-route-id="@r.Id">
                 <i class="bi bi-pencil me-1"></i>Duzenle
@@ -85,19 +92,19 @@
                 <i class="bi bi-file-earmark-pdf me-1"></i>PDF
             </a>
         }
-        @if (Model.CanImport)
+        @if (Model.CanImportThis)
         {
             <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#importModal">
                 <i class="bi bi-upload me-1"></i>Excel'den gorev aktar
             </button>
         }
-        @if (Model.CanPublishTemplate && !isTemplate)
+        @if (Model.CanPublishTemplateThis && !isTemplate)
         {
             <button class="btn btn-sm btn-outline-info" data-bs-toggle="modal" data-bs-target="#templateModal">
                 <i class="bi bi-bookmark-plus me-1"></i>Sablon yap
             </button>
         }
-        @if (Model.CanDelete)
+        @if (Model.CanDeleteRunbookThis)
         {
             <form method="post" asp-action="Delete" asp-route-id="@r.Id" class="d-inline"
                   onsubmit="return confirm('Bu runbook silinecek. Emin misiniz?');">
@@ -112,7 +119,7 @@
 
 <div class="d-flex justify-content-between align-items-center mb-2">
     <h2 class="h5 mb-0"><i class="bi bi-list-ol me-1"></i>Gorevler</h2>
-    @if (Model.CanWrite)
+    @if (Model.CanEditThis)
     {
         <button class="btn btn-primary btn-sm" data-bs-toggle="collapse" data-bs-target="#newTaskPanel">
             <i class="bi bi-plus-lg me-1"></i>Gorev ekle
@@ -120,10 +127,10 @@
     }
 </div>
 
-<div id="taskList" data-sortable="@Model.CanWrite.ToString().ToLowerInvariant()">
+<div id="taskList" data-sortable="@Model.CanEditThis.ToString().ToLowerInvariant()">
     @foreach (var task in r.Tasks)
     {
-        <partial name="_Task" model="@(new TaskCardModel(task, Model))" />
+        <partial name="_Task" model="@(TaskCardModel.From(task, Model))" />
     }
 </div>
 
@@ -135,7 +142,7 @@
     </div>
 }
 
-@if (Model.CanWrite)
+@if (Model.CanEditThis)
 {
     <div class="collapse @(r.Tasks.Count == 0 ? "show" : string.Empty)" id="newTaskPanel">
         <div class="br-card p-3 mb-3">
@@ -275,7 +282,7 @@
     </div>
 </div>
 
-@if (Model.CanImport)
+@if (Model.CanImportThis)
 {
     <div class="modal fade" id="importModal" tabindex="-1">
         <div class="modal-dialog">
@@ -303,7 +310,7 @@
     </div>
 }
 
-@if (Model.CanPublishTemplate && !isTemplate)
+@if (Model.CanPublishTemplateThis && !isTemplate)
 {
     <div class="modal fade" id="templateModal" tabindex="-1">
         <div class="modal-dialog">
@@ -334,10 +341,10 @@
     {
         runbookId = r.Id,
         hubUrl = Model.HubUrl,
-        canWrite = Model.CanWrite,
-        canAssign = Model.CanAssign,
-        canComment = Model.CanComment,
-        canExecute = Model.CanExecute,
+        canWrite = Model.CanEditThis,
+        canAssign = Model.CanAssignThis,
+        canComment = Model.CanCommentThis,
+        canExecute = Model.CanExecuteThis,
         antiforgery = Xsrf.GetAndStoreTokens(Context).RequestToken
     }))</script>
     <script src="~/js/runbook.js" asp-append-version="true"></script>

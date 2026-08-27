@@ -1,7 +1,6 @@
 @model TaskCardModel
 @{
     var t = Model.Task;
-    var acl = Model.Page;
     var isDone = t.Status is RunbookTaskStatus.Completed or RunbookTaskStatus.Skipped;
     var isBlocked = t.Status == RunbookTaskStatus.Blocked;
     var statusKey = t.Status.ToString().ToLowerInvariant();
@@ -9,12 +8,12 @@
 }
 
 <div class="br-task @(isDone ? "is-done" : string.Empty) @(isBlocked ? "is-blocked" : string.Empty)"
-     id="task-@t.Id" data-task-id="@t.Id" draggable="@acl.CanWrite.ToString().ToLowerInvariant()">
+     id="task-@t.Id" data-task-id="@t.Id" draggable="@Model.CanEdit.ToString().ToLowerInvariant()">
     <span class="br-task-bar" style="background:@t.ColorHex"></span>
 
     <div class="br-task-body">
         <div class="d-flex align-items-start gap-2">
-            @if (acl.CanWrite)
+            @if (Model.CanEdit)
             {
                 <i class="bi bi-grip-vertical br-drag-handle mt-1" title="Suruklerek siralayin"></i>
             }
@@ -83,7 +82,7 @@
                     }
                 </span>
 
-                @if (acl.CanAssign)
+                @if (Model.CanAssign)
                 {
                     <button class="btn btn-sm btn-outline-secondary rounded-circle br-assign-btn"
                             data-task-id="@t.Id" title="Kisi veya grup ata">
@@ -115,7 +114,7 @@
             }
 
             <div class="d-flex flex-wrap gap-2 mb-3">
-                @if (acl.CanExecute)
+                @if (Model.CanExecute)
                 {
                     foreach (var status in new[] { RunbookTaskStatus.InProgress, RunbookTaskStatus.Completed, RunbookTaskStatus.Blocked, RunbookTaskStatus.Failed, RunbookTaskStatus.Skipped })
                     {
@@ -129,7 +128,7 @@
                     }
                 }
 
-                @if (t.Assignments.Count > 0 && acl.CanExecute)
+                @if (t.Assignments.Count > 0 && Model.CanExecute)
                 {
                     <div class="dropdown">
                         <button class="btn btn-sm btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown">
@@ -151,7 +150,7 @@
                     </div>
                 }
 
-                @if (acl.CanAssign)
+                @if (Model.CanAssign)
                 {
                     foreach (var assignment in t.Assignments)
                     {
@@ -163,7 +162,7 @@
                     }
                 }
 
-                @if (t.ScriptId.HasValue && acl.CanRunScript)
+                @if (t.ScriptId.HasValue && Model.CanRunScript)
                 {
                     <button class="btn btn-sm btn-outline-dark br-script-btn"
                             data-script-id="@t.ScriptId" data-task-id="@t.Id">
@@ -171,7 +170,8 @@
                     </button>
                 }
 
-                @if (acl.CanWrite)
+                @* Gorev silme: yalnizca yonetici rolu veya runbook sahibi. *@
+                @if (Model.CanDelete)
                 {
                     <button class="btn btn-sm btn-outline-danger br-delete-task-btn" data-task-id="@t.Id">
                         <i class="bi bi-trash"></i>
@@ -215,7 +215,7 @@
             }
         </div>
 
-        @if (acl.CanComment)
+        @if (Model.CanComment)
         {
             <div class="d-flex gap-2 mt-2">
                 <input class="form-control form-control-sm br-comment-input" data-task-id="@t.Id"

@@ -12,6 +12,11 @@ namespace BookRunner.Api.Controllers;
 [Produces("application/json")]
 public sealed class CommentsController(ICommentService comments) : ControllerBase
 {
+    // Not: Asagidaki uclarda politika, her rolde bulunan "runbook.read" iznidir.
+    // Asil yetki karari is katmanindaki IRunbookAccess tarafindan verilir; cunku
+    // runbook'un sahibi, rol izni olmasa da kendi runbook'unda her degisikligi
+    // yapabilir. Boylece yetki kurali tek yerde toplanir.
+
     /// <summary>Gorevin yorumlarini kronolojik sirayla listeler.</summary>
     [HttpGet("tasks/{taskId:guid}/comments")]
     [Authorize(Policy = Permissions.RunbookRead)]
@@ -21,7 +26,7 @@ public sealed class CommentsController(ICommentService comments) : ControllerBas
 
     /// <summary>Goreve yorum ekler; anilan kisilere e-posta gonderilir.</summary>
     [HttpPost("tasks/{taskId:guid}/comments")]
-    [Authorize(Policy = Permissions.TaskComment)]
+    [Authorize(Policy = Permissions.RunbookRead)]
     [ProducesResponseType(typeof(TaskCommentDto), StatusCodes.Status200OK)]
     public async Task<ActionResult<TaskCommentDto>> Add(
         Guid taskId, [FromBody] CreateCommentRequest request, CancellationToken ct)

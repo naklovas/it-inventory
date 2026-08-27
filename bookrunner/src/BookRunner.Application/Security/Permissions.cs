@@ -13,6 +13,8 @@ public static class Permissions
     public const string RunbookDelete = "runbook.delete";
     public const string RunbookPublishTemplate = "runbook.template.publish";
     public const string TaskWrite = "task.write";
+    /// <summary>Gorev silme. Yalnizca yonetici rolunde; runbook sahibi de kendi gorevlerini silebilir.</summary>
+    public const string TaskDelete = "task.delete";
     public const string TaskAssign = "task.assign";
     public const string TaskExecute = "task.execute";
     public const string TaskComment = "task.comment";
@@ -42,8 +44,8 @@ public static class Permissions
             [AppRole.Administrator] =
             [
                 RunbookRead, RunbookWrite, RunbookDelete, RunbookPublishTemplate, TaskWrite,
-                TaskAssign, TaskExecute, TaskComment, ExportData, ImportData, ScriptManage,
-                ScriptExecute, AuditRead, AdminManage
+                TaskDelete, TaskAssign, TaskExecute, TaskComment, ExportData, ImportData,
+                ScriptManage, ScriptExecute, AuditRead, AdminManage
             ]
         };
 
@@ -57,8 +59,9 @@ public static class Permissions
     /// <summary>Tum izin adlari (yetkilendirme politikalarini kaydetmek icin).</summary>
     public static IReadOnlyList<string> All { get; } =
     [
-        RunbookRead, RunbookWrite, RunbookDelete, RunbookPublishTemplate, TaskWrite, TaskAssign,
-        TaskExecute, TaskComment, ExportData, ImportData, ScriptManage, ScriptExecute, AuditRead, AdminManage
+        RunbookRead, RunbookWrite, RunbookDelete, RunbookPublishTemplate, TaskWrite, TaskDelete,
+        TaskAssign, TaskExecute, TaskComment, ExportData, ImportData, ScriptManage, ScriptExecute,
+        AuditRead, AdminManage
     ];
 
     /// <summary>Yetkilendirme sirasinda kullanilan ozel claim turu.</summary>

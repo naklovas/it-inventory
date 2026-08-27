@@ -57,7 +57,9 @@ public sealed class DirectorySyncService(
             return user;
         }
 
-        var adUser = await directory.FindUserBySamAccountNameAsync(normalized, ct);
+        // Cok domainli ormanlarda dogru etki alanina once sorulabilmesi icin
+        // "DOMAIN\\kullanici" biciminde gelen deger oldugu gibi iletilir.
+        var adUser = await directory.FindUserBySamAccountNameAsync(samAccountName, ct);
         if (adUser is null)
         {
             return user;

@@ -14,6 +14,7 @@ public sealed class ServiceManagerOptions
     /// <summary>
     /// SCSM Data Warehouse baglanti dizesi. Salt-okunur bir hesap kullanin
     /// (Integrated Security onerilir; bkz. sql/03_ServiceManager_ReadOnly.sql).
+    /// Bos birakilirsa <c>ConnectionStrings:ServiceManager</c> degeri kullanilir.
     /// </summary>
     public string ConnectionString { get; set; } = string.Empty;
 
