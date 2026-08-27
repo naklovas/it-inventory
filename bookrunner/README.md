@@ -172,6 +172,12 @@ gruplarinizi, kac tane olursa olsun, dogrudan eslersiniz.
 Gecersiz bir deger yazilirsa uygulama sessizce en dusuk yetkiye dusmez;
 acilista acik bir hata verir.
 
+> **Kapali kurulumda dikkat edilecek nokta.** `Viewer` yalnizca okur: yorum
+> yazamaz, gorev durumunu degistiremez, gorevi devredemez. Bu yuzden **gorev
+> atadiginiz AD gruplarini en az `Contributor` olarak eslemeniz gerekir.**
+> Eslenmemis bir gruba gorev atarsaniz gruptaki kisiler gorevi gorur ama
+> uzerinde islem yapamaz.
+
 Iki durum varsayilan roldan etkilenmez ve her zaman `Viewer` alir: kullanicinin
 Active Directory'de bulunamamasi ve dizin sorgusunun hata vermesi. Gecici bir AD
 arizasi kimseye fazladan yetki vermemelidir.
