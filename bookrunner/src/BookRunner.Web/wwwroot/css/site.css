@@ -65,6 +65,7 @@ body {
 /* ----------------------------------------------------------------- avatar */
 
 .br-avatar {
+    position: relative;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -76,9 +77,25 @@ body {
     font-weight: 700;
     letter-spacing: .02em;
     border: 2px solid #fff;
-    object-fit: cover;
     flex: 0 0 auto;
     text-decoration: none;
+    overflow: hidden;
+}
+
+/* Bas harfler her zaman rozetin icindedir; fotograf varsa uzerine biner.
+   Fotograf yuklenemezse <img> kaldirilir ve bas harfler kendiliginden gorunur. */
+.br-avatar-initials {
+    line-height: 1;
+    user-select: none;
+}
+
+.br-avatar-photo {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
 }
 
 .br-avatar-sm { width: 26px; height: 26px; font-size: .62rem; }
@@ -87,6 +104,36 @@ body {
 /* Rozetler ust uste binerek yer kazanir; ilk rozet en ustte durur. */
 .br-avatar-stack { display: inline-flex; flex-direction: row-reverse; }
 .br-avatar-stack .br-avatar:not(:last-child) { margin-left: -10px; }
+
+/* Goreve atananlar: thumbnail + bas harf etiketi yan yana. */
+.br-assignees {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: .35rem;
+    justify-content: flex-end;
+}
+
+.br-assignee {
+    display: inline-flex;
+    align-items: center;
+    gap: .3rem;
+    padding: 2px 8px 2px 2px;
+    border: 1px solid var(--br-border);
+    border-radius: 99px;
+    background: #fff;
+    max-width: 190px;
+}
+
+.br-assignee-initials {
+    font-size: .72rem;
+    font-weight: 700;
+    letter-spacing: .03em;
+    color: #52606d;
+    white-space: nowrap;
+}
+
+/* Bas harf etiketi varken rozetin beyaz cercevesi gereksiz yer kaplar. */
+.br-assignee .br-avatar { border-width: 0; }
 
 .br-avatar-group {
     border-radius: 9px;                 /* gruplar kare-yuvarlak, kisiler daire */
@@ -303,6 +350,33 @@ body {
 .br-task.dragging { opacity: .55; }
 .br-drag-handle { cursor: grab; color: var(--br-muted); }
 .br-drag-handle:active { cursor: grabbing; }
+
+/* --------------------------------------------------- bagli kullanici (sag ust) */
+
+.br-nav-user .br-avatar {
+    width: 36px;
+    height: 36px;
+    font-size: .78rem;
+    border-color: rgba(255, 255, 255, .65);
+}
+
+.br-nav-user-text {
+    line-height: 1.15;
+    text-align: left;
+}
+
+.br-nav-user-name {
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.br-nav-user-text small { font-size: .7rem; }
+
+/* Cok dar ekranlarda yalnizca rol satiri gizlenir, ad gorunur kalir. */
+@media (max-width: 575.98px) {
+    .br-nav-user-name { font-size: .85rem; }
+    .br-nav-user-text small { display: none !important; }
+}
 
 /* ------------------------------------------------------------ canli gosterge */
 

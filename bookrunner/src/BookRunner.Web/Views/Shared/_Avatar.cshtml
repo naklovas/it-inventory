@@ -9,15 +9,18 @@
     var shape = Model.IsGroup ? "br-avatar-group" : string.Empty;
     var tooltip = string.IsNullOrWhiteSpace(Model.Subtitle) ? Model.DisplayName : $"{Model.DisplayName} - {Model.Subtitle}";
 }
-@if (Model.HasPhoto && Model.UserId.HasValue)
-{
-    @* Fotograf Active Directory'den gelir; API uzerinden vekillenerek sunulur. *@
-    <img class="br-avatar @size @shape"
-         src="@Url.Action("Photo", "Home", new { id = Model.UserId })"
-         alt="@Model.DisplayName" title="@tooltip"
-         onerror="this.outerHTML='<span class=\'br-avatar @size @shape\' style=\'background:@Model.Color\'>@Model.Initials</span>';" />
-}
-else
-{
-    <span class="br-avatar @size @shape" style="background:@Model.Color" title="@tooltip">@Model.Initials</span>
-}
+@*
+    Bas harfler her zaman rozetin icine cizilir; fotograf varsa uzerine bindirilir.
+    Boylece fotograf yuklenemezse (AD'de yok, erisilemedi) bas harfler kendiliginden
+    gorunur kalir - ayri bir yedek isaretlemeye gerek kalmaz.
+*@
+<span class="br-avatar @size @shape" style="background:@Model.Color" title="@tooltip">
+    <span class="br-avatar-initials">@Model.Initials</span>
+    @if (Model.HasPhoto && Model.UserId.HasValue)
+    {
+        @* Fotograf Active Directory'den gelir; API uzerinden vekillenerek sunulur. *@
+        <img class="br-avatar-photo"
+             src="@Url.Action("Photo", "Home", new { id = Model.UserId })"
+             alt="@Model.DisplayName" loading="lazy" />
+    }
+</span>

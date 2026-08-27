@@ -29,6 +29,7 @@ herkesin ayni tabloyu gormesini saglamak ve her hareketin izini birakmak.
 | --- | --- |
 | Kimlik dogrulama | Windows Entegre Kimlik Dogrulama (Negotiate/Kerberos) - SSO, ayrica oturum acilmaz |
 | Kullanici yonetimi | Tamamen Active Directory: kisi, grup, uyelik, unvan, departman ve **fotograf** AD'den okunur |
+| Kisi rozetleri | Goreve atanan kisilerde AD **thumbnail'i + adin bas harfleri** birlikte; fotograf yoksa bas harf rozeti. Sag ust kosede bagli kullanicinin fotografi ve tam adi |
 | Runbook | Baslik + aciklama + planlanan zaman + etiketler + SCSM kaydi |
 | Gorev (task) | Sirali adimlar, her adim **kendi renginde bir bar**, oncelik, sure, bagimlilik, geri alma notu |
 | Atama | Kisiye veya dogrudan **AD grubuna**; gruptaki kisilere e-posta gider |
@@ -190,7 +191,9 @@ bellek onbelleginden okunur.
 ### Atama: kisi ve grup birlikte
 
 Bir goreve hem **kisi** hem **AD grubu** atanabilir, ayni gorevde birden fazla
-atama bulunabilir. Grup atamasinda bildirim, grubun kendi e-posta adresine
+atama bulunabilir. Kisi atamalarinda AD'deki fotograf (thumbnail) ile adin bas
+harfleri yan yana gosterilir; fotografi olmayan kisilerde yalnizca bas harf
+rozeti cikar. Fotograf yuklenemezse rozet kendiliginden bas harflere doner. Grup atamasinda bildirim, grubun kendi e-posta adresine
 (varsa) ya da AD'deki uyelerinin adreslerine gider. Goreve atanan kisi gorevi
 baska bir kisiye veya gruba devredebilir; devir zinciri tarihcede saklanir.
 

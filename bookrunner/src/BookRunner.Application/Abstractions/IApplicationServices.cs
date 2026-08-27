@@ -23,6 +23,12 @@ public interface IDirectorySyncService
 
     Task<IReadOnlyList<GroupSummary>> SearchGroupsAsync(string term, int take, CancellationToken ct = default);
 
+    /// <summary>
+    /// Kimlige gore tek bir kisinin ozetini dondurur (ad, unvan, bas harfler,
+    /// avatar rengi, fotograf var mi). Bulunamazsa null.
+    /// </summary>
+    Task<PersonSummary?> GetPersonAsync(Guid userId, CancellationToken ct = default);
+
     /// <summary>Kullanicinin fotografini dondurur; yerelde yoksa AD'den ceker ve onbellege alir.</summary>
     Task<(byte[] Content, string ContentType)?> GetUserPhotoAsync(Guid userId, CancellationToken ct = default);
 

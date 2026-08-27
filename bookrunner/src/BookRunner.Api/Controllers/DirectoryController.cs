@@ -23,12 +23,11 @@ public sealed class DirectoryController(
     [ProducesResponseType(typeof(CurrentUserDto), StatusCodes.Status200OK)]
     public async Task<ActionResult<CurrentUserDto>> Me(CancellationToken ct)
     {
-        PersonSummary? profile = null;
-        if (currentUser.UserId.HasValue)
-        {
-            var matches = await directory.SearchUsersAsync(currentUser.DisplayName, 1, ct);
-            profile = matches.FirstOrDefault(p => p.Id == currentUser.UserId.Value);
-        }
+        // Profil, oturum acan kullanicinin kimligiyle dogrudan okunur; boylece
+        // fotograf, unvan ve departman bilgisi arayuzun sag ust kosesine ulasir.
+        var profile = currentUser.UserId.HasValue
+            ? await directory.GetPersonAsync(currentUser.UserId.Value, ct)
+            : null;
 
         return Ok(new CurrentUserDto
         {
@@ -41,6 +40,7 @@ public sealed class DirectoryController(
             Initials = profile?.Initials ?? AvatarHelper.Initials(currentUser.DisplayName),
             AvatarColor = profile?.AvatarColor ?? AvatarHelper.Color(currentUser.Sid ?? currentUser.UserName),
             HasPhoto = profile?.HasPhoto ?? false,
+            PhotoUrl = profile?.PhotoUrl,
             Role = DisplayText.Role(currentUser.Role),
             Permissions = Permissions.ForRole(currentUser.Role),
             Groups = currentUser.GroupSids.ToList()

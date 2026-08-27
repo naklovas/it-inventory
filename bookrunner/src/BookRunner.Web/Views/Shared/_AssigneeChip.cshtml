@@ -1,0 +1,16 @@
+@model AvatarModel
+@{
+    var tooltip = string.IsNullOrWhiteSpace(Model.Subtitle) ? Model.DisplayName : $"{Model.DisplayName} - {Model.Subtitle}";
+}
+@*
+    Goreve atanan kisi/grup rozeti: thumbnail + ad bas harfleri.
+    Fotograf yoksa rozetin kendisi zaten bas harfleri gosterdigi icin
+    metin tekrarlanmaz.
+*@
+<span class="br-assignee" title="@tooltip">
+    <partial name="_Avatar" model="Model" />
+    @if (Model.HasPhoto && Model.UserId.HasValue)
+    {
+        <span class="br-assignee-initials">@Model.Initials</span>
+    }
+</span>

@@ -60,6 +60,42 @@
         return div.innerHTML;
     }
 
+    /** Oznitelik icine yazilacak degerler icin tirnaklari da kacisla yazar. */
+    function escapeAttr(value) {
+        return String(value == null ? "" : value)
+            .replace(/&/g, "&amp;")
+            .replace(/"/g, "&quot;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
+    }
+
+    /**
+     * Sunucudaki _Avatar partial'i ile ayni yapiyi uretir: bas harfler rozetin
+     * icinde durur, fotograf varsa uzerine biner ve yuklenemezse kaldirilir.
+     */
+    function avatarHtml(person, options) {
+        const settings = options || {};
+        const classes = ["br-avatar"];
+
+        if (settings.size) {
+            classes.push("br-avatar-" + settings.size);
+        }
+        if (settings.isGroup) {
+            classes.push("br-avatar-group");
+        }
+
+        const label = person.displayName || person.name || "";
+        const photo = (person.hasPhoto && person.id)
+            ? '<img class="br-avatar-photo" src="/Home/Photo/' + encodeURIComponent(person.id) +
+              '" alt="" loading="lazy" />'
+            : "";
+
+        return '<span class="' + classes.join(" ") + '" style="background:' + escapeAttr(person.avatarColor) +
+            '" title="' + escapeAttr(label) + '">' +
+            '<span class="br-avatar-initials">' + escapeHtml(person.initials) + "</span>" +
+            photo + "</span>";
+    }
+
     function toIsoOrNull(value) {
         return value ? new Date(value).toISOString() : null;
     }
@@ -182,10 +218,7 @@
             return;
         }
 
-        const avatar = comment.author.hasPhoto
-            ? '<img class="br-avatar br-avatar-sm" src="/Home/Photo/' + comment.author.id + '" alt="" />'
-            : '<span class="br-avatar br-avatar-sm" style="background:' + comment.author.avatarColor + '">'
-              + escapeHtml(comment.author.initials) + '</span>';
+        const avatar = avatarHtml(comment.author, { size: "sm" });
 
         const element = document.createElement("div");
         element.className = "br-comment";
@@ -298,10 +331,7 @@
                     ? [item.title, item.department].filter(Boolean).join(" - ")
                     : "AD grubu";
 
-                const avatar = (kind === "user" && item.hasPhoto)
-                    ? '<img class="br-avatar br-avatar-sm" src="/Home/Photo/' + item.id + '" alt="" />'
-                    : '<span class="br-avatar br-avatar-sm ' + (kind === "group" ? "br-avatar-group" : "") +
-                      '" style="background:' + item.avatarColor + '">' + escapeHtml(item.initials) + "</span>";
+                const avatar = avatarHtml(item, { size: "sm", isGroup: kind === "group" });
 
                 return '<div class="br-suggest-item" data-id="' + item.id + '" data-label="' + escapeHtml(label) + '">' +
                     avatar + "<span><span>" + escapeHtml(label) + "</span>" +

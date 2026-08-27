@@ -68,6 +68,8 @@ public sealed record CurrentUserDto
     public required string Initials { get; init; }
     public required string AvatarColor { get; init; }
     public bool HasPhoto { get; init; }
+    /// <summary>Fotografi getiren API adresi; foto yoksa null.</summary>
+    public string? PhotoUrl { get; init; }
     public required string Role { get; init; }
     public IReadOnlyList<string> Permissions { get; init; } = Array.Empty<string>();
     public IReadOnlyList<string> Groups { get; init; } = Array.Empty<string>();

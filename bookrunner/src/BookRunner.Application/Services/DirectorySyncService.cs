@@ -255,6 +255,12 @@ public sealed class DirectorySyncService(
         return results;
     }
 
+    public async Task<PersonSummary?> GetPersonAsync(Guid userId, CancellationToken ct = default)
+    {
+        var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId, ct);
+        return user?.ToSummary();
+    }
+
     public async Task<(byte[] Content, string ContentType)?> GetUserPhotoAsync(Guid userId, CancellationToken ct = default)
     {
         var user = await db.Users.FirstOrDefaultAsync(u => u.Id == userId, ct);
