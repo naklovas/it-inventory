@@ -33,7 +33,8 @@
     .\scaffold-bookrunner.ps1 -OutputPath D:\src\BookRunner -SkipBuild
 
 .NOTES
-    Gereksinimler : .NET 9 SDK (derleme icin), SQL Server, etki alanina uye sunucu
+    Gereksinimler : Windows PowerShell 5.1 veya PowerShell 7+, .NET 9 SDK
+                    (derleme icin), SQL Server, etki alanina uye sunucu
     Uretim tarihi : 2026-08-27
 #>
 [CmdletBinding()]
@@ -73,35 +74,54 @@ function Install-BookRunner {
     $OutputPath = (Resolve-Path -LiteralPath $OutputPath).Path
 
     # ------------------------------------------------------------------- acma
-    # Windows PowerShell 5.1'de sikistirma turleri acikca yuklenmelidir.
-    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    # Sikistirma turleri .NET Framework'te (Windows PowerShell 5.1) iki ayri
+    # assembly'ye dagilmistir: ZipFile/ZipFileExtensions FileSystem tarafinda,
+    # ZipArchive ise System.IO.Compression tarafindadir. Ikisi de yuklenir ve
+    # asagida yalnizca FileSystem tarafindaki turler ada gore anilir; boylece
+    # hem 5.1 hem PowerShell 7 uzerinde calisir.
+    foreach ($assemblyName in @('System.IO.Compression', 'System.IO.Compression.FileSystem')) {
+        try { Add-Type -AssemblyName $assemblyName -ErrorAction Stop } catch { }
+    }
+
+    if (-not ('System.IO.Compression.ZipFile' -as [type])) {
+        throw 'Sikistirma destegi yuklenemedi. Windows PowerShell 5.1 (.NET Framework 4.5+) veya PowerShell 7 gerekiyor.'
+    }
 
     Write-Host 'Dosyalar aciliyor...' -ForegroundColor Yellow
 
     # Convert.FromBase64String bosluk karakterlerini yok sayar; satirlara
     # bolunmus blogu oldugu gibi verebiliriz.
     $bytes = [Convert]::FromBase64String($Payload)
-    $stream = New-Object System.IO.MemoryStream(, $bytes)
-    $zip = New-Object System.IO.Compression.ZipArchive($stream, [System.IO.Compression.ZipArchiveMode]::Read)
+
+    # Arsiv gecici bir dosyaya yazilir: ZipFile.OpenRead kullanmak, betigin
+    # ZipArchive/ZipArchiveMode turlerini adiyla anmasini gereksiz kilar.
+    $temporaryArchive = [System.IO.Path]::GetTempFileName()
 
     try {
-        foreach ($entry in $zip.Entries) {
-            # Adi bos olan girdiler klasordur; dosya olarak acilmaz.
-            if ([string]::IsNullOrEmpty($entry.Name)) { continue }
+        [System.IO.File]::WriteAllBytes($temporaryArchive, $bytes)
+        $zip = [System.IO.Compression.ZipFile]::OpenRead($temporaryArchive)
 
-            $target = Join-Path $OutputPath $entry.FullName
-            $targetDirectory = Split-Path -Parent $target
+        try {
+            foreach ($entry in $zip.Entries) {
+                # Adi bos olan girdiler klasordur; dosya olarak acilmaz.
+                if ([string]::IsNullOrEmpty($entry.Name)) { continue }
 
-            if (-not (Test-Path -LiteralPath $targetDirectory)) {
-                New-Item -ItemType Directory -Force -Path $targetDirectory | Out-Null
+                $target = Join-Path $OutputPath $entry.FullName
+                $targetDirectory = Split-Path -Parent $target
+
+                if (-not (Test-Path -LiteralPath $targetDirectory)) {
+                    New-Item -ItemType Directory -Force -Path $targetDirectory | Out-Null
+                }
+
+                [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $target, $true)
             }
-
-            [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $target, $true)
+        }
+        finally {
+            $zip.Dispose()
         }
     }
     finally {
-        $zip.Dispose()
-        $stream.Dispose()
+        Remove-Item -LiteralPath $temporaryArchive -Force -ErrorAction SilentlyContinue
     }
 
     $written = @(Get-ChildItem -LiteralPath $OutputPath -Recurse -File -Force)
