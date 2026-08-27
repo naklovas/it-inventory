@@ -15,6 +15,7 @@ herkesin ayni tabloyu gormesini saglamak ve her hareketin izini birakmak.
 - [Mimari](#mimari)
 - [Cozum yapisi](#cozum-yapisi)
 - [Yetkilendirme modeli](#yetkilendirme-modeli)
+- [Service Manager entegrasyonu](#service-manager-entegrasyonu)
 - [Kurulum](#kurulum)
 - [Yapilandirma](#yapilandirma)
 - [Calistirma ve dagitim](#calistirma-ve-dagitim)
@@ -126,13 +127,25 @@ bookrunner/
 
 ## Yetkilendirme modeli
 
-Uygulamada ayri bir kullanici/rol ekrani **yoktur**. Yetki iki kaynaktan gelir:
+Uygulamada ayri bir kullanici/rol ekrani **yoktur**. Yetki, birbirinden
+bagimsiz iki eksenden gelir:
 
 ```
-AD grubu ──(RoleMappings tablosu)──► AppRole ──► izin claim'leri
-                                                      +
-                            runbook sahipligi ──► kendi runbook'unda tam yetki
+1) ROL       kullanici bazli   "uygulamada ne yapabilir"
+   AD grubu ──(RoleMappings)──► AppRole ──► izin claim'leri
+   Esleme tutmazsa: Authorization:DefaultRole
+
+2) SAHIPLIK  runbook bazli     "hangi runbook'un sahibi"
+   Runbook'u olusturan kisi ──► Runbooks.OwnerUserId
 ```
+
+Bu ikisi karistirilmamalidir:
+
+- **Rol**, kullanicinin kim oldugundan gelir ve tum uygulamada gecerlidir.
+- **Sahiplik**, tek bir runbook kaydina aittir. Runbook'u kim olusturursa
+  sahibi odur; bu kisinin hangi AD gruplarinda oldugunun onemi yoktur ve
+  yapilandirmada sabitlenmis bir "sahip" listesi bulunmaz. Sahip, runbook
+  duzenleme ekranindan baska bir kisiye devredilebilir.
 
 ### Roller
 
@@ -143,10 +156,25 @@ AD grubu ──(RoleMappings tablosu)──► AppRole ──► izin claim'leri
 | `RunbookAuthor` | Runbook/gorev olusturur, kisi ve gruplara atar, sablon yayinlar | + `runbook.write`, `task.assign`, `data.import` |
 | `Administrator` | **Tam yetki**: her runbook'ta silme dahil her sey | + `runbook.delete`, `task.delete`, `script.manage`, `audit.read`, `admin.manage` |
 
-Bir kullanici birden fazla gruba uye ise **en yuksek rol** gecerlidir. Hicbir
-eslemeye uymayan kullanici `Viewer` olur. Eslemeler `appsettings.json` icindeki
-`Authorization:RoleMappings` bolumunden (ilk acilista tohumlanir) veya
-`sql/04_RoleMappings.sql` ile yonetilir.
+Bir kullanici birden fazla gruba uye ise **en yuksek rol** gecerlidir.
+Eslemeler `appsettings.json` icindeki `Authorization:RoleMappings` bolumunden
+(ilk acilista tohumlanir) veya `sql/04_RoleMappings.sql` ile yonetilir.
+Ornek dosyadaki `BookRunner-*` gruplari yalnizca **ornektir**: kendi AD
+gruplarinizi, kac tane olursa olsun, dogrudan eslersiniz.
+
+### Hicbir eslemeye uymayan kullanici: `Authorization:DefaultRole`
+
+| Ayar | Anlami |
+| --- | --- |
+| `"Viewer"` (varsayilan) | **Kapali kurulum.** Yalnizca eslenen gruplardaki kisiler runbook acabilir; digerleri sadece okur. |
+| `"RunbookAuthor"` | **Acik kurulum.** Etki alanindaki herkes runbook acabilir ve actigi runbook'un sahibi olur. `RoleMappings` bu durumda yalnizca yonetici belirlemek icin kullanilir. |
+
+Gecersiz bir deger yazilirsa uygulama sessizce en dusuk yetkiye dusmez;
+acilista acik bir hata verir.
+
+Iki durum varsayilan roldan etkilenmez ve her zaman `Viewer` alir: kullanicinin
+Active Directory'de bulunamamasi ve dizin sorgusunun hata vermesi. Gecici bir AD
+arizasi kimseye fazladan yetki vermemelidir.
 
 ### Runbook sahipligi
 
@@ -159,7 +187,10 @@ degisikligi yapabilir** - rol izni olmasa bile:
 - yorum yazma, Excel'den gorev aktarma, sablona cevirme
 
 Sahiplik `Runbooks.OwnerUserId` alanindan okunur ve runbook duzenleme ekranindan
-baska bir kisiye devredilebilir.
+baska bir kisiye devredilebilir. Sahip olabilmek icin runbook acmak, runbook
+acabilmek icin de `runbook.write` izni gerekir; yani `Contributor` bir kullanici
+sahip olamaz. Herkesin runbook acabilmesini istiyorsaniz `DefaultRole` degerini
+`RunbookAuthor` yapin.
 
 ### Kim neyi yapabilir - ozet
 
@@ -196,6 +227,69 @@ harfleri yan yana gosterilir; fotografi olmayan kisilerde yalnizca bas harf
 rozeti cikar. Fotograf yuklenemezse rozet kendiliginden bas harflere doner. Grup atamasinda bildirim, grubun kendi e-posta adresine
 (varsa) ya da AD'deki uyelerinin adreslerine gider. Goreve atanan kisi gorevi
 baska bir kisiye veya gruba devredebilir; devir zinciri tarihcede saklanir.
+
+---
+
+## Service Manager entegrasyonu
+
+BookRunner, System Center Service Manager'a **SDK veya konsol uzerinden degil,
+Data Warehouse veritabanina dogrudan SQL ile ve yalnizca okuyarak** baglanir.
+Amac, runbook'u degisiklik kaydiyla (change request) iliskilendirip iki sistem
+arasinda numara kopyalamayi ortadan kaldirmaktir.
+
+### Ne yapiyor
+
+| Yetenek | Nerede gorunur |
+| --- | --- |
+| Kayit arama (numara veya baslikla) | Runbook olustur/duzenle ekranindaki "Service Manager kaydi" kutusu; yazdikca oneri listesi acilir |
+| Secilen kaydin numarasini saklama | `Runbooks.ServiceManagerWorkItemId` (indeksli) |
+| Kayda gore runbook filtreleme | Runbook listesi filtresi, `GET /api/runbooks?serviceManagerWorkItemId=CR12345` |
+| Kaydi ciktilarda gosterme | Runbook detayi, Excel disa aktarim, PDF ciktisi |
+| Baglanti sagligi | Yonetim > Entegrasyonlar ekrani, `GET /api/service-manager/health` |
+
+Okunan alanlar: numara, baslik, aciklama, durum, kategori, atanan kisi,
+olusturan, olusturma tarihi ve planlanan baslangic/bitis.
+
+### Ne yapmiyor
+
+- SCSM'e **hicbir sey yazmaz.** Runbook tamamlandiginda degisiklik kaydinin
+  durumu guncellenmez, aktivite kapatilmaz, yorum eklenmez.
+- SCSM aktivitelerinden otomatik gorev uretmez; gorevler BookRunner'da
+  tanimlanir veya sablondan/Excel'den gelir.
+- Ek, iliski (related items) ve CI/varlik bilgisi cekmez.
+
+Bunlar bilincli bir sinirdir: veritabani seviyesinde yazma islemi SCSM'in kendi
+is akislarini ve veri butunlugunu bozar. Ters yonde otomasyon gerekiyorsa dogru
+yol SCSM SDK'si veya Orchestrator'dur; BookRunner tarafinda bunun icin
+`Integration` (3. parti REST) bolumu ya da bir CSX script'i kullanilabilir.
+
+### Kurulum
+
+1. `sql/03_ServiceManager_ReadOnly.sql` script'ini SCSM Data Warehouse
+   sunucusunda calistirin. Script uygulama hesabina yalnizca `SELECT` verir ve
+   `INSERT/UPDATE/DELETE/EXECUTE` yetkilerini acikca **reddeder**.
+2. Baglanti dizesini `ConnectionStrings:ServiceManager` altina yazin
+   (`ApplicationIntent=ReadOnly` onerilir).
+3. `ServiceManager:Enabled` degerini `true` yapin.
+
+### Sorgular yapilandirmadan degistirilir
+
+Varsayilan sorgular SCSM DW'deki `ChangeRequestDimvw` gorunumune gore yazildi.
+Ortaminizdaki sema, surum veya ozellestirmeler farkliysa `ServiceManager`
+bolumundeki `SearchQuery` ve `GetByIdQuery` degerlerini degistirmeniz yeterlidir;
+**kod degistirmek gerekmez.** Sorgunun donmesi gereken sutunlar:
+
+```
+Id, Title, Description, Status, Category, AssignedTo,
+CreatedBy, CreatedDate, ScheduledStartDate, ScheduledEndDate, WorkItemType
+```
+
+Parametreler: arama icin `@term` ve `@take`, tekil kayit icin `@id`.
+Incident, Service Request veya baska bir is kaydi turunu kullanmak isterseniz
+sorguyu ilgili gorunume yoneltmeniz yeterlidir.
+
+SCSM erisilemedigi durumda arama bos doner ve hata loglanir; runbook calismasi
+durmaz.
 
 ---
 
@@ -294,7 +388,8 @@ erisilemezse digerleri calismaya devam eder.
 | | `ServiceAccountUserName/Password` | Bos ise uygulama kimligiyle baglanilir (onerilen) |
 | | `PhotoAttributes` | Fotograf niteligi sirasi (`thumbnailPhoto`, `jpegPhoto`) |
 | | `Disabled` | AD'siz gelistirme ortami icin |
-| `Authorization` | `RoleMappings` | AD grubu -> rol tohumlamasi |
+| `Authorization` | `DefaultRole` | Hicbir eslemeye uymayan kullanicinin rolu (`Viewer` / `RunbookAuthor`) |
+| | `RoleMappings` | AD grubu -> rol tohumlamasi (kendi gruplariniz) |
 | `Email` | `Host`, `Port`, `UseStartTls`, `FromAddress` | SMTP |
 | | `WebBaseUrl` | E-postalardaki baglantilarin taban adresi |
 | | `RedirectAllTo` | Doluysa tum posta bu adrese gider (test ortami) |
@@ -401,7 +496,12 @@ Gereksinimlerde acikca belirtilmeyen, tasarim sirasinda alinan kararlar:
    (12 saatlik tazeleme). Boylece raporlar hizli calisir ve AD'ye gecici olarak
    erisilemedigi anlarda uygulama okunabilir kalir.
 
-2. **Yetki AD grubundan + runbook sahipliginden gelir.** Ayri bir kullanici/rol
+2. **Yetki AD grubundan + runbook sahipliginden gelir.** Bunlar bagimsiz iki
+   eksendir: rol kullanici bazlidir ve AD grubundan turetilir; sahiplik ise
+   runbook bazlidir ve runbook'u olusturan kisiye aittir.
+   Varsayilan kurulum kapalidir (`DefaultRole = Viewer`): yalnizca eslenen
+   gruplardaki kisiler runbook acabilir. Etki alanindaki herkesin runbook
+   acabilmesi isteniyorsa `DefaultRole` degeri `RunbookAuthor` yapilir. Ayri bir kullanici/rol
    yonetimi ekrani yapilmadi; roller `RoleMappings` tablosundaki AD grubu
    eslemelerinden turetiliyor. Hicbir eslemeye uymayan kullanici `Viewer` olur.
    Buna ek olarak runbook'un sahibi, rol izni olmasa da kendi runbook'unda her

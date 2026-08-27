@@ -4,9 +4,11 @@ using BookRunner.Api.Identity;
 using BookRunner.Application.Abstractions;
 using BookRunner.Application.Security;
 using BookRunner.Domain.Enums;
+using BookRunner.Infrastructure.Identity;
 using BookRunner.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Options;
 
 namespace BookRunner.Api.Authorization;
 
@@ -18,9 +20,12 @@ namespace BookRunner.Api.Authorization;
 public sealed class BookRunnerClaimsTransformation(
     IServiceScopeFactory scopeFactory,
     IMemoryCache cache,
+    IOptions<RoleOptions> roleOptions,
     ILogger<BookRunnerClaimsTransformation> logger) : IClaimsTransformation
 {
     private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(15);
+
+    private readonly RoleOptions _roleOptions = roleOptions.Value;
 
     public async Task<ClaimsPrincipal> TransformAsync(ClaimsPrincipal principal)
     {
@@ -91,6 +96,8 @@ public sealed class BookRunnerClaimsTransformation(
             var user = await directorySync.EnsureUserBySamAccountNameAsync(userName);
             if (user is null)
             {
+                // AD'de karsiligi olmayan hesap: yapilandirilan varsayilan rol degil,
+                // her zaman en dusuk yetki verilir.
                 logger.LogWarning("{User} Active Directory'de bulunamadi; en dusuk yetkiyle devam ediliyor.", userName);
                 return new UserProfile(null, userName, null, AppRole.Viewer, []);
             }
@@ -102,7 +109,7 @@ public sealed class BookRunnerClaimsTransformation(
                 .Select(ug => ug.Group.Sid)
                 .ToListAsync();
 
-            var role = await ResolveRoleAsync(db, groupSids);
+            var role = await ResolveRoleAsync(db, groupSids, _roleOptions.DefaultRole);
 
             user.LastSeenAt = DateTimeOffset.UtcNow;
             await db.SaveChangesAsync();
@@ -114,18 +121,26 @@ public sealed class BookRunnerClaimsTransformation(
         catch (Exception ex)
         {
             // Kimlik zenginlestirme basarisiz olsa da istek reddedilmez; kullanici
-            // en dusuk yetkiyle devam eder ve durum loglanir.
+            // en dusuk yetkiyle devam eder ve durum loglanir. Hata durumunda
+            // varsayilan rol uygulanmaz: gecici bir AD arizasi kimseye fazladan
+            // yetki vermemeli.
             logger.LogError(ex, "{User} icin profil olusturulamadi.", userName);
             return new UserProfile(null, userName, null, AppRole.Viewer, []);
         }
     }
 
-    /// <summary>Kullanicinin gruplarina karsilik gelen en yuksek rolu bulur.</summary>
-    private static async Task<AppRole> ResolveRoleAsync(BookRunnerDbContext db, List<string> groupSids)
+    /// <summary>
+    /// Kullanicinin gruplarina karsilik gelen en yuksek rolu bulur.
+    /// Hicbir esleme tutmazsa yapilandirmadaki varsayilan rol uygulanir;
+    /// boylece "etki alanindaki herkes runbook acabilsin" kurulumu tek ayarla
+    /// mumkun olur.
+    /// </summary>
+    private static async Task<AppRole> ResolveRoleAsync(
+        BookRunnerDbContext db, List<string> groupSids, AppRole defaultRole)
     {
         if (groupSids.Count == 0)
         {
-            return AppRole.Viewer;
+            return defaultRole;
         }
 
         var roles = await db.RoleMappings
@@ -133,7 +148,8 @@ public sealed class BookRunnerClaimsTransformation(
             .Select(r => r.Role)
             .ToListAsync();
 
-        return roles.Count == 0 ? AppRole.Viewer : roles.Max();
+        // Esleme varsa en yuksegi, yoksa varsayilan rol gecerlidir.
+        return roles.Count == 0 ? defaultRole : roles.Max();
     }
 
     private sealed record UserProfile(

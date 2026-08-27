@@ -3,6 +3,7 @@ using BookRunner.Infrastructure.Audit;
 using BookRunner.Infrastructure.Directory;
 using BookRunner.Infrastructure.Email;
 using BookRunner.Infrastructure.Export;
+using BookRunner.Infrastructure.Identity;
 using BookRunner.Infrastructure.Integration;
 using BookRunner.Infrastructure.Persistence;
 using BookRunner.Infrastructure.Persistence.Interceptors;
@@ -31,6 +32,7 @@ public static class DependencyInjection
             .Bind(configuration.GetSection(EmailOptions.SectionName))
             .ValidateDataAnnotations();
 
+        services.Configure<RoleOptions>(configuration.GetSection(RoleOptions.SectionName));
         services.Configure<ServiceManagerOptions>(configuration.GetSection(ServiceManagerOptions.SectionName));
 
         // Tum SQL Server baglanti dizeleri appsettings icindeki "ConnectionStrings"
