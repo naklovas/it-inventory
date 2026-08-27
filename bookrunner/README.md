@@ -238,10 +238,17 @@ baska bir kisiye veya gruba devredebilir; devir zinciri tarihcede saklanir.
 
 ## Service Manager entegrasyonu
 
-BookRunner, System Center Service Manager'a **SDK veya konsol uzerinden degil,
-Data Warehouse veritabanina dogrudan SQL ile ve yalnizca okuyarak** baglanir.
-Amac, runbook'u degisiklik kaydiyla (change request) iliskilendirip iki sistem
-arasinda numara kopyalamayi ortadan kaldirmaktir.
+BookRunner, Service Manager'a **SDK veya konsol uzerinden degil, veritabanina
+dogrudan SQL ile ve yalnizca okuyarak** baglanir. Amac, runbook'u ilgili is
+kaydiyla iliskilendirip iki sistem arasinda numara kopyalamayi ortadan
+kaldirmaktir.
+
+> **Urun notu.** Kutudan cikan varsayilan sorgular Microsoft System Center
+> Service Manager'in (SCSM) Data Warehouse semasina gore yazilmistir ve
+> **ornektir**. Entegrasyon urunden bagimsizdir: OpenText (eski Micro Focus /
+> HP) Service Manager gibi baska bir urun kullaniyorsaniz `SearchQuery` ve
+> `GetByIdQuery` degerlerini kendi tablolarinizla degistirmeniz yeterlidir,
+> kod degismez. Ayni sutun adlarini uretmeniz kafidir.
 
 ### Ne yapiyor
 
@@ -317,21 +324,35 @@ durmaz.
 > Kaynaklar degistikten sonra paketi `tools\New-BookRunnerScaffold.ps1` ile
 > yeniden uretin.
 
+SQL script'lerinin basinda **duzenlenmesi gereken satirlar** vardir
+(`@appAccount`, grup SID'leri). Duzenlenmeden calistirilirsa script hata
+vermez; ilgili bolumu atlar ve ne yapmaniz gerektigini ekrana yazar.
+
 ```powershell
-# 1. Veritabani
+# 1. Veritabani ve sema
+#    01 icindeki @appAccount satirini uygulamanin calisacagi Windows
+#    hesabiyla degistirin (IIS havuz kimligi, servis hesabi ya da deneme
+#    icin kendi hesabiniz - PowerShell'de: whoami).
 sqlcmd -S localhost -i sql\01_CreateDatabase.sql
 sqlcmd -S localhost -d BookRunner -i sql\02_BookRunner_Schema.sql
 
-# 2. AD grup -> rol eslemesi (SID degerlerini kendi gruplarinizla degistirin)
-#    Grup SID'ini ogrenmek icin:  (Get-ADGroup 'BookRunner-Authors').SID.Value
+# 2. AD grup -> rol eslemesi
+#    04 icindeki INSERT satirlarini kendi gruplarinizla degistirin.
+#    Grup SID'i icin:  (Get-ADGroup 'Sunucu-Ekibi').SID.Value
+#    Ayni eslemeyi appsettings.json > Authorization:RoleMappings ile de
+#    tanimlayabilirsiniz; uygulama ilk acilista veritabanina yazar.
 sqlcmd -S localhost -d BookRunner -i sql\04_RoleMappings.sql
 
 # 3. (opsiyonel) Service Manager salt-okunur erisimi
-sqlcmd -S scsm-dw -i sql\03_ServiceManager_ReadOnly.sql
+sqlcmd -S <sm-veritabani> -i sql\03_ServiceManager_ReadOnly.sql
 
 # 4. Calistir
 .\run-local.ps1
 ```
+
+`@appAccount` degeri, uygulamanin **uzerinde calisacagi Windows hesabidir** -
+BookRunner'a giris yapacak kullanicilar degil. Kullanicilar kendi Windows
+kimlikleriyle girer ve veritabanina uygulama hesabi uzerinden erisilir.
 
 > `Database:MigrateOnStartup` varsayilan olarak `true`'dur; API acilista bekleyen
 > EF Core migration'larini kendisi uygular. Sema degisikliklerini elle yonetmek
