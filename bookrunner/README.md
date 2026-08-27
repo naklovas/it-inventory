@@ -210,6 +210,13 @@ baska bir kisiye veya gruba devredebilir; devir zinciri tarihcede saklanir.
 
 ### Adimlar
 
+> Bu klasor tek dosyalik bir kurulum paketinden de uretilebilir:
+> depo kokundeki `scaffold-bookrunner.ps1` cozumun tamamini (kaynak kod, SQL
+> script'leri, arayuz kutuphaneleri) icinde tasir ve `.\scaffold-bookrunner.ps1`
+> komutuyla diske acip derler. Internet baglantisi gerekmez.
+> Kaynaklar degistikten sonra paketi `tools\New-BookRunnerScaffold.ps1` ile
+> yeniden uretin.
+
 ```powershell
 # 1. Veritabani
 sqlcmd -S localhost -i sql\01_CreateDatabase.sql
