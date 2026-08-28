@@ -324,35 +324,50 @@ durmaz.
 > Kaynaklar degistikten sonra paketi `tools\New-BookRunnerScaffold.ps1` ile
 > yeniden uretin.
 
-SQL script'lerinin basinda **duzenlenmesi gereken satirlar** vardir
-(`@appAccount`, grup SID'leri). Duzenlenmeden calistirilirsa script hata
-vermez; ilgili bolumu atlar ve ne yapmaniz gerektigini ekrana yazar.
+`sql/` klasorundeki dosyalar bagimsizdir; yalnizca ihtiyaciniz olani
+calistirin. Hicbirinde duzenlenmesi zorunlu bir satir yoktur - varsayilan
+haliyle calisirlar.
+
+| Dosya | Ne zaman calistirilir |
+| --- | --- |
+| `01_CreateDatabase.sql` | Veritabanini henuz olusturmadiysaniz. **Zaten olusturduysaniz atlayin.** |
+| `02_BookRunner_Schema.sql` | Her zaman. Tablolari, indeksleri ve iliskileri olusturur; kendi semasini de kurar, `01`'e bagimli degildir. |
+| `04_RoleMappings.sql` | AD grubu -> rol eslemesini SQL'den yonetmek isterseniz (opsiyonel; appsettings'ten de yapilabilir). |
+| `03_ServiceManager_ReadOnly.sql` | Yalnizca Service Manager entegrasyonunu acacaksaniz. |
+| `05_AppAccount_Optional.sql` | Yalnizca uygulamayi, veritabaninda henuz yetkisi olmayan **ayri bir Windows hesabi** altinda (IIS havuzu, servis hesabi) calistiracaksaniz. Sunucuda kendi hesabinizla calistiriyorsaniz gerekmez. |
+| `00_Reset_Optional.sql` | **Yikici.** bookrunner semasini tamamen siler. Yalnizca yarim kalmis/bozuk bir kurulumu atip sifirdan baslamak isterseniz. |
+
+En sik kullanilan yol - veritabanini zaten olusturdunuz, dogrudan sunucuda
+kendi hesabinizla calistiriyorsunuz:
 
 ```powershell
-# 1. Veritabani ve sema
-#    01 icindeki @appAccount satirini uygulamanin calisacagi Windows
-#    hesabiyla degistirin (IIS havuz kimligi, servis hesabi ya da deneme
-#    icin kendi hesabiniz - PowerShell'de: whoami).
-sqlcmd -S localhost -i sql\01_CreateDatabase.sql
 sqlcmd -S localhost -d BookRunner -i sql\02_BookRunner_Schema.sql
-
-# 2. AD grup -> rol eslemesi
-#    04 icindeki INSERT satirlarini kendi gruplarinizla degistirin.
-#    Grup SID'i icin:  (Get-ADGroup 'Sunucu-Ekibi').SID.Value
-#    Ayni eslemeyi appsettings.json > Authorization:RoleMappings ile de
-#    tanimlayabilirsiniz; uygulama ilk acilista veritabanina yazar.
-sqlcmd -S localhost -d BookRunner -i sql\04_RoleMappings.sql
-
-# 3. (opsiyonel) Service Manager salt-okunur erisimi
-sqlcmd -S <sm-veritabani> -i sql\03_ServiceManager_ReadOnly.sql
-
-# 4. Calistir
 .\run-local.ps1
 ```
 
-`@appAccount` degeri, uygulamanin **uzerinde calisacagi Windows hesabidir** -
-BookRunner'a giris yapacak kullanicilar degil. Kullanicilar kendi Windows
-kimlikleriyle girer ve veritabanina uygulama hesabi uzerinden erisilir.
+`02_BookRunner_Schema.sql` **tekrar tekrar calistirilabilir**: her tablo,
+her indeks ve her iliski (foreign key) kendi basina kontrol edilir ve
+yalnizca eksikse olusturulur. Bir iliski herhangi bir nedenle
+olusturulamazsa script durmaz - uyari basar, digerlerine devam eder ve
+sonunda kac tablodan kacinin hazir oldugunu yazar. Kurulum yarim kaldiysa
+(bazi tablolar olustu, biri hata verdi) **cozum script'i aynen tekrar
+calistirmaktir**; sadece eksik kalani tamamlar, var olan tablolara dokunmaz.
+Yapinin bozuk oldugunu dusunuyorsaniz (orn. elle olusturulmus, yanlis
+tipte bir sutun) `00_Reset_Optional.sql` ile semayi tamamen silip
+`02`'yi sifirdan calistirabilirsiniz.
+
+AD grubu -> rol eslemesini appsettings uzerinden degil SQL'den yapmak
+isterseniz once `04_RoleMappings.sql` icindeki ornek grup adlarini ve
+SID degerlerini kendi gruplarinizla degistirin
+(Grup SID'i: `(Get-ADGroup 'Sunucu-Ekibi').SID.Value`), sonra calistirin:
+
+```powershell
+sqlcmd -S localhost -d BookRunner -i sql\04_RoleMappings.sql
+```
+
+Bu adimi atlarsaniz sorun degil: eslemeleri dogrudan
+`appsettings.json > Authorization:RoleMappings` altina yazabilirsiniz;
+uygulama ilk acilista bunlari veritabanina yazar.
 
 > `Database:MigrateOnStartup` varsayilan olarak `true`'dur; API acilista bekleyen
 > EF Core migration'larini kendisi uygular. Sema degisikliklerini elle yonetmek

@@ -16,8 +16,8 @@
        ServiceManager:SearchQuery / GetByIdQuery degerleri kendi
        tablolarinizla degistirilmelidir. Kod degistirmek gerekmez.
 
-   CALISTIRMADAN ONCE: @appAccount ve gerekiyorsa veritabani adini duzenleyin.
-   Gereken yetki: hedef veritabaninda sysadmin veya securityadmin
+   Service Manager entegrasyonu varsayilan olarak KAPALIDIR; acmadan once bu
+   dosyayi calistirmaniz gerekmez.
    =========================================================================== */
 
 /* ---------------------------------------------------------------------------
@@ -33,24 +33,20 @@ GO
 /* ---------------------------------------------------------------------------
    BOLUM 2 - Uygulama hesabina okuma yetkisi
 
-   >>> ASAGIDAKI SATIRI DUZENLEYIN <<<
+   Uygulamayi ayri bir Windows hesabi altinda calistiriyorsaniz o hesabi
+   asagiya yazin. Sunucuda kendi hesabinizla calistiriyorsaniz ve o hesabin
+   zaten okuma yetkisi varsa bos birakin; script hicbir sey yapmaz.
    --------------------------------------------------------------------------- */
 
-DECLARE @appAccount sysname = N'CONTOSO\svc-bookrunner';   -- <<< DEGISTIRIN
+DECLARE @appAccount sysname = N'';
 
 /* --------------------------- buradan asagisi degistirilmeden calisir ------ */
 
-DECLARE @placeholder sysname = N'CONTOSO\svc-bookrunner';
 DECLARE @sql nvarchar(max);
 
-IF @appAccount = @placeholder
+IF @appAccount = N''
 BEGIN
-    PRINT N'';
-    PRINT N'-------------------------------------------------------------------';
-    PRINT N'ATLANDI: @appAccount hala ornek deger.';
-    PRINT N'Script''in basindaki @appAccount satirini, uygulamanin calistigi';
-    PRINT N'Windows hesabiyla degistirip tekrar calistirin.';
-    PRINT N'-------------------------------------------------------------------';
+    PRINT N'@appAccount bos; yetkilendirme atlandi.';
 END
 ELSE
 BEGIN
@@ -69,38 +65,17 @@ BEGIN
             PRINT N'Veritabani kullanicisi olusturuldu.';
         END
 
-        /* Tum veritabaninda okuma. Daha dar bir yetki isterseniz bu satiri
-           kaldirip yalnizca ihtiyac duyulan tablo/gorunumlere GRANT SELECT
-           verebilirsiniz:
-             GRANT SELECT ON OBJECT::dbo.<tablo> TO <hesap>; */
         SET @sql = N'ALTER ROLE [db_datareader] ADD MEMBER ' + QUOTENAME(@appAccount);
         EXEC sp_executesql @sql;
         PRINT N'db_datareader rolu verildi.';
 
-        /* Yazma yetkisi acikca reddedilir: BookRunner Service Manager'a
-           hicbir kosulda yazmaz. */
+        /* BookRunner Service Manager'a hicbir kosulda yazmaz. */
         SET @sql = N'DENY INSERT, UPDATE, DELETE, EXECUTE TO ' + QUOTENAME(@appAccount);
         EXEC sp_executesql @sql;
-        PRINT N'Yazma yetkileri reddedildi (DENY INSERT/UPDATE/DELETE/EXECUTE).';
+        PRINT N'Yazma yetkileri reddedildi.';
     END TRY
     BEGIN CATCH
-        PRINT N'';
-        PRINT N'-------------------------------------------------------------------';
-        PRINT N'BASARISIZ. Hata ' + CAST(ERROR_NUMBER() AS nvarchar(10)) + N': ' + ERROR_MESSAGE();
-
-        IF ERROR_NUMBER() IN (15401, 15007)
-        BEGIN
-            PRINT N'"' + @appAccount + N'" hesabi Active Directory''de bulunamadi.';
-            PRINT N'NetBIOS adiyla yazin (CONTOSO\kullanici) ve hesabin var oldugunu';
-            PRINT N'dogrulayin (PowerShell: Get-ADUser <hesap>).';
-        END
-        ELSE IF ERROR_NUMBER() IN (15247, 262, 300)
-        BEGIN
-            PRINT N'Yetki eksik. Login olusturmak icin sysadmin veya securityadmin';
-            PRINT N'rolu gerekir; SQL yoneticinizden calistirmasini isteyin.';
-        END
-
-        PRINT N'-------------------------------------------------------------------';
+        PRINT N'Basarisiz. Hata ' + CAST(ERROR_NUMBER() AS nvarchar(10)) + N': ' + ERROR_MESSAGE();
     END CATCH
 END
 GO
