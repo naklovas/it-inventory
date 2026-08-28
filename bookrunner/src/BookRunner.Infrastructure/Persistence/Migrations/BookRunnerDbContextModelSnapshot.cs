@@ -906,7 +906,7 @@ namespace BookRunner.Infrastructure.Persistence.Migrations
                     b.HasOne("BookRunner.Domain.Entities.RunbookScript", "Script")
                         .WithMany()
                         .HasForeignKey("ScriptId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("DependsOnTask");
 

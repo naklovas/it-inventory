@@ -288,7 +288,7 @@ namespace BookRunner.Infrastructure.Persistence.Migrations
                         principalSchema: "bookrunner",
                         principalTable: "Scripts",
                         principalColumn: "Id",
-                        onDelete: ReferentialAction.SetNull);
+                        onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
                         name: "FK_Tasks_Tasks_DependsOnTaskId",
                         column: x => x.DependsOnTaskId,

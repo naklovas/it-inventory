@@ -816,7 +816,7 @@ BEGIN
     BEGIN TRY
         ALTER TABLE [bookrunner].[Tasks] WITH CHECK
             ADD CONSTRAINT [FK_Tasks_Scripts_ScriptId] FOREIGN KEY ([ScriptId])
-            REFERENCES [bookrunner].[Scripts] ([Id]) ON DELETE SET NULL;
+            REFERENCES [bookrunner].[Scripts] ([Id]) ON DELETE NO ACTION;
         PRINT N'Iliski eklendi: FK_Tasks_Scripts_ScriptId';
     END TRY
     BEGIN CATCH

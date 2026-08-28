@@ -73,10 +73,18 @@ public sealed class RunbookTaskConfiguration : IEntityTypeConfiguration<RunbookT
             .HasForeignKey(t => t.DependsOnTaskId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        // Restrict (NO ACTION), SetNull degil: Runbook -> Tasks (cascade) ve
+        // Runbook -> Scripts (cascade) ikisi de ayni runbook'tan geldigi icin,
+        // Tasks.ScriptId burada SetNull olsaydi SQL Server Tasks tablosuna iki
+        // farkli cascade yolundan ulasilabildigini tespit edip FK olusturmayi
+        // reddederdi (Msg 1785/1750). Uygulama zaten ScriptService.DeleteAsync
+        // icinde goreve bagli script'in silinmesini engelliyor; bu yuzden
+        // Restrict'e gecmek davranisi degistirmez, yalnizca DB'nin de ayni
+        // kurali garanti altina almasini saglar.
         builder.HasOne(t => t.Script)
             .WithMany()
             .HasForeignKey(t => t.ScriptId)
-            .OnDelete(DeleteBehavior.SetNull);
+            .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(t => new { t.RunbookId, t.Order });
         builder.HasIndex(t => t.Status);
