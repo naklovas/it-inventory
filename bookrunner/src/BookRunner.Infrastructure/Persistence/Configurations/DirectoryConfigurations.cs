@@ -88,12 +88,11 @@ public sealed class RoleMappingConfiguration : IEntityTypeConfiguration<RoleMapp
         builder.ToTable("RoleMappings");
         builder.HasKey(r => r.Id);
 
-        builder.Property(r => r.GroupSid).HasMaxLength(184).IsRequired();
-        builder.Property(r => r.GroupName).HasMaxLength(256).IsRequired();
+        builder.Property(r => r.TeamName).HasMaxLength(256).IsRequired();
         builder.Property(r => r.Role).HasConversion<int>();
         builder.Property(r => r.CreatedBy).HasMaxLength(256).IsRequired();
         builder.Property(r => r.UpdatedBy).HasMaxLength(256);
 
-        builder.HasIndex(r => new { r.GroupSid, r.Role }).IsUnique();
+        builder.HasIndex(r => new { r.TeamName, r.Role }).IsUnique();
     }
 }

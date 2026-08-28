@@ -31,14 +31,14 @@ public sealed class DatabaseInitializer(
     }
 
     /// <summary>
-    /// appsettings icindeki "Authorization:RoleMappings" bolumunden gelen
-    /// AD grubu -> rol eslemelerini ekler. Var olan kayitlar degistirilmez;
+    /// appsettings icindeki "Authorization:TeamRoleMappings" bolumunden gelen
+    /// takim -> rol eslemelerini ekler. Var olan kayitlar degistirilmez;
     /// boylece yonetim ekranindan yapilan degisiklikler ezilmez.
     /// </summary>
     private async Task SeedRoleMappingsAsync(CancellationToken ct)
     {
         var configured = configuration
-            .GetSection("Authorization:RoleMappings")
+            .GetSection("Authorization:TeamRoleMappings")
             .Get<List<RoleMappingSeed>>() ?? [];
 
         if (configured.Count == 0)
@@ -47,31 +47,30 @@ public sealed class DatabaseInitializer(
         }
 
         var existing = await db.RoleMappings
-            .Select(r => new { r.GroupSid, r.Role })
+            .Select(r => new { r.TeamName, r.Role })
             .ToListAsync(ct);
 
         var known = existing
-            .Select(r => $"{r.GroupSid}|{r.Role}")
+            .Select(r => $"{r.TeamName}|{r.Role}")
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var added = 0;
         foreach (var seed in configured)
         {
-            if (string.IsNullOrWhiteSpace(seed.GroupSid) || !Enum.TryParse<AppRole>(seed.Role, true, out var role))
+            if (string.IsNullOrWhiteSpace(seed.TeamName) || !Enum.TryParse<AppRole>(seed.Role, true, out var role))
             {
-                logger.LogWarning("Gecersiz rol eslemesi atlandi: {Group} -> {Role}", seed.GroupSid, seed.Role);
+                logger.LogWarning("Gecersiz rol eslemesi atlandi: {Team} -> {Role}", seed.TeamName, seed.Role);
                 continue;
             }
 
-            if (known.Contains($"{seed.GroupSid}|{role}"))
+            if (known.Contains($"{seed.TeamName}|{role}"))
             {
                 continue;
             }
 
             db.RoleMappings.Add(new RoleMapping
             {
-                GroupSid = seed.GroupSid,
-                GroupName = seed.GroupName ?? seed.GroupSid,
+                TeamName = seed.TeamName,
                 Role = role,
                 IsActive = true,
                 CreatedAt = DateTimeOffset.UtcNow,
@@ -90,8 +89,7 @@ public sealed class DatabaseInitializer(
 
     private sealed class RoleMappingSeed
     {
-        public string? GroupSid { get; set; }
-        public string? GroupName { get; set; }
+        public string? TeamName { get; set; }
         public string? Role { get; set; }
     }
 }

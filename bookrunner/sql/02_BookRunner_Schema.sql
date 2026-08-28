@@ -131,8 +131,7 @@ IF OBJECT_ID(N'[bookrunner].[RoleMappings]', N'U') IS NULL
 BEGIN
     CREATE TABLE [bookrunner].[RoleMappings] (
         [Id] uniqueidentifier NOT NULL,
-        [GroupSid] nvarchar(184) NOT NULL,
-        [GroupName] nvarchar(256) NOT NULL,
+        [TeamName] nvarchar(256) NOT NULL,
         [Role] int NOT NULL,
         [IsActive] bit NOT NULL,
         [CreatedAt] datetimeoffset NOT NULL,
@@ -142,6 +141,34 @@ BEGIN
         CONSTRAINT [PK_RoleMappings] PRIMARY KEY ([Id])
     );
     PRINT N'Tablo olusturuldu: RoleMappings';
+END
+GO
+
+-- Daha once GroupSid/GroupName ile olusturulmus bir RoleMappings tablosu varsa
+-- (AD grubu -> rol eslemesi), takim adi -> rol eslemesine gecirilir.
+IF COL_LENGTH(N'bookrunner.RoleMappings', 'GroupSid') IS NOT NULL
+BEGIN
+    IF COL_LENGTH(N'bookrunner.RoleMappings', 'TeamName') IS NULL
+    BEGIN
+        ALTER TABLE [bookrunner].[RoleMappings] ADD [TeamName] nvarchar(256) NULL;
+        PRINT N'Kolon eklendi: RoleMappings.TeamName';
+    END
+
+    UPDATE [bookrunner].[RoleMappings] SET [TeamName] = [GroupName] WHERE [TeamName] IS NULL;
+
+    IF EXISTS (
+        SELECT 1 FROM sys.indexes
+        WHERE name = N'IX_RoleMappings_GroupSid_Role' AND object_id = OBJECT_ID(N'[bookrunner].[RoleMappings]')
+    )
+    BEGIN
+        DROP INDEX [IX_RoleMappings_GroupSid_Role] ON [bookrunner].[RoleMappings];
+        PRINT N'Indeks kaldirildi: IX_RoleMappings_GroupSid_Role';
+    END
+
+    ALTER TABLE [bookrunner].[RoleMappings] ALTER COLUMN [TeamName] nvarchar(256) NOT NULL;
+    ALTER TABLE [bookrunner].[RoleMappings] DROP COLUMN [GroupSid];
+    ALTER TABLE [bookrunner].[RoleMappings] DROP COLUMN [GroupName];
+    PRINT N'RoleMappings takim adina gore eslemeye tasindi (GroupSid/GroupName kaldirildi).';
 END
 GO
 
@@ -432,11 +459,11 @@ GO
 
 IF NOT EXISTS (
     SELECT 1 FROM sys.indexes
-    WHERE name = N'IX_RoleMappings_GroupSid_Role' AND object_id = OBJECT_ID(N'[bookrunner].[RoleMappings]')
+    WHERE name = N'IX_RoleMappings_TeamName_Role' AND object_id = OBJECT_ID(N'[bookrunner].[RoleMappings]')
 )
 BEGIN
-    CREATE UNIQUE INDEX [IX_RoleMappings_GroupSid_Role] ON [bookrunner].[RoleMappings] ([GroupSid], [Role]);
-    PRINT N'Indeks olusturuldu: IX_RoleMappings_GroupSid_Role';
+    CREATE UNIQUE INDEX [IX_RoleMappings_TeamName_Role] ON [bookrunner].[RoleMappings] ([TeamName], [Role]);
+    PRINT N'Indeks olusturuldu: IX_RoleMappings_TeamName_Role';
 END
 GO
 

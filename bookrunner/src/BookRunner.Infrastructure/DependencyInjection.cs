@@ -5,6 +5,7 @@ using BookRunner.Infrastructure.Email;
 using BookRunner.Infrastructure.Export;
 using BookRunner.Infrastructure.Identity;
 using BookRunner.Infrastructure.Integration;
+using BookRunner.Infrastructure.Personnel;
 using BookRunner.Infrastructure.Persistence;
 using BookRunner.Infrastructure.Persistence.Interceptors;
 using BookRunner.Infrastructure.Realtime;
@@ -46,6 +47,7 @@ public static class DependencyInjection
         });
         services.Configure<ScriptingOptions>(configuration.GetSection(ScriptingOptions.SectionName));
         services.Configure<IntegrationOptions>(configuration.GetSection(IntegrationOptions.SectionName));
+        services.Configure<PersonnelDirectoryOptions>(configuration.GetSection(PersonnelDirectoryOptions.SectionName));
 
         services.AddScoped<AuditSaveChangesInterceptor>();
 
@@ -79,6 +81,7 @@ public static class DependencyInjection
         services.AddScoped<IRealtimeNotifier, NullRealtimeNotifier>();
 
         AddIntegration(services, configuration);
+        AddPersonnelDirectory(services, configuration);
 
         services.AddHostedService<EmailOutboxProcessor>();
 
@@ -108,6 +111,24 @@ public static class DependencyInjection
             {
                 client.DefaultRequestHeaders.Add(options.ApiKeyHeader, options.ApiKey);
             }
+        });
+    }
+
+    private static void AddPersonnelDirectory(IServiceCollection services, IConfiguration configuration)
+    {
+        var options = configuration.GetSection(PersonnelDirectoryOptions.SectionName).Get<PersonnelDirectoryOptions>()
+            ?? new PersonnelDirectoryOptions();
+
+        if (!options.Enabled || string.IsNullOrWhiteSpace(options.BaseUrl))
+        {
+            services.AddScoped<IPersonnelDirectoryService, NullPersonnelDirectoryService>();
+            return;
+        }
+
+        services.AddHttpClient<IPersonnelDirectoryService, PersonnelDirectoryService>(client =>
+        {
+            client.BaseAddress = new Uri(options.BaseUrl.TrimEnd('/') + "/");
+            client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
         });
     }
 }

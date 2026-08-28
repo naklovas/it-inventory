@@ -1,8 +1,10 @@
 using System.Security.Claims;
+using System.Security.Cryptography;
 using Microsoft.AspNetCore.Authentication;
 using BookRunner.Api.Identity;
 using BookRunner.Application.Abstractions;
 using BookRunner.Application.Security;
+using BookRunner.Domain.Entities;
 using BookRunner.Domain.Enums;
 using BookRunner.Infrastructure.Identity;
 using BookRunner.Infrastructure.Persistence;
@@ -91,6 +93,7 @@ public sealed class BookRunnerClaimsTransformation(
         try
         {
             var directorySync = provider.GetRequiredService<IDirectorySyncService>();
+            var personnelDirectory = provider.GetRequiredService<IPersonnelDirectoryService>();
             var db = provider.GetRequiredService<BookRunnerDbContext>();
 
             var user = await directorySync.EnsureUserBySamAccountNameAsync(userName);
@@ -102,6 +105,8 @@ public sealed class BookRunnerClaimsTransformation(
                 return new UserProfile(null, userName, null, AppRole.Viewer, []);
             }
 
+            // Grup senkronizasyonu yalnizca "goreve AD grubu olarak atama" ozelligi
+            // icin kullanilir (bkz. AssignmentService); rol bu bilgiden turetilmez.
             await directorySync.SyncUserGroupsAsync(user.Id);
 
             var groupSids = await db.UserGroups
@@ -109,7 +114,13 @@ public sealed class BookRunnerClaimsTransformation(
                 .Select(ug => ug.Group.Sid)
                 .ToListAsync();
 
-            var role = await ResolveRoleAsync(db, groupSids, _roleOptions.DefaultRole);
+            // Rol, AD grup uyeliginden degil personel servisinin dondurdugu tek bir
+            // takim adindan turetilir: kullanicinin uyesi oldugu grup sayisi (onlarca,
+            // yuzlerce olabilir) rol kararini etkilemez.
+            var personnel = await personnelDirectory.GetProfileAsync(user.SamAccountName);
+            ApplyPersonnelPhoto(user, personnel);
+
+            var role = await ResolveRoleAsync(db, personnel?.TeamName, _roleOptions.DefaultRole);
 
             user.LastSeenAt = DateTimeOffset.UtcNow;
             await db.SaveChangesAsync();
@@ -122,29 +133,48 @@ public sealed class BookRunnerClaimsTransformation(
         {
             // Kimlik zenginlestirme basarisiz olsa da istek reddedilmez; kullanici
             // en dusuk yetkiyle devam eder ve durum loglanir. Hata durumunda
-            // varsayilan rol uygulanmaz: gecici bir AD arizasi kimseye fazladan
-            // yetki vermemeli.
+            // varsayilan rol uygulanmaz: gecici bir AD/servis arizasi kimseye
+            // fazladan yetki vermemeli.
             logger.LogError(ex, "{User} icin profil olusturulamadi.", userName);
             return new UserProfile(null, userName, null, AppRole.Viewer, []);
         }
     }
 
-    /// <summary>
-    /// Kullanicinin gruplarina karsilik gelen en yuksek rolu bulur.
-    /// Hicbir esleme tutmazsa yapilandirmadaki varsayilan rol uygulanir;
-    /// boylece "etki alanindaki herkes runbook acabilsin" kurulumu tek ayarla
-    /// mumkun olur.
-    /// </summary>
-    private static async Task<AppRole> ResolveRoleAsync(
-        BookRunnerDbContext db, List<string> groupSids, AppRole defaultRole)
+    /// <summary>Personel servisinden gelen fotograf, AD fotografindan farkliysa kullaniciya yazilir.</summary>
+    private static void ApplyPersonnelPhoto(AppUser user, PersonnelProfile? personnel)
     {
-        if (groupSids.Count == 0)
+        if (personnel?.Thumbnail is not { Length: > 0 } thumbnail)
+        {
+            return;
+        }
+
+        var hash = Convert.ToHexString(SHA256.HashData(thumbnail));
+        if (user.PhotoHash == hash)
+        {
+            return;
+        }
+
+        user.Photo = thumbnail;
+        user.PhotoContentType = "image/jpeg";
+        user.PhotoHash = hash;
+    }
+
+    /// <summary>
+    /// Kullanicinin takimina karsilik gelen en yuksek rolu bulur.
+    /// Takim adi yoksa veya hicbir esleme tutmazsa yapilandirmadaki varsayilan
+    /// rol uygulanir; boylece "etki alanindaki herkes runbook acabilsin" kurulumu
+    /// tek ayarla mumkun olur.
+    /// </summary>
+    private static async Task<AppRole> ResolveRoleAsync(BookRunnerDbContext db, string? teamName, AppRole defaultRole)
+    {
+        if (string.IsNullOrWhiteSpace(teamName))
         {
             return defaultRole;
         }
 
+        // SQL Server'in varsayilan (buyuk/kucuk harf duyarsiz) collation'ina guvenilir.
         var roles = await db.RoleMappings
-            .Where(r => r.IsActive && groupSids.Contains(r.GroupSid))
+            .Where(r => r.IsActive && r.TeamName == teamName)
             .Select(r => r.Role)
             .ToListAsync();
 

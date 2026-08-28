@@ -8,7 +8,8 @@ namespace BookRunner.Infrastructure.Identity;
 /// Uygulamada iki bagimsiz kavram vardir ve birbirine karistirilmamalidir:
 ///
 ///   Rol      - kullanicinin uygulamada <b>ne yapabilecegini</b> belirler ve
-///              AD grup uyeliginden turetilir. Kullanici bazlidir.
+///              personel servisinin dondurdugu takim adindan turetilir
+///              (bkz. IPersonnelDirectoryService, RoleMapping). Kullanici bazlidir.
 ///   Sahiplik - <b>hangi runbook'un</b> sahibi oldugunu belirler. Runbook
 ///              bazlidir ve runbook'u olusturan kisiye aittir; hicbir gruba
 ///              veya yapilandirmaya bagli degildir.

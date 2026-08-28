@@ -92,8 +92,7 @@ namespace BookRunner.Infrastructure.Persistence.Migrations
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    GroupSid = table.Column<string>(type: "nvarchar(184)", maxLength: 184, nullable: false),
-                    GroupName = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: false),
+                    TeamName = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: false),
                     Role = table.Column<int>(type: "int", nullable: false),
                     IsActive = table.Column<bool>(type: "bit", nullable: false),
                     CreatedAt = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: false),
@@ -514,10 +513,10 @@ namespace BookRunner.Infrastructure.Persistence.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_RoleMappings_GroupSid_Role",
+                name: "IX_RoleMappings_TeamName_Role",
                 schema: "bookrunner",
                 table: "RoleMappings",
-                columns: new[] { "GroupSid", "Role" },
+                columns: new[] { "TeamName", "Role" },
                 unique: true);
 
             migrationBuilder.CreateIndex(

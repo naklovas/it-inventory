@@ -337,21 +337,16 @@ namespace BookRunner.Infrastructure.Persistence.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)");
 
-                    b.Property<string>("GroupName")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("nvarchar(256)");
-
-                    b.Property<string>("GroupSid")
-                        .IsRequired()
-                        .HasMaxLength(184)
-                        .HasColumnType("nvarchar(184)");
-
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
                     b.Property<int>("Role")
                         .HasColumnType("int");
+
+                    b.Property<string>("TeamName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
 
                     b.Property<DateTimeOffset?>("UpdatedAt")
                         .HasColumnType("datetimeoffset");
@@ -362,7 +357,7 @@ namespace BookRunner.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("GroupSid", "Role")
+                    b.HasIndex("TeamName", "Role")
                         .IsUnique();
 
                     b.ToTable("RoleMappings", "bookrunner");
