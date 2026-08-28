@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Json.Serialization;
 using BookRunner.Web.Services;
 using Microsoft.AspNetCore.Authentication.Negotiate;
 using Microsoft.AspNetCore.Authorization;
@@ -41,7 +42,14 @@ builder.Services
     // controller'larin zaten yakaladigi ApiException'a cevirir.
     .AddHttpMessageHandler<ApiConnectionHandler>();
 
-builder.Services.AddControllersWithViews();
+// API'ye giden JSON uclarindaki (gorev ekleme, atama, durum degistirme...)
+// enum degerleri metin olarak gonderilir (orn. "priority": "Normal"). API
+// tarafi bunu JsonStringEnumConverter ile kabul ediyor; Web'in kendi model
+// binder'i da ayni cevirici olmadan bu govdeleri cozemez ve istek API'ye
+// bozuk/varsayilan degerlerle ulasip "One or more validation errors
+// occurred" hatasi doner.
+builder.Services.AddControllersWithViews()
+    .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddHttpContextAccessor();
 
 var app = builder.Build();
