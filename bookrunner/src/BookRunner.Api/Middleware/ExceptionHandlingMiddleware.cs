@@ -7,7 +7,10 @@ namespace BookRunner.Api.Middleware;
 /// Is katmani istisnalarini RFC 7807 ProblemDetails yanitlarina cevirir.
 /// Boylece istemci tarafinda tutarli hata isleme yapilabilir.
 /// </summary>
-public sealed class ExceptionHandlingMiddleware(RequestDelegate next, ILogger<ExceptionHandlingMiddleware> logger)
+public sealed class ExceptionHandlingMiddleware(
+    RequestDelegate next,
+    ILogger<ExceptionHandlingMiddleware> logger,
+    IHostEnvironment environment)
 {
     public async Task InvokeAsync(HttpContext context)
     {
@@ -48,14 +51,24 @@ public sealed class ExceptionHandlingMiddleware(RequestDelegate next, ILogger<Ex
             logger.LogInformation("Istek reddedildi ({Status}): {Message}", status, exception.Message);
         }
 
+        // Development ortaminda 500'lerde de gercek hatayi gosteririz; aksi halde
+        // API'nin gerceklestigi konsol logunu okumadan hicbir sey teshis edilemez.
+        // Production'da (IsDevelopment() = false) detay hep gizli kalir.
+        var showRealError = status < 500 || environment.IsDevelopment();
+
         var problem = new ProblemDetails
         {
             Status = status,
             Title = title,
-            // Sunucu ici hata detaylari istemciye sizdirilmaz.
-            Detail = status >= 500 ? "Islem tamamlanamadi. Lutfen sistem yoneticinize basvurun." : exception.Message,
+            Detail = showRealError ? exception.Message : "Islem tamamlanamadi. Lutfen sistem yoneticinize basvurun.",
             Instance = context.Request.Path
         };
+
+        if (status >= 500 && environment.IsDevelopment())
+        {
+            problem.Extensions["exceptionType"] = exception.GetType().FullName;
+            problem.Extensions["stackTrace"] = exception.ToString();
+        }
 
         problem.Extensions["traceId"] = context.TraceIdentifier;
 

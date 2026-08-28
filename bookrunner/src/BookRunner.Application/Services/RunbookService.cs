@@ -94,6 +94,13 @@ public sealed class RunbookService(
         var page = Math.Max(1, filter.Page);
         var pageSize = Math.Clamp(filter.PageSize, 1, 200);
 
+        // Katilimci rozetleri icin once yalnizca kullanici kimlikleri (Guid) cekilir.
+        // SQL Server DISTINCT icinde varbinary(max) sutunu (AppUser.Photo) kabul
+        // etmez ("Operand data type varbinary(max) is invalid for the DISTINCT
+        // operator"), ve EF Core da hesaplanmis bir alanla (orn. Photo != null)
+        // birlikte entity projeksiyonunu Distinct + collection-subquery baglaminda
+        // ceviremiyor. Bu yuzden Distinct yalnizca saf Guid uzerinde calisir; kisi
+        // ozetleri asagida TEK bir ayri sorguyla topluca cozulur.
         var rows = await query
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
@@ -104,15 +111,31 @@ public sealed class RunbookService(
                 TaskCount = r.Tasks.Count,
                 CompletedTaskCount = r.Tasks.Count(t => t.Status == RunbookTaskStatus.Completed || t.Status == RunbookTaskStatus.Skipped),
                 CommentCount = r.Tasks.SelectMany(t => t.Comments).Count(c => !c.IsDeleted),
-                Participants = r.Tasks
+                ParticipantUserIds = r.Tasks
                     .SelectMany(t => t.Assignments)
-                    .Where(a => a.IsActive && a.User != null)
-                    .Select(a => a.User!)
+                    .Where(a => a.IsActive && a.UserId != null)
+                    .Select(a => a.UserId!.Value)
                     .Distinct()
                     .Take(5)
                     .ToList()
             })
             .ToListAsync(ct);
+
+        var participantIds = rows.SelectMany(r => r.ParticipantUserIds).Distinct().ToList();
+        var participantLookup = new Dictionary<Guid, PersonSummary>();
+        if (participantIds.Count > 0)
+        {
+            // ToSummary() bir C# yardimci metodu oldugu icin SQL'e cevrilemez;
+            // once kullanicilar cekilir, esleme bellekte (client-side) yapilir.
+            var participantUsers = await db.Users.AsNoTracking()
+                .Where(u => participantIds.Contains(u.Id))
+                .ToListAsync(ct);
+
+            foreach (var user in participantUsers)
+            {
+                participantLookup[user.Id] = user.ToSummary();
+            }
+        }
 
         var items = rows.Select(row => new RunbookListItemDto
         {
@@ -132,7 +155,10 @@ public sealed class RunbookService(
             TaskCount = row.TaskCount,
             CompletedTaskCount = row.CompletedTaskCount,
             CommentCount = row.CommentCount,
-            Participants = row.Participants.Select(p => p.ToSummary()).ToList(),
+            Participants = row.ParticipantUserIds
+                .Where(participantLookup.ContainsKey)
+                .Select(id => participantLookup[id])
+                .ToList(),
             CreatedAt = row.Runbook.CreatedAt,
             UpdatedAt = row.Runbook.UpdatedAt
         }).ToList();

@@ -305,12 +305,22 @@ public sealed class BookRunnerApiClient(HttpClient httpClient, ILogger<BookRunne
         try
         {
             using var document = JsonDocument.Parse(body);
-            if (document.RootElement.TryGetProperty("detail", out var detail))
+            var detail = document.RootElement.TryGetProperty("detail", out var detailElement)
+                ? detailElement.GetString()
+                : document.RootElement.TryGetProperty("title", out var titleElement) ? titleElement.GetString() : null;
+
+            // API yalnizca Development ortamindayken 500 hatalarina bu alani ekler;
+            // boylece gercek istisna API konsoluna bakmadan Web tarafinda da gorulur.
+            if (document.RootElement.TryGetProperty("stackTrace", out var stackTraceElement))
             {
-                return detail.GetString();
+                var stackTrace = stackTraceElement.GetString();
+                if (!string.IsNullOrWhiteSpace(stackTrace))
+                {
+                    return $"{detail}{Environment.NewLine}{Environment.NewLine}{stackTrace}";
+                }
             }
 
-            return document.RootElement.TryGetProperty("title", out var title) ? title.GetString() : null;
+            return detail;
         }
         catch (JsonException)
         {
