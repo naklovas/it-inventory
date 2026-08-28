@@ -1,9 +1,21 @@
 ﻿[CmdletBinding()]
 param(
-    [string]$SolutionRoot = $PSScriptRoot
+    [string]$SolutionRoot
 )
 
 $ErrorActionPreference = 'Stop'
+
+if ([string]::IsNullOrWhiteSpace($SolutionRoot)) {
+    if ($PSScriptRoot) {
+        $SolutionRoot = $PSScriptRoot
+    }
+    elseif ($MyInvocation.MyCommand.Path) {
+        $SolutionRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+    }
+    else {
+        $SolutionRoot = (Get-Location).Path
+    }
+}
 
 if (-not (Test-Path (Join-Path $SolutionRoot 'BookRunner.sln'))) {
     Write-Warning "BookRunner.sln '$SolutionRoot' altinda bulunamadi. Bu betigi BookRunner.sln ile ayni klasore koyup oradan calistirin, ya da -SolutionRoot parametresiyle dogru yolu verin."
