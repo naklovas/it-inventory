@@ -28,6 +28,32 @@ public static class AvatarHelper
     public static string TaskColor(int order)
         => TaskPalette[Math.Abs(order - 1) % TaskPalette.Length];
 
+    /// <summary>
+    /// Bazi kurumlarda AD "displayName" alanina departman bilgisi parantez
+    /// icinde eklenir, orn. "Volkan Isikhan (Konfigurasyon ve Degisiklik
+    /// Yonetimi)". Bu ek olmasa idi son kelime soyisim olurdu; oldugunda ise
+    /// son kelime parantezin icindeki metin olur ve hem gorunen ad hem de
+    /// bas harfler (Initials) bozulur. Bu yuzden ham AD degeri saklanmadan
+    /// once bu son ek temizlenir.
+    /// </summary>
+    public static string? StripTrailingAnnotation(string? displayName)
+    {
+        var trimmed = displayName?.TrimEnd();
+        if (string.IsNullOrEmpty(trimmed) || trimmed[^1] != ')')
+        {
+            return displayName;
+        }
+
+        var openIndex = trimmed.LastIndexOf('(');
+        if (openIndex <= 0)
+        {
+            return displayName;
+        }
+
+        var candidate = trimmed[..openIndex].TrimEnd();
+        return candidate.Length > 0 ? candidate : displayName;
+    }
+
     /// <summary>"Ahmet Yilmaz" -> "AY". Tek kelime ise ilk iki harf.</summary>
     public static string Initials(string? displayName)
     {

@@ -114,7 +114,7 @@
             const minutes = document.getElementById("newTaskMinutes").value;
 
             try {
-                await post("AddTask", {
+                const created = await post("AddTask", {
                     title: title,
                     description: document.getElementById("newTaskDescription").value || null,
                     colorHex: document.getElementById("newTaskColor").value,
@@ -125,6 +125,24 @@
                     rollbackNotes: document.getElementById("newTaskRollback").value || null
                 }, { id: config.runbookId });
 
+                const assignee = selection.newTask;
+                if (assignee) {
+                    try {
+                        await post("Assign", {
+                            assigneeType: assignee.kind === "user" ? "User" : "Group",
+                            userId: assignee.kind === "user" ? assignee.id : null,
+                            groupId: assignee.kind === "group" ? assignee.id : null,
+                            note: null,
+                            notify: true
+                        }, { taskId: created.id });
+                    } catch (assignError) {
+                        toast("Gorev olusturuldu ama atama yapilamadi: " + assignError.message, "warning");
+                        reload();
+                        return;
+                    }
+                }
+
+                selection.newTask = null;
                 reload();
             } catch (error) {
                 toast(error.message, "danger");
@@ -284,8 +302,8 @@
 
     // ------------------------------------------------------- AD arama kutulari
 
-    /** Secilen kisi/grup; atama ve devir modallarinda paylasilir. */
-    const selection = { assign: null, handover: null };
+    /** Secilen kisi/grup; atama, devir ve yeni gorev formunda paylasilir. */
+    const selection = { assign: null, handover: null, newTask: null };
 
     function wireSearch(inputId, suggestId, kind, scope) {
         const input = document.getElementById(inputId);
@@ -353,9 +371,10 @@
 
             if (scope === "assign") {
                 confirmAssign();
-            } else {
+            } else if (scope === "handover") {
                 confirmHandover();
             }
+            // scope === "newTask": secim sadece saklanir, gorev "Ekle" ile olusturulunca atanir.
         });
 
         document.addEventListener("click", (event) => {
@@ -369,6 +388,8 @@
     wireSearch("assignGroupSearch", "assignGroupSuggest", "group", "assign");
     wireSearch("handoverUserSearch", "handoverUserSuggest", "user", "handover");
     wireSearch("handoverGroupSearch", "handoverGroupSuggest", "group", "handover");
+    wireSearch("newTaskAssigneeUserSearch", "newTaskAssigneeUserSuggest", "user", "newTask");
+    wireSearch("newTaskAssigneeGroupSearch", "newTaskAssigneeGroupSuggest", "group", "newTask");
 
     // -------------------------------------------------------------- atama
 

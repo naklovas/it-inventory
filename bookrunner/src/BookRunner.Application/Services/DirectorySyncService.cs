@@ -96,8 +96,10 @@ public sealed class DirectorySyncService(
             db.Groups.Add(group);
         }
 
+        var cleanedGroupDisplayName = AvatarHelper.StripTrailingAnnotation(adGroup.DisplayName);
+
         group.Name = adGroup.Name;
-        group.DisplayName = string.IsNullOrWhiteSpace(adGroup.DisplayName) ? adGroup.Name : adGroup.DisplayName;
+        group.DisplayName = string.IsNullOrWhiteSpace(cleanedGroupDisplayName) ? adGroup.Name : cleanedGroupDisplayName;
         group.Description = adGroup.Description;
         group.Email = adGroup.Email;
         group.DistinguishedName = adGroup.DistinguishedName;
@@ -335,9 +337,11 @@ public sealed class DirectorySyncService(
             db.Users.Add(user);
         }
 
+        var cleanedDisplayName = AvatarHelper.StripTrailingAnnotation(adUser.DisplayName);
+
         user.SamAccountName = adUser.SamAccountName;
         user.UserPrincipalName = adUser.UserPrincipalName;
-        user.DisplayName = string.IsNullOrWhiteSpace(adUser.DisplayName) ? adUser.SamAccountName : adUser.DisplayName;
+        user.DisplayName = string.IsNullOrWhiteSpace(cleanedDisplayName) ? adUser.SamAccountName : cleanedDisplayName;
         user.Email = adUser.Email;
         user.Title = adUser.Title;
         user.Department = adUser.Department;
