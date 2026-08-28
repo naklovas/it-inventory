@@ -184,6 +184,13 @@ public sealed class DirectorySyncService(
             .Take(take)
             .ToListAsync(ct);
 
+        // Yerel eslesmeler dogrudan donulmeden once bayatlamis olanlar (12 saatten
+        // eski, hic senkronize edilmemis) tazelenir. Aksi halde bir kisi bir kere
+        // yerel tabloya yazildiktan sonra (orn. eski/fotosuz haliyle) arama hep o
+        // eski kaydi donerdi; EnsureUserBySamAccountNameAsync (oturum acma) bu
+        // kontrolu yapiyordu ama arama yapmiyordu.
+        local = await RefreshStaleAsync(local, ct);
+
         var results = local.Select(u => u.ToSummary()).ToList();
         if (results.Count >= take)
         {
@@ -326,6 +333,39 @@ public sealed class DirectorySyncService(
             .ToListAsync(ct);
 
         return local.Select(u => u.ToSummary()).ToList();
+    }
+
+    /// <summary>
+    /// Arama sonucundaki yerel eslesmelerden bayatlamis (12 saatten eski veya hic
+    /// senkronize olmamis) olanlari AD'den tazeler; boylece UpsertAsync tekrar
+    /// calisip personel servisinden guncel foto/ad bilgisini ceker. AD'ye
+    /// erisilemezse arama hicbir zaman basarisiz olmaz, elde ne varsa o kullanilir.
+    /// </summary>
+    private async Task<List<AppUser>> RefreshStaleAsync(List<AppUser> candidates, CancellationToken ct)
+    {
+        var refreshed = new List<AppUser>(candidates.Count);
+
+        foreach (var candidate in candidates)
+        {
+            if (!NeedsRefresh(candidate.LastSyncedAt))
+            {
+                refreshed.Add(candidate);
+                continue;
+            }
+
+            try
+            {
+                var adUser = await directory.FindUserBySamAccountNameAsync(candidate.SamAccountName, ct);
+                refreshed.Add(adUser is null ? candidate : await UpsertAsync(adUser, ct));
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "{User} arama sonucunda tazelenemedi; yerel kayit kullanildi.", candidate.SamAccountName);
+                refreshed.Add(candidate);
+            }
+        }
+
+        return refreshed;
     }
 
     /// <summary>AD'den okunan kullaniciyi yerel tabloya ekler veya gunceller.</summary>
