@@ -16,6 +16,7 @@ namespace BookRunner.Application.Services;
 public sealed class DirectorySyncService(
     IAppDbContext db,
     IDirectoryService directory,
+    IPersonnelDirectoryService personnelDirectory,
     ILogger<DirectorySyncService> logger) : IDirectorySyncService
 {
     /// <summary>Bu sureden eski kayitlar bir sonraki erisimde AD'den tazelenir.</summary>
@@ -354,19 +355,39 @@ public sealed class DirectorySyncService(
         user.IsActive = adUser.IsActive;
         user.LastSyncedAt = DateTimeOffset.UtcNow;
 
-        if (adUser.Photo is { Length: > 0 })
-        {
-            var hash = Convert.ToHexString(SHA256.HashData(adUser.Photo));
-            if (user.PhotoHash != hash)
-            {
-                user.Photo = adUser.Photo;
-                user.PhotoContentType = "image/jpeg";
-                user.PhotoHash = hash;
-            }
-        }
+        await ApplyPhotoAsync(user, adUser, ct);
 
         await db.SaveChangesAsync(ct);
         return user;
+    }
+
+    /// <summary>
+    /// Fotograf, AD'nin kendi thumbnailPhoto/jpegPhoto oznitelikleri yerine
+    /// oncelikle personel servisinden alinir (bkz. IPersonnelDirectoryService);
+    /// bircok kurulumda AD tarafinda foto hic tutulmaz. Bu, AD'den okunan HER
+    /// kullanici icin gecerlidir (atama/arama sonuclari dahil) - yalnizca
+    /// oturum acan kisiye ozel degildir. Personel servisi bos donerse AD
+    /// fotografina geri dusulur.
+    /// </summary>
+    private async Task ApplyPhotoAsync(AppUser user, DirectoryUser adUser, CancellationToken ct)
+    {
+        var personnel = await personnelDirectory.GetProfileAsync(adUser.SamAccountName, ct);
+        var photo = personnel?.Thumbnail ?? adUser.Photo;
+
+        if (photo is not { Length: > 0 })
+        {
+            return;
+        }
+
+        var hash = Convert.ToHexString(SHA256.HashData(photo));
+        if (user.PhotoHash == hash)
+        {
+            return;
+        }
+
+        user.Photo = photo;
+        user.PhotoContentType = "image/jpeg";
+        user.PhotoHash = hash;
     }
 
     private static bool NeedsRefresh(DateTimeOffset? lastSyncedAt)
