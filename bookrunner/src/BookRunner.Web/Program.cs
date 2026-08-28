@@ -20,6 +20,8 @@ builder.Services.Configure<ApiOptions>(builder.Configuration.GetSection(ApiOptio
 
 var apiOptions = builder.Configuration.GetSection(ApiOptions.SectionName).Get<ApiOptions>() ?? new ApiOptions();
 
+builder.Services.AddTransient<ApiConnectionHandler>();
+
 // API cagrilari kullanicinin Windows kimligiyle yapilir.
 // Not: Web ve API ayri sunuculardaysa Kerberos kisitlanmis yetki devri
 // (constrained delegation) yapilandirilmalidir; bkz. README.
@@ -34,7 +36,10 @@ builder.Services
         UseDefaultCredentials = true,
         Credentials = CredentialCache.DefaultNetworkCredentials,
         AllowAutoRedirect = false
-    });
+    })
+    // API'ye hic ulasilamamasi (baglanti reddi, zaman asimi) durumunu
+    // controller'larin zaten yakaladigi ApiException'a cevirir.
+    .AddHttpMessageHandler<ApiConnectionHandler>();
 
 builder.Services.AddControllersWithViews();
 builder.Services.AddHttpContextAccessor();

@@ -17,15 +17,31 @@ public sealed class TemplatesController(BookRunnerApiClient api, ILogger<Templat
     {
         filter = filter with { IsTemplate = true };
 
-        var results = await Api.ListRunbooksAsync(filter, ct);
+        var currentUser = await GetCurrentUserAsync(ct);
+        var emptyResults = Application.Common.PagedResult<RunbookListItemDto>.Create([], 1, filter.PageSize, 0);
 
-        return View(await FillAsync(new RunbookListViewModel
+        try
         {
-            CurrentUser = await GetCurrentUserAsync(ct),
-            Filter = filter,
-            TemplatesView = true,
-            Results = results ?? Application.Common.PagedResult<RunbookListItemDto>.Create([], 1, filter.PageSize, 0)
-        }, ct));
+            var results = await Api.ListRunbooksAsync(filter, ct);
+            return View(await FillAsync(new RunbookListViewModel
+            {
+                CurrentUser = currentUser,
+                Filter = filter,
+                TemplatesView = true,
+                Results = results ?? emptyResults
+            }, ct));
+        }
+        catch (ApiException ex)
+        {
+            TempData["Error"] = ex.Message;
+            return View(await FillAsync(new RunbookListViewModel
+            {
+                CurrentUser = currentUser,
+                Filter = filter,
+                TemplatesView = true,
+                Results = emptyResults
+            }, ct));
+        }
     }
 
     /// <summary>Sablondan yeni runbook uretir.</summary>

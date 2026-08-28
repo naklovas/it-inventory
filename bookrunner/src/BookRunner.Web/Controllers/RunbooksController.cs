@@ -28,21 +28,46 @@ public sealed class RunbooksController(
         filter = filter with { IsTemplate = filter.IsTemplate ?? false };
 
         var currentUser = await GetCurrentUserAsync(ct);
-        var results = await Api.ListRunbooksAsync(filter, ct);
+        var emptyResults = Application.Common.PagedResult<RunbookListItemDto>.Create([], 1, filter.PageSize, 0);
 
-        return View(await FillAsync(new RunbookListViewModel
+        try
         {
-            CurrentUser = currentUser,
-            Filter = filter,
-            Results = results ?? Application.Common.PagedResult<RunbookListItemDto>.Create([], 1, filter.PageSize, 0)
-        }, ct));
+            var results = await Api.ListRunbooksAsync(filter, ct);
+            return View(await FillAsync(new RunbookListViewModel
+            {
+                CurrentUser = currentUser,
+                Filter = filter,
+                Results = results ?? emptyResults
+            }, ct));
+        }
+        catch (ApiException ex)
+        {
+            TempData["Error"] = ex.Message;
+            return View(await FillAsync(new RunbookListViewModel
+            {
+                CurrentUser = currentUser,
+                Filter = filter,
+                Results = emptyResults
+            }, ct));
+        }
     }
 
     /// <summary>Runbook detayi: renkli gorev barlari, atamalar, yorumlar, tarihce.</summary>
     public async Task<IActionResult> Details(Guid id, CancellationToken ct)
     {
         var currentUser = await GetCurrentUserAsync(ct);
-        var runbook = await Api.GetRunbookAsync(id, ct);
+
+        RunbookDetailDto? runbook;
+        try
+        {
+            runbook = await Api.GetRunbookAsync(id, ct);
+        }
+        catch (ApiException ex)
+        {
+            TempData["Error"] = ex.Message;
+            return RedirectToAction(nameof(Index));
+        }
+
         if (runbook is null)
         {
             return NotFound();
