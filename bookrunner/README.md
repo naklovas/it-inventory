@@ -17,6 +17,7 @@ herkesin ayni tabloyu gormesini saglamak ve her hareketin izini birakmak.
 - [Yetkilendirme modeli](#yetkilendirme-modeli)
 - [Service Manager entegrasyonu](#service-manager-entegrasyonu)
 - [Kurulum](#kurulum)
+- [Depoyu guncelleme (git pull)](#depoyu-guncelleme-git-pull)
 - [Yapilandirma](#yapilandirma)
 - [Calistirma ve dagitim](#calistirma-ve-dagitim)
 - [API](#api)
@@ -381,6 +382,27 @@ dotnet ef migrations add <Ad> `
     --startup-project src/BookRunner.Api `
     --output-dir Persistence/Migrations
 ```
+
+---
+
+## Depoyu guncelleme (git pull)
+
+Proje `naklovas/it-inventory` deposunun `claude/bookrunner-runbook-app-57f25r`
+dalinda gelistiriliyor. Daha once bu dali klonladiginiz klasorun icinden:
+
+```
+git pull origin claude/bookrunner-runbook-app-57f25r
+```
+
+Henuz klonlamadiysaniz (veya "not a git repository" hatasi alirsaniz), o
+klasorun disinda, tam klonlama yapin:
+
+```
+git clone -b claude/bookrunner-runbook-app-57f25r https://github.com/naklovas/it-inventory.git BookRunner-git
+```
+
+Bu, `BookRunner-git` adinda yeni bir klasore tum depoyu indirir; solution
+dosyalari `BookRunner-git/bookrunner/` altinda olur.
 
 ---
 
