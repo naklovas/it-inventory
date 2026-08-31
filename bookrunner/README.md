@@ -520,6 +520,54 @@ sc.exe create BookRunnerWeb binPath= "C:\BookRunner\BookRunner.Web\BookRunner.We
 Her iki uygulama `UseWindowsService()` ile yapilandirildigi icin hem konsoldan
 hem de servis olarak calisir.
 
+### IIS altinda
+
+Windows Authentication'in kernel-mode IIS implementasyonu Kestrel'in kendi
+Negotiate paketinden daha az sorun cikardigi icin kurumsal AD ortaminda
+genelde tercih edilir. IIS + ASP.NET Core Module (ANCM) her uygulamayi ayri
+bir process olarak (w3wp.exe altinda) calistirir; framework-dependent yayin
+gerekir (self-contained/tek dosya DEGIL), hedef sunucuda [.NET 9 Hosting
+Bundle](https://dotnet.microsoft.com/download/dotnet/9.0) kurulu olmali ve
+"Windows Authentication" rol hizmeti acik olmalidir:
+
+```powershell
+Install-WindowsFeature Web-Server, Web-Windows-Auth
+```
+
+Yayinlayin (bu sefer `-Iis` ile - framework-dependent, `web.config` uretir):
+
+```powershell
+.\publish.ps1 -OutputPath C:\BookRunner -Iis
+```
+
+**API ve Web iki ayri IIS sitesi olarak, iki farkli portta** calisir; tarayici
+yalnizca Web'in portuna gider, Web de kendi sunucu tarafi kodundan API'nin
+portuna istek atar (bkz. "Tarayici neden API'ye dogrudan gitmiyor?"). Portlari
+siz belirlersiniz - `New-IisSites.ps1` varsayilan olarak API icin 7443, Web
+icin 443 kullanir:
+
+```powershell
+.\tools\New-IisSites.ps1 -ApiPath C:\BookRunner\BookRunner.Api -WebPath C:\BookRunner\BookRunner.Web
+```
+
+Bu script iki app pool (No Managed Code) ve iki site olusturur, Windows
+Authentication'i acar, Anonymous'u kapatir. Sertifikaniz varsa
+`-CertificateThumbprint <thumbprint>` ile HTTPS binding'i de otomatik ekler;
+vermezseniz HTTP kurulur, HTTPS'i IIS Manager'dan elle baglarsiniz.
+
+**Web'in API'yi hangi porttan cagiracagini bilmesi icin** tek yapmaniz
+gereken `src/BookRunner.Web/appsettings.Local.json` icindeki `Api:BaseUrl`
+degerini API sitesinin adresiyle esitlemek - script bu adresi calisma
+sonunda ekrana yazdirir:
+
+```json
+{ "Api": { "BaseUrl": "https://sunucu-adi:7443" } }
+```
+
+Farkli portlar secmek isterseniz `-ApiPort`/`-WebPort` parametreleriyle
+degistirebilirsiniz; onemli olan `Api:BaseUrl`'in gercekte sectiginiz
+API portuyla birebir ayni olmasidir.
+
 ### Kerberos notu
 
 Web ve API **ayni sunucuda** calisir; bu kurulumda ek yapilandirma gerekmez.
