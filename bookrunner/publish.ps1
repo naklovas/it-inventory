@@ -54,7 +54,9 @@ Write-Host "  API : $(Join-Path $OutputPath 'BookRunner.Api\BookRunner.Api.exe')
 Write-Host "  Web : $(Join-Path $OutputPath 'BookRunner.Web\BookRunner.Web.exe')"
 Write-Host ''
 Write-Host 'Sonraki adimlar:' -ForegroundColor Yellow
-Write-Host '  1. Her iki klasordeki appsettings.json dosyalarini ortaminiza gore duzenleyin.'
+Write-Host '  1. Sunucuya ozel gercek degerleriniz (baglanti dizesi, AD domaini...) src/BookRunner.Api ve'
+Write-Host '     src/BookRunner.Web altindaki appsettings.Local.json dosyalarindaysa otomatik tasindi.'
+Write-Host '     appsettings.json dosyalarini DUZENLEMEYIN; sonraki git pull''da ezilir.'
 Write-Host '  2. sql/01_CreateDatabase.sql ve sql/02_BookRunner_Schema.sql dosyalarini calistirin.'
 Write-Host '  3. Uygulamalari calistirin veya Windows servisi olarak kaydedin:'
 Write-Host '       sc.exe create BookRunnerApi binPath= "C:\BookRunner\BookRunner.Api\BookRunner.Api.exe" obj= "CONTOSO\svc-bookrunner" start= auto'
