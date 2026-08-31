@@ -3,14 +3,18 @@
     BookRunner API ve Web icin IIS sitelerini olusturur/gunceller.
 
 .DESCRIPTION
-    Iki ayri IIS sitesi kurar (ayri app pool, ayri port), Windows Authentication'i
-    acar ve Anonymous'u kapatir. publish.ps1 -Iis ile uretilen iki klasoru
-    (framework-dependent, web.config icerir) hedefler.
+    Iki ayri IIS sitesi kurar (ayri app pool, ayri port). Anonymous
+    Authentication'i ACAR, IIS'in kendi Windows Authentication'ini KAPALI
+    birakir - kimlik dogrulamayi IIS degil, uygulamanin kendisi (Negotiate
+    middleware, Program.cs > AddNegotiate()) yapar. IIS'in Windows
+    Authentication'ini da acarsaniz uygulama acilista şu hatayla cöker:
+    "The Negotiate Authentication handler cannot be used on a server that
+    directly supports Windows Authentication." publish.ps1 -Iis ile
+    uretilen iki klasoru (framework-dependent, web.config icerir) hedefler.
 
-    On kosul: sunucuda IIS + ASP.NET Core Hosting Bundle (.NET 9) kurulu olmali,
-    ve "Web Server (IIS) > Security > Windows Authentication" rol hizmeti acik
-    olmali:
-        Install-WindowsFeature Web-Windows-Auth
+    On kosul: sunucuda IIS + ASP.NET Core Hosting Bundle (.NET 9) kurulu
+    olmali. "Windows Authentication" IIS rol hizmetinin kurulu olmasi
+    GEREKMEZ - kullanilmiyor.
 
 .PARAMETER ApiPath
     publish.ps1 -Iis ciktisindaki BookRunner.Api klasorunun tam yolu.
@@ -83,12 +87,13 @@ function New-BookRunnerIisSite {
         Write-Host "Site olusturuldu: $Name (http, port $Port) -> $PhysicalPath" -ForegroundColor Green
     }
 
-    # Windows Entegre Kimlik Dogrulama acik, Anonymous kapali - uygulama zaten
-    # bunu bekliyor (bkz. Program.cs UseNegotiate()).
+    # Anonymous ACIK birakilir; IIS'in kendi Windows Authentication'ina HIC
+    # dokunulmaz (varsayilan olarak zaten kapalidir). Kimlik dogrulamayi
+    # uygulamanin kendi Negotiate middleware'i yapar (bkz. Program.cs
+    # AddNegotiate()) - IIS'in Windows Authentication'ini da acmak uygulamayi
+    # acilista cokertir (bkz. script basindaki aciklama).
     Set-WebConfigurationProperty -PSPath "IIS:\Sites\$Name" `
-        -Filter /system.webServer/security/authentication/windowsAuthentication -Name enabled -Value true
-    Set-WebConfigurationProperty -PSPath "IIS:\Sites\$Name" `
-        -Filter /system.webServer/security/authentication/anonymousAuthentication -Name enabled -Value false
+        -Filter /system.webServer/security/authentication/anonymousAuthentication -Name enabled -Value true
 
     if ($CertificateThumbprint) {
         $existing = Get-WebBinding -Name $Name -Protocol https -Port $Port -ErrorAction SilentlyContinue

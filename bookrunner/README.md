@@ -522,17 +522,20 @@ hem de servis olarak calisir.
 
 ### IIS altinda
 
-Windows Authentication'in kernel-mode IIS implementasyonu Kestrel'in kendi
-Negotiate paketinden daha az sorun cikardigi icin kurumsal AD ortaminda
-genelde tercih edilir. IIS + ASP.NET Core Module (ANCM) her uygulamayi ayri
-bir process olarak (w3wp.exe altinda) calistirir; framework-dependent yayin
-gerekir (self-contained/tek dosya DEGIL), hedef sunucuda [.NET 9 Hosting
-Bundle](https://dotnet.microsoft.com/download/dotnet/9.0) kurulu olmali ve
-"Windows Authentication" rol hizmeti acik olmalidir:
+IIS + ASP.NET Core Module (ANCM) her uygulamayi ayri bir process olarak
+(w3wp.exe altinda) calistirir; IIS surecleri otomatik yonetir (cokerse
+yeniden baslatir), sertifika/site yonetimi IIS Manager'dan tanidik sekilde
+yapilir. Framework-dependent yayin gerekir (self-contained/tek dosya DEGIL),
+hedef sunucuda [.NET 9 Hosting Bundle](https://dotnet.microsoft.com/download/dotnet/9.0)
+kurulu olmalidir.
 
-```powershell
-Install-WindowsFeature Web-Server, Web-Windows-Auth
-```
+> **ONEMLI:** IIS'in kendi "Windows Authentication" rol hizmetini KURMAYIN/
+> AÇMAYIN. Uygulama kimlik dogrulamasini kendi icinde (Negotiate middleware,
+> `Program.cs > AddNegotiate()`) yapiyor; IIS'in Windows Authentication'i da
+> acik olursa ikisi catisir ve uygulama acilista soyle cokebilir:
+> `The Negotiate Authentication handler cannot be used on a server that
+> directly supports Windows Authentication.` Site'da yalnizca **Anonymous
+> Authentication acik** olmali - `New-IisSites.ps1` bunu otomatik ayarlar.
 
 Yayinlayin (bu sefer `-Iis` ile - framework-dependent, `web.config` uretir):
 
@@ -550,8 +553,9 @@ icin 443 kullanir:
 .\tools\New-IisSites.ps1 -ApiPath C:\BookRunner\BookRunner.Api -WebPath C:\BookRunner\BookRunner.Web
 ```
 
-Bu script iki app pool (No Managed Code) ve iki site olusturur, Windows
-Authentication'i acar, Anonymous'u kapatir. Sertifikaniz varsa
+Bu script iki app pool (No Managed Code) ve iki site olusturur, Anonymous
+Authentication'i acar (IIS'in Windows Authentication'ina dokunmaz - bkz.
+yukaridaki uyari). Sertifikaniz varsa
 `-CertificateThumbprint <thumbprint>` ile HTTPS binding'i de otomatik ekler;
 vermezseniz HTTP kurulur, HTTPS'i IIS Manager'dan elle baglarsiniz.
 
