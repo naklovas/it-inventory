@@ -26,6 +26,8 @@ builder.Services.Configure<ApiOptions>(builder.Configuration.GetSection(ApiOptio
 var apiOptions = builder.Configuration.GetSection(ApiOptions.SectionName).Get<ApiOptions>() ?? new ApiOptions();
 
 builder.Services.AddTransient<ApiConnectionHandler>();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddTransient<WindowsIdentityHandler>();
 
 // API cagrilari kullanicinin Windows kimligiyle yapilir.
 // Not: Web ve API ayri sunuculardaysa Kerberos kisitlanmis yetki devri
@@ -42,6 +44,11 @@ builder.Services
         Credentials = CredentialCache.DefaultNetworkCredentials,
         AllowAutoRedirect = false
     })
+    // ASP.NET Core, klasik ASP.NET'in aksine kimligi dogrulanmis kullaniciyi
+    // otomatik impersonate etmez; bu handler olmadan UseDefaultCredentials
+    // yukarida surecin kendi kimligini (IIS'te uygulama havuzu hesabi)
+    // gonderir, tarayicidaki kullaniciyi degil.
+    .AddHttpMessageHandler<WindowsIdentityHandler>()
     // API'ye hic ulasilamamasi (baglanti reddi, zaman asimi) durumunu
     // controller'larin zaten yakaladigi ApiException'a cevirir.
     .AddHttpMessageHandler<ApiConnectionHandler>();
@@ -54,7 +61,6 @@ builder.Services
 // occurred" hatasi doner.
 builder.Services.AddControllersWithViews()
     .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
-builder.Services.AddHttpContextAccessor();
 
 var app = builder.Build();
 
