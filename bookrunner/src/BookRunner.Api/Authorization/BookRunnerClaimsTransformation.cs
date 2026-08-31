@@ -120,6 +120,15 @@ public sealed class BookRunnerClaimsTransformation(
             var personnel = await personnelDirectory.GetProfileAsync(user.SamAccountName);
             ApplyPersonnelPhoto(user, personnel);
 
+            // TeamName, liderlik tablosunda takim siralamasi icin kalici saklanir.
+            // Bu cagri zaten her girişte yapiliyor (12 saatlik AD tazeleme
+            // penceresinden bagimsiz); o yuzden burada da yazilmazsa takim adi
+            // yalnizca AD tam senkronizasyonunda (en fazla 12 saatte bir) guncellenir.
+            if (!string.IsNullOrWhiteSpace(personnel?.TeamName))
+            {
+                user.TeamName = personnel.TeamName;
+            }
+
             var role = await ResolveRoleAsync(db, personnel?.TeamName, _roleOptions.DefaultRole);
 
             user.LastSeenAt = DateTimeOffset.UtcNow;
