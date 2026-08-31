@@ -6,6 +6,10 @@ using Microsoft.AspNetCore.Authorization;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Sunucuya ozel gercek degerler buraya yazilir (bkz. BookRunner.Api/Program.cs
+// ayni satir). .gitignore'dadir; git pull hicbir zaman uzerine yazmaz.
+builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
+
 // "Local exe" dagitimi icin Windows servisi destegi.
 builder.Host.UseWindowsService(options => options.ServiceName = "BookRunner Web");
 

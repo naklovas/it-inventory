@@ -13,6 +13,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Sunucuya ozel gercek ayarlar (appsettings.Local.json.example'dan kopyalanir,
+         .gitignore'dadir). Var olmasi durumunda cikti klasorune kopyalanir; yoksa
+         bu item hic olusmaz, derleme hata vermez. -->
+    <None Include="appsettings.Local.json" CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest" Condition="Exists('appsettings.Local.json')" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Authentication.Negotiate" />
     <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" />
   </ItemGroup>

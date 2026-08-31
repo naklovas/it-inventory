@@ -404,6 +404,16 @@ git clone -b claude/bookrunner-runbook-app-57f25r https://github.com/naklovas/it
 Bu, `BookRunner-git` adinda yeni bir klasore tum depoyu indirir; solution
 dosyalari `BookRunner-git/bookrunner/` altinda olur.
 
+> **Sunucuya ozel ayarlarinizi (baglanti dizesi, AD domaini, personel servisi
+> adresi...) `appsettings.json`'a degil `appsettings.Local.json`'a yazin.**
+> Bu dosya `.gitignore`'dadir; `git pull` ona asla dokunmaz, boylece her
+> guncellemede ayarlarinizi yeniden girmeniz gerekmez. Bir kere kurmak icin:
+> `src/BookRunner.Api/appsettings.Local.json.example` (ve Web icin ayni
+> klasordeki `appsettings.Local.json.example`) dosyasini `appsettings.Local.json`
+> olarak kopyalayip icindeki degerleri kendi sunucunuza gore doldurun. Yalnizca
+> DEGISTIRMEK istediginiz anahtarlari birakin; digerleri appsettings.json'daki
+> degeriyle kalir.
+
 ---
 
 ## Yapilandirma

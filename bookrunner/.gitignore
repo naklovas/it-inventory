@@ -2,3 +2,8 @@ bin/
 obj/
 publish/
 *.user
+
+# Sunucuya ozel gercek ayarlar (baglanti dizesi, AD domaini, personel servisi
+# adresi...). appsettings.Local.json.example'dan kopyalanir; git pull bu
+# dosyaya hicbir zaman dokunmaz.
+appsettings.Local.json

@@ -16,6 +16,14 @@ using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Sunucuya ozel gercek degerler (baglanti dizeleri, AD domaini, personel
+// servisi adresi...) appsettings.json'a DEGIL buraya yazilir. Bu dosya
+// appsettings.Local.json.example'dan kopyalanir, .gitignore'dadir ve git pull
+// hicbir zaman uzerine yazmaz - boylece her guncellemede yeniden girmeye
+// gerek kalmaz. En sonda eklendigi icin appsettings.json ve
+// appsettings.{Environment}.json degerlerinin hepsinin uzerine yazar.
+builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
+
 // "Local exe" dagitimi: uygulama Windows servisi olarak da calisabilsin.
 builder.Host.UseWindowsService(options => options.ServiceName = "BookRunner API");
 

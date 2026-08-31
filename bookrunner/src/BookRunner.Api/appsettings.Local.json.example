@@ -1,0 +1,25 @@
+{
+  "_ACIKLAMA": "Bu dosyayi 'appsettings.Local.json' olarak kopyalayip gercek degerlerinizi girin. appsettings.Local.json .gitignore'dadir; git pull ona hicbir zaman dokunmaz, bu yuzden sunucuya ozel degerleri (baglanti dizesi, AD domaini, personel servisi adresi...) her guncellemede tekrar girmeniz gerekmez. Yalnizca DEGISTIRMEK istediginiz anahtarlari birakin; digerleri appsettings.json'daki degeriyle kalir.",
+
+  "ConnectionStrings": {
+    "BookRunner": "Server=GERCEK_SUNUCU_ADI;Database=BookRunner;Integrated Security=true;TrustServerCertificate=true;MultipleActiveResultSets=true",
+    "ServiceManager": ""
+  },
+
+  "ActiveDirectory": {
+    "Domain": "gercek.domain",
+    "Domains": []
+  },
+
+  "PersonnelDirectory": {
+    "Enabled": true,
+    "BaseUrl": "http://gercek-sunucu:port"
+  },
+
+  "Authorization": {
+    "DefaultRole": "Viewer",
+    "TeamRoleMappings": [
+      { "TeamName": "Gercek Takim Adi", "Role": "Administrator" }
+    ]
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "_ACIKLAMA": "Bu dosyayi 'appsettings.Local.json' olarak kopyalayip gercek degerlerinizi girin. appsettings.Local.json .gitignore'dadir; git pull ona hicbir zaman dokunmaz.",
+
+  "Api": {
+    "BaseUrl": "https://gercek-api-adresi:port"
+  }
+}
