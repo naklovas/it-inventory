@@ -231,6 +231,15 @@ public sealed class TaskService(
             await gamification.OnTaskClosedAsync(task, actorId, ct);
         }
 
+        // Son gorev de kapaninca (Completed/Skipped) runbook otomatik "Tamamlandi"
+        // olur - ilk gorev baslayinca otomatik "Devam Ediyor" olmasiyla simetrik.
+        // Bloke/basarisiz gorev varsa otomatik kapatilmaz; bu, bir operatorun
+        // bilerek karar vermesini gerektirir.
+        if (request.Status is RunbookTaskStatus.Completed or RunbookTaskStatus.Skipped)
+        {
+            await TryAutoCompleteRunbookAsync(task.RunbookId, ct);
+        }
+
         await audit.LogAsync(AuditAction.Update, nameof(RunbookTask), task.Id.ToString(), summary, task.RunbookId, ct: ct);
         await notifications.NotifyTaskStatusChangedAsync(task.Id, DisplayText.Status(oldStatus), DisplayText.Status(request.Status), ct);
         await realtime.TaskChangedAsync(task.RunbookId, task.Id, "status", ct);
@@ -415,5 +424,37 @@ public sealed class TaskService(
         }
 
         return await db.UserGroups.AnyAsync(ug => ug.UserId == userId.Value && groupIds.Contains(ug.GroupId), ct);
+    }
+
+    /// <summary>
+    /// Runbook'un TUM gorevleri kapandiginda (Completed/Skipped) runbook'u da
+    /// otomatik olarak Tamamlandi yapar. Bloke veya basarisiz bir gorev varsa
+    /// otomatik kapatmaz - bu, kasitli bir operator kararini gerektirir.
+    /// </summary>
+    private async Task TryAutoCompleteRunbookAsync(Guid runbookId, CancellationToken ct)
+    {
+        var runbook = await db.Runbooks.FirstOrDefaultAsync(r => r.Id == runbookId, ct);
+        if (runbook is null || runbook.Status is RunbookStatus.Completed or RunbookStatus.Cancelled or RunbookStatus.Archived)
+        {
+            return;
+        }
+
+        var taskStatuses = await db.Tasks.Where(t => t.RunbookId == runbookId).Select(t => t.Status).ToListAsync(ct);
+        if (taskStatuses.Count == 0 || taskStatuses.Any(status => !status.IsClosed()))
+        {
+            return;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        runbook.Status = RunbookStatus.Completed;
+        runbook.ActualStart ??= now;
+        runbook.ActualEnd = now;
+
+        await db.SaveChangesAsync(ct);
+
+        await gamification.OnRunbookCompletedAsync(runbook, ct);
+        await audit.LogAsync(AuditAction.Update, nameof(Runbook), runbook.Id.ToString(),
+            "Tum gorevler tamamlandigi icin runbook otomatik olarak kapatildi.", runbook.Id, ct: ct);
+        await realtime.RunbookChangedAsync(runbook.Id, "updated", ct);
     }
 }
