@@ -27,6 +27,13 @@ public class AppUser
 
     public string? Department { get; set; }
 
+    /// <summary>
+    /// Personel servisinden (bkz. IPersonnelDirectoryService) gelen takim adi.
+    /// Rol eslemesi (RoleMapping) icin taze cekilir; burada kalici tutulmasinin
+    /// tek amaci takim bazli siralama tablosudur (oyunlastirma).
+    /// </summary>
+    public string? TeamName { get; set; }
+
     public string? Company { get; set; }
 
     public string? OfficePhone { get; set; }

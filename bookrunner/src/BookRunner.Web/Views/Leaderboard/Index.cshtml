@@ -1,0 +1,134 @@
+@using BookRunner.Application.Dtos
+@model LeaderboardViewModel
+@{
+    ViewData["Title"] = "Liderlik Tablosu";
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div>
+        <h1 class="br-page-title h3 mb-1">Liderlik Tablosu</h1>
+        <p class="br-muted mb-0">Gorev/runbook tamamlama ve katilima gore puan, rozet ve takim siralamasi.</p>
+    </div>
+    <div class="btn-group" role="group">
+        <a class="btn btn-sm @(Model.Period == LeaderboardPeriod.AllTime ? "btn-primary" : "btn-outline-secondary")"
+           asp-action="Index" asp-route-period="AllTime">Tum Zamanlar</a>
+        <a class="btn btn-sm @(Model.Period == LeaderboardPeriod.ThisMonth ? "btn-primary" : "btn-outline-secondary")"
+           asp-action="Index" asp-route-period="ThisMonth">Bu Ay</a>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-7">
+        <div class="br-card h-100">
+            <div class="px-3 pt-3">
+                <h2 class="h6 mb-3"><i class="bi bi-person-lines-fill me-1"></i>Bireysel Siralama</h2>
+            </div>
+            @if (Model.Users.Count == 0)
+            {
+                <div class="text-center py-4">
+                    <i class="bi bi-bar-chart display-6 br-muted"></i>
+                    <p class="br-muted mt-2 mb-3">Bu donemde henuz puan kaydi yok.</p>
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0">
+                        <thead>
+                            <tr class="br-muted small">
+                                <th style="width:2.5rem">#</th>
+                                <th>Kisi</th>
+                                <th>Takim</th>
+                                <th class="text-end">Gorev</th>
+                                <th class="text-end">Rozet</th>
+                                <th class="text-end">Puan</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var row in Model.Users)
+                            {
+                                <tr>
+                                    <td class="br-muted">@row.Rank</td>
+                                    <td>
+                                        <div class="d-flex align-items-center gap-2">
+                                            @await Html.PartialAsync("_Avatar", new AvatarModel(
+                                                row.Person.Id, row.Person.DisplayName, row.Person.Initials,
+                                                row.Person.AvatarColor, row.Person.HasPhoto, AvatarSize.Small))
+                                            <span>@row.Person.DisplayName</span>
+                                        </div>
+                                    </td>
+                                    <td class="br-muted small">@(row.TeamName ?? "-")</td>
+                                    <td class="text-end">@row.CompletedTaskCount</td>
+                                    <td class="text-end">@row.BadgeCount</td>
+                                    <td class="text-end fw-semibold">@row.Points</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="br-card mb-3">
+            <div class="px-3 pt-3">
+                <h2 class="h6 mb-3"><i class="bi bi-people-fill me-1"></i>Takim Siralamasi</h2>
+            </div>
+            @if (Model.Teams.Count == 0)
+            {
+                <p class="br-muted text-center py-3 mb-3">Bu donemde henuz takim verisi yok.</p>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0">
+                        <thead>
+                            <tr class="br-muted small">
+                                <th style="width:2.5rem">#</th>
+                                <th>Takim</th>
+                                <th class="text-end">Kisi</th>
+                                <th class="text-end">Ort. Puan</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var team in Model.Teams)
+                            {
+                                <tr>
+                                    <td class="br-muted">@team.Rank</td>
+                                    <td>@team.TeamName</td>
+                                    <td class="text-end">@team.MemberCount</td>
+                                    <td class="text-end fw-semibold">@team.AveragePointsPerMember</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+
+        <div class="br-card">
+            <div class="px-3 pt-3">
+                <h2 class="h6 mb-3"><i class="bi bi-award-fill me-1"></i>Rozetlerim</h2>
+            </div>
+            <div class="px-3 pb-3 d-flex flex-wrap gap-3">
+                @if (Model.MyBadges.Count == 0)
+                {
+                    <p class="br-muted mb-2">Rozet bilgisi icin oturum acmaniz gerekir.</p>
+                }
+                else
+                {
+                    @foreach (var badge in Model.MyBadges)
+                    {
+                        <div class="text-center" style="width:5.5rem; opacity:@(badge.Earned ? "1" : "0.35")" title="@badge.Description">
+                            <div class="br-avatar br-avatar-lg mx-auto mb-1" style="background:@(badge.Earned ? "#2e9e68" : "#7b8794")">
+                                <i class="bi @badge.Icon" style="font-size:1.4rem;color:#fff"></i>
+                            </div>
+                            <small class="d-block">@badge.Name</small>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+</div>

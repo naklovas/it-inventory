@@ -19,7 +19,8 @@ public sealed class TaskService(
     IAuditService audit,
     INotificationService notifications,
     IRealtimeNotifier realtime,
-    IExternalIntegrationClient integration) : ITaskService
+    IExternalIntegrationClient integration,
+    IGamificationService gamification) : ITaskService
 {
     public async Task<RunbookTaskDto> GetAsync(Guid taskId, CancellationToken ct = default)
     {
@@ -224,6 +225,11 @@ public sealed class TaskService(
         }
 
         await db.SaveChangesAsync(ct);
+
+        if (request.Status is RunbookTaskStatus.Completed or RunbookTaskStatus.Failed && currentUser.UserId is { } actorId)
+        {
+            await gamification.OnTaskClosedAsync(task, actorId, ct);
+        }
 
         await audit.LogAsync(AuditAction.Update, nameof(RunbookTask), task.Id.ToString(), summary, task.RunbookId, ct: ct);
         await notifications.NotifyTaskStatusChangedAsync(task.Id, DisplayText.Status(oldStatus), DisplayText.Status(request.Status), ct);

@@ -17,6 +17,7 @@ public sealed class RunbookService(
     IAuditService audit,
     IRealtimeNotifier realtime,
     IExternalIntegrationClient integration,
+    IGamificationService gamification,
     ILogger<RunbookService> logger) : IRunbookService
 {
     public async Task<PagedResult<RunbookListItemDto>> ListAsync(RunbookFilter filter, CancellationToken ct = default)
@@ -265,6 +266,11 @@ public sealed class RunbookService(
         }
 
         await db.SaveChangesAsync(ct);
+
+        if (request.Status == RunbookStatus.Completed && oldStatus != RunbookStatus.Completed)
+        {
+            await gamification.OnRunbookCompletedAsync(runbook, ct);
+        }
 
         await audit.LogAsync(AuditAction.Update, nameof(Runbook), runbook.Id.ToString(),
             $"{runbook.Code} runbook'u guncellendi.", runbook.Id, ct: ct);

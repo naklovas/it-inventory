@@ -395,25 +395,27 @@ public sealed class DirectorySyncService(
         user.IsActive = adUser.IsActive;
         user.LastSyncedAt = DateTimeOffset.UtcNow;
 
-        await ApplyPhotoAsync(user, adUser, ct);
+        await ApplyPersonnelDataAsync(user, adUser, ct);
 
         await db.SaveChangesAsync(ct);
         return user;
     }
 
     /// <summary>
-    /// Fotograf, AD'nin kendi thumbnailPhoto/jpegPhoto oznitelikleri yerine
-    /// oncelikle personel servisinden alinir (bkz. IPersonnelDirectoryService);
-    /// bircok kurulumda AD tarafinda foto hic tutulmaz. Bu, AD'den okunan HER
-    /// kullanici icin gecerlidir (atama/arama sonuclari dahil) - yalnizca
-    /// oturum acan kisiye ozel degildir. Personel servisi bos donerse AD
-    /// fotografina geri dusulur.
+    /// Takim adi ve fotograf personel servisinden (bkz. IPersonnelDirectoryService)
+    /// tek bir cagriyla alinir; ikisi de rol/oyunlastirma icin kullanildigindan
+    /// birlikte guncellenir. Bu, AD'den okunan HER kullanici icin gecerlidir
+    /// (atama/arama sonuclari dahil) - yalnizca oturum acan kisiye ozel degildir.
+    /// Foto icin personel servisi bos donerse AD'nin kendi thumbnailPhoto/jpegPhoto
+    /// oznitelikligine geri dusulur.
     /// </summary>
-    private async Task ApplyPhotoAsync(AppUser user, DirectoryUser adUser, CancellationToken ct)
+    private async Task ApplyPersonnelDataAsync(AppUser user, DirectoryUser adUser, CancellationToken ct)
     {
         var personnel = await personnelDirectory.GetProfileAsync(adUser.SamAccountName, ct);
-        var photo = personnel?.Thumbnail ?? adUser.Photo;
 
+        user.TeamName = string.IsNullOrWhiteSpace(personnel?.TeamName) ? user.TeamName : personnel.TeamName;
+
+        var photo = personnel?.Thumbnail ?? adUser.Photo;
         if (photo is not { Length: > 0 })
         {
             return;

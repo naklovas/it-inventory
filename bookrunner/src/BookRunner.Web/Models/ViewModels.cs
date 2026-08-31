@@ -31,6 +31,15 @@ public sealed class DashboardViewModel : PageViewModel
     public DashboardDto Dashboard { get; init; } = new();
 }
 
+/// <summary>Liderlik tablosu: bireysel ve takim siralamasi, rozetlerim.</summary>
+public sealed class LeaderboardViewModel : PageViewModel
+{
+    public LeaderboardPeriod Period { get; init; }
+    public IReadOnlyList<LeaderboardEntryDto> Users { get; init; } = [];
+    public IReadOnlyList<TeamLeaderboardEntryDto> Teams { get; init; } = [];
+    public IReadOnlyList<BadgeDto> MyBadges { get; init; } = [];
+}
+
 /// <summary>Runbook listesi ve filtreleri.</summary>
 public sealed class RunbookListViewModel : PageViewModel
 {

@@ -22,6 +22,9 @@ public interface IAppDbContext
     DbSet<ScriptExecution> ScriptExecutions { get; }
     DbSet<AuditLog> AuditLogs { get; }
     DbSet<EmailOutboxMessage> EmailOutbox { get; }
+    DbSet<GamificationEvent> GamificationEvents { get; }
+    DbSet<Badge> Badges { get; }
+    DbSet<UserBadge> UserBadges { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

@@ -28,6 +28,45 @@ public sealed class DatabaseInitializer(
         }
 
         await SeedRoleMappingsAsync(ct);
+        await SeedBadgesAsync(ct);
+    }
+
+    /// <summary>
+    /// Oyunlastirma rozet katalogu kod ile tanimlidir (GamificationService bu
+    /// kodlara gore esik kontrolu yapar); burada yalnizca eksik olanlar eklenir,
+    /// var olan Ad/Aciklama admin ekranindan degistirilse bile ezilmez.
+    /// </summary>
+    private async Task SeedBadgesAsync(CancellationToken ct)
+    {
+        var catalog = new[]
+        {
+            new Badge { Code = "FIRST_TASK", Name = "Ilk Adim", Description = "Ilk gorevini tamamladin.", Icon = "bi-flag", SortOrder = 1 },
+            new Badge { Code = "TASKS_10", Name = "10 Gorev", Description = "10 gorev tamamladin.", Icon = "bi-check2-circle", SortOrder = 2 },
+            new Badge { Code = "TASKS_50", Name = "50 Gorev", Description = "50 gorev tamamladin.", Icon = "bi-check2-all", SortOrder = 3 },
+            new Badge { Code = "TASKS_100", Name = "100 Gorev", Description = "100 gorev tamamladin.", Icon = "bi-trophy", SortOrder = 4 },
+            new Badge { Code = "FIRST_RUNBOOK", Name = "Ilk Runbook", Description = "Sahibi oldugun ilk runbook'u tamamladin.", Icon = "bi-journal-check", SortOrder = 5 },
+            new Badge { Code = "COMMENTS_20", Name = "Belgeci", Description = "20 goreve yorum/not biraktin.", Icon = "bi-chat-square-text", SortOrder = 6 }
+        };
+
+        var existingCodes = await db.Badges.Select(b => b.Code).ToHashSetAsync(ct);
+        var added = 0;
+
+        foreach (var badge in catalog)
+        {
+            if (existingCodes.Contains(badge.Code))
+            {
+                continue;
+            }
+
+            db.Badges.Add(badge);
+            added++;
+        }
+
+        if (added > 0)
+        {
+            await db.SaveChangesAsync(ct);
+            logger.LogInformation("{Count} rozet katalogdan eklendi.", added);
+        }
     }
 
     /// <summary>

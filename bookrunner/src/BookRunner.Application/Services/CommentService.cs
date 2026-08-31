@@ -15,7 +15,8 @@ public sealed class CommentService(
     IRunbookAccess access,
     IAuditService audit,
     INotificationService notifications,
-    IRealtimeNotifier realtime) : ICommentService
+    IRealtimeNotifier realtime,
+    IGamificationService gamification) : ICommentService
 {
     public async Task<IReadOnlyList<TaskCommentDto>> ListAsync(Guid taskId, CancellationToken ct = default)
     {
@@ -75,6 +76,8 @@ public sealed class CommentService(
         });
 
         await db.SaveChangesAsync(ct);
+
+        await gamification.OnCommentAddedAsync(authorId, taskId, ct);
 
         await audit.LogAsync(AuditAction.Create, nameof(TaskComment), comment.Id.ToString(),
             $"'{task.Title}' gorevine yorum eklendi.", task.RunbookId, ct: ct);

@@ -103,6 +103,19 @@ public sealed class BookRunnerApiClient(HttpClient httpClient, ILogger<BookRunne
     public Task<IReadOnlyList<PersonSummary>?> GetGroupMembersAsync(Guid groupId, CancellationToken ct = default)
         => GetAsync<IReadOnlyList<PersonSummary>>($"api/directory/groups/{groupId}/members", ct);
 
+    // ---------------------------------------------------------- oyunlastirma
+
+    public Task<IReadOnlyList<LeaderboardEntryDto>?> GetUserLeaderboardAsync(
+        LeaderboardPeriod period, int take = 25, CancellationToken ct = default)
+        => GetAsync<IReadOnlyList<LeaderboardEntryDto>>($"api/leaderboard/users?period={period}&take={take}", ct);
+
+    public Task<IReadOnlyList<TeamLeaderboardEntryDto>?> GetTeamLeaderboardAsync(
+        LeaderboardPeriod period, CancellationToken ct = default)
+        => GetAsync<IReadOnlyList<TeamLeaderboardEntryDto>>($"api/leaderboard/teams?period={period}", ct);
+
+    public Task<IReadOnlyList<BadgeDto>?> GetMyBadgesAsync(CancellationToken ct = default)
+        => GetAsync<IReadOnlyList<BadgeDto>>("api/leaderboard/my-badges", ct);
+
     /// <summary>Kullanicinin AD fotografini API'den akis olarak getirir.</summary>
     public async Task<(byte[] Content, string ContentType)?> GetUserPhotoAsync(Guid userId, CancellationToken ct = default)
     {

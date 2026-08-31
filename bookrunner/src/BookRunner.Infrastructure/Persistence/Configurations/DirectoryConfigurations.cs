@@ -22,6 +22,7 @@ public sealed class AppUserConfiguration : IEntityTypeConfiguration<AppUser>
         builder.Property(u => u.Email).HasMaxLength(256);
         builder.Property(u => u.Title).HasMaxLength(128);
         builder.Property(u => u.Department).HasMaxLength(128);
+        builder.Property(u => u.TeamName).HasMaxLength(256);
         builder.Property(u => u.Company).HasMaxLength(128);
         builder.Property(u => u.OfficePhone).HasMaxLength(64);
         builder.Property(u => u.MobilePhone).HasMaxLength(64);

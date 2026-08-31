@@ -1,6 +1,7 @@
 using BookRunner.Application.Common;
 using BookRunner.Application.Dtos;
 using BookRunner.Domain.Entities;
+using BookRunner.Domain.Enums;
 
 namespace BookRunner.Application.Abstractions;
 
@@ -104,6 +105,35 @@ public interface ICommentService
 public interface IAuditQueryService
 {
     Task<PagedResult<AuditLogDto>> ListAsync(AuditFilter filter, CancellationToken ct = default);
+}
+
+/// <summary>
+/// Puan/rozet olaylarini kaydeder ve siralama tablolarini hesaplar. Puan
+/// degerleri appsettings "Gamification" bolumunden gelir (bkz. GamificationOptions);
+/// bir olay olustugu andaki puan degeri GamificationEvent'e yazilir, sonradan
+/// yapilandirma degisse bile gecmis kayitlar bozulmaz.
+/// </summary>
+public interface IGamificationService
+{
+    /// <summary>
+    /// Bir gorev Completed/Failed olarak kapandiginda cagrilir; puan ve rozet islenir.
+    /// Puan, goreve atanmis kisiye degil, degisikligi YAPAN kullaniciya verilir -
+    /// atama grup olabilir veya hic atama olmayabilir, ama degisikligi yapan
+    /// kullanici her zaman bellidir.
+    /// </summary>
+    Task OnTaskClosedAsync(RunbookTask task, Guid actorUserId, CancellationToken ct = default);
+
+    /// <summary>Bir runbook Completed olarak kapandiginda cagrilir.</summary>
+    Task OnRunbookCompletedAsync(Runbook runbook, CancellationToken ct = default);
+
+    /// <summary>Bir goreve yorum/not birakildiginda cagrilir.</summary>
+    Task OnCommentAddedAsync(Guid authorUserId, Guid taskId, CancellationToken ct = default);
+
+    Task<IReadOnlyList<LeaderboardEntryDto>> GetUserLeaderboardAsync(LeaderboardPeriod period, int take, CancellationToken ct = default);
+
+    Task<IReadOnlyList<TeamLeaderboardEntryDto>> GetTeamLeaderboardAsync(LeaderboardPeriod period, CancellationToken ct = default);
+
+    Task<IReadOnlyList<BadgeDto>> GetUserBadgesAsync(Guid userId, CancellationToken ct = default);
 }
 
 /// <summary>CSX script yonetimi ve calistirma.</summary>

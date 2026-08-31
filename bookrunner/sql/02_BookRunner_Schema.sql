@@ -384,6 +384,61 @@ END
 GO
 
 /* ---------------------------------------------------------------------------
+   Oyunlastirma: puan, rozet katalogu, kazanilan rozetler.
+   --------------------------------------------------------------------------- */
+
+IF COL_LENGTH(N'bookrunner.Users', 'TeamName') IS NULL
+BEGIN
+    ALTER TABLE [bookrunner].[Users] ADD [TeamName] nvarchar(256) NULL;
+    PRINT N'Kolon eklendi: Users.TeamName';
+END
+GO
+
+IF OBJECT_ID(N'[bookrunner].[Badges]', N'U') IS NULL
+BEGIN
+    CREATE TABLE [bookrunner].[Badges] (
+        [Id] uniqueidentifier NOT NULL,
+        [Code] nvarchar(64) NOT NULL,
+        [Name] nvarchar(128) NOT NULL,
+        [Description] nvarchar(512) NOT NULL,
+        [Icon] nvarchar(64) NOT NULL,
+        [SortOrder] int NOT NULL,
+        CONSTRAINT [PK_Badges] PRIMARY KEY ([Id])
+    );
+    PRINT N'Tablo olusturuldu: Badges';
+END
+GO
+
+IF OBJECT_ID(N'[bookrunner].[GamificationEvents]', N'U') IS NULL
+BEGIN
+    CREATE TABLE [bookrunner].[GamificationEvents] (
+        [Id] uniqueidentifier NOT NULL,
+        [UserId] uniqueidentifier NOT NULL,
+        [EventType] int NOT NULL,
+        [Points] int NOT NULL,
+        [RunbookId] uniqueidentifier NULL,
+        [RunbookTaskId] uniqueidentifier NULL,
+        [CreatedAt] datetimeoffset NOT NULL,
+        CONSTRAINT [PK_GamificationEvents] PRIMARY KEY ([Id])
+    );
+    PRINT N'Tablo olusturuldu: GamificationEvents';
+END
+GO
+
+IF OBJECT_ID(N'[bookrunner].[UserBadges]', N'U') IS NULL
+BEGIN
+    CREATE TABLE [bookrunner].[UserBadges] (
+        [Id] uniqueidentifier NOT NULL,
+        [UserId] uniqueidentifier NOT NULL,
+        [BadgeId] uniqueidentifier NOT NULL,
+        [EarnedAt] datetimeoffset NOT NULL,
+        CONSTRAINT [PK_UserBadges] PRIMARY KEY ([Id])
+    );
+    PRINT N'Tablo olusturuldu: UserBadges';
+END
+GO
+
+/* ---------------------------------------------------------------------------
    Indeksler
    --------------------------------------------------------------------------- */
 
@@ -719,6 +774,76 @@ GO
 
 IF NOT EXISTS (
     SELECT 1 FROM sys.indexes
+    WHERE name = N'IX_Badges_Code' AND object_id = OBJECT_ID(N'[bookrunner].[Badges]')
+)
+BEGIN
+    CREATE UNIQUE INDEX [IX_Badges_Code] ON [bookrunner].[Badges] ([Code]);
+    PRINT N'Indeks olusturuldu: IX_Badges_Code';
+END
+GO
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.indexes
+    WHERE name = N'IX_GamificationEvents_CreatedAt' AND object_id = OBJECT_ID(N'[bookrunner].[GamificationEvents]')
+)
+BEGIN
+    CREATE INDEX [IX_GamificationEvents_CreatedAt] ON [bookrunner].[GamificationEvents] ([CreatedAt]);
+    PRINT N'Indeks olusturuldu: IX_GamificationEvents_CreatedAt';
+END
+GO
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.indexes
+    WHERE name = N'IX_GamificationEvents_RunbookId' AND object_id = OBJECT_ID(N'[bookrunner].[GamificationEvents]')
+)
+BEGIN
+    CREATE INDEX [IX_GamificationEvents_RunbookId] ON [bookrunner].[GamificationEvents] ([RunbookId]);
+    PRINT N'Indeks olusturuldu: IX_GamificationEvents_RunbookId';
+END
+GO
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.indexes
+    WHERE name = N'IX_GamificationEvents_RunbookTaskId' AND object_id = OBJECT_ID(N'[bookrunner].[GamificationEvents]')
+)
+BEGIN
+    CREATE INDEX [IX_GamificationEvents_RunbookTaskId] ON [bookrunner].[GamificationEvents] ([RunbookTaskId]);
+    PRINT N'Indeks olusturuldu: IX_GamificationEvents_RunbookTaskId';
+END
+GO
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.indexes
+    WHERE name = N'IX_GamificationEvents_UserId_EventType' AND object_id = OBJECT_ID(N'[bookrunner].[GamificationEvents]')
+)
+BEGIN
+    CREATE INDEX [IX_GamificationEvents_UserId_EventType] ON [bookrunner].[GamificationEvents] ([UserId], [EventType]);
+    PRINT N'Indeks olusturuldu: IX_GamificationEvents_UserId_EventType';
+END
+GO
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.indexes
+    WHERE name = N'IX_UserBadges_BadgeId' AND object_id = OBJECT_ID(N'[bookrunner].[UserBadges]')
+)
+BEGIN
+    CREATE INDEX [IX_UserBadges_BadgeId] ON [bookrunner].[UserBadges] ([BadgeId]);
+    PRINT N'Indeks olusturuldu: IX_UserBadges_BadgeId';
+END
+GO
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.indexes
+    WHERE name = N'IX_UserBadges_UserId_BadgeId' AND object_id = OBJECT_ID(N'[bookrunner].[UserBadges]')
+)
+BEGIN
+    CREATE UNIQUE INDEX [IX_UserBadges_UserId_BadgeId] ON [bookrunner].[UserBadges] ([UserId], [BadgeId]);
+    PRINT N'Indeks olusturuldu: IX_UserBadges_UserId_BadgeId';
+END
+GO
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.indexes
     WHERE name = N'IX_Users_DisplayName' AND object_id = OBJECT_ID(N'[bookrunner].[Users]')
 )
 BEGIN
@@ -1020,6 +1145,108 @@ BEGIN
 END
 GO
 
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_GamificationEvents_Runbooks_RunbookId')
+BEGIN
+    BEGIN TRY
+        ALTER TABLE [bookrunner].[GamificationEvents] WITH CHECK
+            ADD CONSTRAINT [FK_GamificationEvents_Runbooks_RunbookId] FOREIGN KEY ([RunbookId])
+            REFERENCES [bookrunner].[Runbooks] ([Id]) ON DELETE NO ACTION;
+        PRINT N'Iliski eklendi: FK_GamificationEvents_Runbooks_RunbookId';
+    END TRY
+    BEGIN CATCH
+        PRINT N'UYARI: FK_GamificationEvents_Runbooks_RunbookId eklenemedi -> ' + ERROR_MESSAGE();
+    END CATCH
+END
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_GamificationEvents_Tasks_RunbookTaskId')
+BEGIN
+    BEGIN TRY
+        ALTER TABLE [bookrunner].[GamificationEvents] WITH CHECK
+            ADD CONSTRAINT [FK_GamificationEvents_Tasks_RunbookTaskId] FOREIGN KEY ([RunbookTaskId])
+            REFERENCES [bookrunner].[Tasks] ([Id]) ON DELETE NO ACTION;
+        PRINT N'Iliski eklendi: FK_GamificationEvents_Tasks_RunbookTaskId';
+    END TRY
+    BEGIN CATCH
+        PRINT N'UYARI: FK_GamificationEvents_Tasks_RunbookTaskId eklenemedi -> ' + ERROR_MESSAGE();
+    END CATCH
+END
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_GamificationEvents_Users_UserId')
+BEGIN
+    BEGIN TRY
+        ALTER TABLE [bookrunner].[GamificationEvents] WITH CHECK
+            ADD CONSTRAINT [FK_GamificationEvents_Users_UserId] FOREIGN KEY ([UserId])
+            REFERENCES [bookrunner].[Users] ([Id]) ON DELETE CASCADE;
+        PRINT N'Iliski eklendi: FK_GamificationEvents_Users_UserId';
+    END TRY
+    BEGIN CATCH
+        PRINT N'UYARI: FK_GamificationEvents_Users_UserId eklenemedi -> ' + ERROR_MESSAGE();
+    END CATCH
+END
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_UserBadges_Badges_BadgeId')
+BEGIN
+    BEGIN TRY
+        ALTER TABLE [bookrunner].[UserBadges] WITH CHECK
+            ADD CONSTRAINT [FK_UserBadges_Badges_BadgeId] FOREIGN KEY ([BadgeId])
+            REFERENCES [bookrunner].[Badges] ([Id]) ON DELETE CASCADE;
+        PRINT N'Iliski eklendi: FK_UserBadges_Badges_BadgeId';
+    END TRY
+    BEGIN CATCH
+        PRINT N'UYARI: FK_UserBadges_Badges_BadgeId eklenemedi -> ' + ERROR_MESSAGE();
+    END CATCH
+END
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_UserBadges_Users_UserId')
+BEGIN
+    BEGIN TRY
+        ALTER TABLE [bookrunner].[UserBadges] WITH CHECK
+            ADD CONSTRAINT [FK_UserBadges_Users_UserId] FOREIGN KEY ([UserId])
+            REFERENCES [bookrunner].[Users] ([Id]) ON DELETE CASCADE;
+        PRINT N'Iliski eklendi: FK_UserBadges_Users_UserId';
+    END TRY
+    BEGIN CATCH
+        PRINT N'UYARI: FK_UserBadges_Users_UserId eklenemedi -> ' + ERROR_MESSAGE();
+    END CATCH
+END
+GO
+
+/* ---------------------------------------------------------------------------
+   Rozet katalogu (seed)
+
+   GamificationService bu kodlara gore esik kontrolu yapar; Ad/Aciklama
+   sonradan degistirilse bile kod sabit kalmalidir.
+   --------------------------------------------------------------------------- */
+
+IF NOT EXISTS (SELECT 1 FROM [bookrunner].[Badges] WHERE [Code] = N'FIRST_TASK')
+    INSERT INTO [bookrunner].[Badges] ([Id], [Code], [Name], [Description], [Icon], [SortOrder])
+    VALUES (NEWID(), N'FIRST_TASK', N'Ilk Adim', N'Ilk gorevini tamamladin.', N'bi-flag', 1);
+
+IF NOT EXISTS (SELECT 1 FROM [bookrunner].[Badges] WHERE [Code] = N'TASKS_10')
+    INSERT INTO [bookrunner].[Badges] ([Id], [Code], [Name], [Description], [Icon], [SortOrder])
+    VALUES (NEWID(), N'TASKS_10', N'10 Gorev', N'10 gorev tamamladin.', N'bi-check2-circle', 2);
+
+IF NOT EXISTS (SELECT 1 FROM [bookrunner].[Badges] WHERE [Code] = N'TASKS_50')
+    INSERT INTO [bookrunner].[Badges] ([Id], [Code], [Name], [Description], [Icon], [SortOrder])
+    VALUES (NEWID(), N'TASKS_50', N'50 Gorev', N'50 gorev tamamladin.', N'bi-check2-all', 3);
+
+IF NOT EXISTS (SELECT 1 FROM [bookrunner].[Badges] WHERE [Code] = N'TASKS_100')
+    INSERT INTO [bookrunner].[Badges] ([Id], [Code], [Name], [Description], [Icon], [SortOrder])
+    VALUES (NEWID(), N'TASKS_100', N'100 Gorev', N'100 gorev tamamladin.', N'bi-trophy', 4);
+
+IF NOT EXISTS (SELECT 1 FROM [bookrunner].[Badges] WHERE [Code] = N'FIRST_RUNBOOK')
+    INSERT INTO [bookrunner].[Badges] ([Id], [Code], [Name], [Description], [Icon], [SortOrder])
+    VALUES (NEWID(), N'FIRST_RUNBOOK', N'Ilk Runbook', N'Sahibi oldugun ilk runbook''u tamamladin.', N'bi-journal-check', 5);
+
+IF NOT EXISTS (SELECT 1 FROM [bookrunner].[Badges] WHERE [Code] = N'COMMENTS_20')
+    INSERT INTO [bookrunner].[Badges] ([Id], [Code], [Name], [Description], [Icon], [SortOrder])
+    VALUES (NEWID(), N'COMMENTS_20', N'Belgeci', N'20 goreve yorum/not biraktin.', N'bi-chat-square-text', 6);
+GO
+
 /* ---------------------------------------------------------------------------
    Tamamlanma kontrolu
 
@@ -1029,7 +1256,7 @@ GO
    eder.
    --------------------------------------------------------------------------- */
 
-DECLARE @expectedTables int = 14;
+DECLARE @expectedTables int = 17;
 DECLARE @actualTables int = (
     SELECT COUNT(*) FROM sys.tables WHERE schema_id = SCHEMA_ID(N'bookrunner')
 );
@@ -1043,6 +1270,15 @@ BEGIN
     BEGIN
         INSERT INTO [bookrunner].[__EFMigrationsHistory] ([MigrationId], [ProductVersion])
         VALUES (N'20260827115149_InitialCreate', N'9.0.19');
+    END
+
+    IF NOT EXISTS (
+        SELECT 1 FROM [bookrunner].[__EFMigrationsHistory]
+        WHERE [MigrationId] = N'20260831071620_AddGamification'
+    )
+    BEGIN
+        INSERT INTO [bookrunner].[__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+        VALUES (N'20260831071620_AddGamification', N'9.0.19');
     END
 
     PRINT N'';

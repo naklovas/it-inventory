@@ -99,3 +99,13 @@ public enum ScriptExecutionStatus
     Failed = 2,
     TimedOut = 3
 }
+
+/// <summary>Oyunlastirma puan olayinin turu; denetim izinde ("neden bu puani aldim") kullanilir.</summary>
+public enum GamificationEventType
+{
+    TaskCompleted = 0,
+    TaskOnTimeBonus = 1,
+    TaskFailedPenalty = 2,
+    RunbookCompleted = 3,
+    CommentAdded = 4
+}

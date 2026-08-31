@@ -1,4 +1,5 @@
 using BookRunner.Application.Abstractions;
+using BookRunner.Application.Common;
 using BookRunner.Infrastructure.Audit;
 using BookRunner.Infrastructure.Directory;
 using BookRunner.Infrastructure.Email;
@@ -48,6 +49,7 @@ public static class DependencyInjection
         services.Configure<ScriptingOptions>(configuration.GetSection(ScriptingOptions.SectionName));
         services.Configure<IntegrationOptions>(configuration.GetSection(IntegrationOptions.SectionName));
         services.Configure<PersonnelDirectoryOptions>(configuration.GetSection(PersonnelDirectoryOptions.SectionName));
+        services.Configure<GamificationOptions>(configuration.GetSection(GamificationOptions.SectionName));
 
         services.AddScoped<AuditSaveChangesInterceptor>();
 

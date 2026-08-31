@@ -24,6 +24,9 @@ public class BookRunnerDbContext(DbContextOptions<BookRunnerDbContext> options)
     public DbSet<ScriptExecution> ScriptExecutions => Set<ScriptExecution>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<EmailOutboxMessage> EmailOutbox => Set<EmailOutboxMessage>();
+    public DbSet<GamificationEvent> GamificationEvents => Set<GamificationEvent>();
+    public DbSet<Badge> Badges => Set<Badge>();
+    public DbSet<UserBadge> UserBadges => Set<UserBadge>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
