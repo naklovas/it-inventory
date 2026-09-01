@@ -18,6 +18,7 @@ public sealed class RunbookService(
     IRealtimeNotifier realtime,
     IExternalIntegrationClient integration,
     IGamificationService gamification,
+    INotificationService notifications,
     ILogger<RunbookService> logger) : IRunbookService
 {
     public async Task<PagedResult<RunbookListItemDto>> ListAsync(RunbookFilter filter, CancellationToken ct = default)
@@ -549,6 +550,7 @@ public sealed class RunbookService(
 
         await audit.LogAsync(AuditAction.Update, nameof(Runbook), runbookId.ToString(),
             $"{user.DisplayName} editor olarak eklendi.", runbookId, ct: ct);
+        await notifications.NotifyCollaboratorAddedAsync(runbookId, userId, ct);
         await realtime.RunbookChangedAsync(runbookId, "updated", ct);
 
         return new RunbookCollaboratorDto

@@ -14,6 +14,13 @@ public interface INotificationService
     /// <summary>Goreve atanan kisilere / grup uyelerine bildirim gonderir.</summary>
     Task NotifyTaskAssignedAsync(Guid taskId, Guid assignmentId, CancellationToken ct = default);
 
+    /// <summary>
+    /// Ayni goreve tek islemde eklenen birden fazla atama (orn. gorev olustururken
+    /// secilen birden fazla kisi/takim) icin TEK bir e-posta gonderir; her atama
+    /// icin ayri mail atmaz. Posta trafigini dusuk tutmak icin bu tercih edilir.
+    /// </summary>
+    Task NotifyTaskAssignedBatchAsync(Guid taskId, IReadOnlyList<Guid> assignmentIds, CancellationToken ct = default);
+
     /// <summary>Gorev devredildiginde hem yeni sahibe hem devredene bildirim gonderir.</summary>
     Task NotifyTaskHandedOverAsync(Guid taskId, Guid newAssignmentId, string? note, CancellationToken ct = default);
 
@@ -21,6 +28,9 @@ public interface INotificationService
     Task NotifyTaskCommentedAsync(Guid taskId, Guid commentId, CancellationToken ct = default);
 
     Task NotifyTaskStatusChangedAsync(Guid taskId, string oldStatus, string newStatus, CancellationToken ct = default);
+
+    /// <summary>Bir runbook'a "Editor" olarak eklenen kisiye bildirim gonderir.</summary>
+    Task NotifyCollaboratorAddedAsync(Guid runbookId, Guid userId, CancellationToken ct = default);
 }
 
 /// <summary>Runbook'un Excel'e aktarimi ve Excel'den gorev ice aktarimi.</summary>

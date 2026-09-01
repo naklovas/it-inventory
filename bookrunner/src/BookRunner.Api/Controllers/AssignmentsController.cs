@@ -38,6 +38,19 @@ public sealed class AssignmentsController(IAssignmentService assignments) : Cont
         => Ok(await assignments.AssignAsync(taskId, request, ct));
 
     /// <summary>
+    /// Ayni goreve birden fazla kisi/takim atar ve hepsi icin TEK bir bildirim
+    /// e-postasi gonderir. Gorev olustururken birden fazla sorumlu secildiginde
+    /// kullanilir; boylece atama sayisi kadar ayri mail gitmez.
+    /// </summary>
+    [HttpPost("batch")]
+    [Authorize(Policy = Permissions.RunbookRead)]
+    [ProducesResponseType(typeof(IReadOnlyList<TaskAssignmentDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<IReadOnlyList<TaskAssignmentDto>>> AssignBatch(
+        Guid taskId, [FromBody] IReadOnlyList<AssignTaskRequest> requests, CancellationToken ct)
+        => Ok(await assignments.AssignManyAsync(taskId, requests, ct));
+
+    /// <summary>
     /// Gorevi baska bir kisiye veya gruba devreder. Kendisine atanmis kisiler
     /// bu islemi atama yetkisi olmadan da yapabilir.
     /// </summary>

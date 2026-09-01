@@ -343,6 +343,16 @@ public sealed class RunbooksController(
     public Task<IActionResult> Assign(Guid taskId, [FromBody] AssignTaskRequest request, CancellationToken ct)
         => JsonResultAsync(() => Api.AssignAsync(taskId, request, ct));
 
+    /// <summary>
+    /// Ayni goreve birden fazla kisi/takim atar; hepsi icin TEK bir bildirim
+    /// e-postasi gider. Yeni gorev formunda birden fazla sorumlu secildiginde
+    /// kullanilir.
+    /// </summary>
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public Task<IActionResult> AssignBatch(Guid taskId, [FromBody] List<AssignTaskRequest> requests, CancellationToken ct)
+        => JsonResultAsync(() => Api.AssignManyAsync(taskId, requests, ct));
+
     /// <summary>Runbook'a "Editor" ekler. Yalnizca runbook sahibi cagirabilir.</summary>
     [HttpPost]
     [ValidateAntiForgeryToken]

@@ -23,6 +23,66 @@ public sealed class AssignmentService(
 {
     public async Task<TaskAssignmentDto> AssignAsync(Guid taskId, AssignTaskRequest request, CancellationToken ct = default)
     {
+        var (assignment, task) = await AssignCoreAsync(taskId, request, ct);
+
+        if (request.Notify)
+        {
+            await notifications.NotifyTaskAssignedAsync(taskId, assignment.Id, ct);
+        }
+
+        await realtime.TaskChangedAsync(task.RunbookId, taskId, "assigned", ct);
+
+        return await LoadAssignmentDtoAsync(assignment.Id, ct);
+    }
+
+    public async Task<IReadOnlyList<TaskAssignmentDto>> AssignManyAsync(
+        Guid taskId, IReadOnlyList<AssignTaskRequest> requests, CancellationToken ct = default)
+    {
+        if (requests.Count == 0)
+        {
+            return [];
+        }
+
+        var assignmentIds = new List<Guid>();
+        RunbookTask? task = null;
+        var notify = false;
+
+        foreach (var request in requests)
+        {
+            var (assignment, loadedTask) = await AssignCoreAsync(taskId, request, ct);
+            assignmentIds.Add(assignment.Id);
+            task = loadedTask;
+            notify = notify || request.Notify;
+        }
+
+        if (notify)
+        {
+            // Her atama icin ayri e-posta yerine hepsi TEK bir bildirimde birlestirilir;
+            // boylece bir goreve birden fazla kisi/takim eklendiginde posta trafigi
+            // atama sayisi kadar katlanmaz.
+            await notifications.NotifyTaskAssignedBatchAsync(taskId, assignmentIds, ct);
+        }
+
+        await realtime.TaskChangedAsync(task!.RunbookId, taskId, "assigned", ct);
+
+        var results = new List<TaskAssignmentDto>(assignmentIds.Count);
+        foreach (var id in assignmentIds)
+        {
+            results.Add(await LoadAssignmentDtoAsync(id, ct));
+        }
+
+        return results;
+    }
+
+    /// <summary>
+    /// Atama olusturmanin ortak cekirdegi: yetki kontrolu, hedef cozumleme,
+    /// mukerrer kontrolu, kayit ve tarihce/denetim. Bildirim gonderme cagirana
+    /// birakilir - AssignAsync her atama icin ayri, AssignManyAsync ise tumu icin
+    /// tek bir bildirim gonderir.
+    /// </summary>
+    private async Task<(TaskAssignment Assignment, RunbookTask Task)> AssignCoreAsync(
+        Guid taskId, AssignTaskRequest request, CancellationToken ct)
+    {
         // Atama yetkisi rolden ya da runbook sahipliginden gelir.
         await access.EnsureForTaskAsync(taskId, Permissions.TaskAssign, ct);
 
@@ -58,14 +118,7 @@ public sealed class AssignmentService(
         await audit.LogAsync(AuditAction.Update, nameof(TaskAssignment), assignment.Id.ToString(),
             $"'{task.Title}' gorevi {targetName} kaydina atandi.", task.RunbookId, ct: ct);
 
-        if (request.Notify)
-        {
-            await notifications.NotifyTaskAssignedAsync(taskId, assignment.Id, ct);
-        }
-
-        await realtime.TaskChangedAsync(task.RunbookId, taskId, "assigned", ct);
-
-        return await LoadAssignmentDtoAsync(assignment.Id, ct);
+        return (assignment, task);
     }
 
     public async Task<TaskAssignmentDto> HandoverAsync(Guid taskId, HandoverTaskRequest request, CancellationToken ct = default)

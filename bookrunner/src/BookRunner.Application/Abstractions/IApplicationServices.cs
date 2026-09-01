@@ -100,6 +100,13 @@ public interface IAssignmentService
 {
     Task<TaskAssignmentDto> AssignAsync(Guid taskId, AssignTaskRequest request, CancellationToken ct = default);
 
+    /// <summary>
+    /// Ayni goreve birden fazla kisi/takim atar ve hepsi icin TEK bir bildirim
+    /// e-postasi gonderir (her biri icin ayri mail atmaz). Gorev olustururken
+    /// birden fazla sorumlu secildiginde kullanilir.
+    /// </summary>
+    Task<IReadOnlyList<TaskAssignmentDto>> AssignManyAsync(Guid taskId, IReadOnlyList<AssignTaskRequest> requests, CancellationToken ct = default);
+
     Task<TaskAssignmentDto> HandoverAsync(Guid taskId, HandoverTaskRequest request, CancellationToken ct = default);
 
     Task RemoveAsync(Guid taskId, Guid assignmentId, CancellationToken ct = default);

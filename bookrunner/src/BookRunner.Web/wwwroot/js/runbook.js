@@ -125,17 +125,21 @@
                     rollbackNotes: document.getElementById("newTaskRollback").value || null
                 }, { id: config.runbookId });
 
-                for (const assignee of selection.newTask) {
+                if (selection.newTask.length > 0) {
+                    // Tum sorumlular tek istekte atanir; boylece kac kisi/takim
+                    // secilirse secilsin TEK bir bildirim e-postasi gider.
+                    const requests = selection.newTask.map((assignee) => ({
+                        assigneeType: assignee.kind === "user" ? "User" : "Group",
+                        userId: assignee.kind === "user" ? assignee.id : null,
+                        groupId: assignee.kind === "group" ? assignee.id : null,
+                        note: null,
+                        notify: true
+                    }));
+
                     try {
-                        await post("Assign", {
-                            assigneeType: assignee.kind === "user" ? "User" : "Group",
-                            userId: assignee.kind === "user" ? assignee.id : null,
-                            groupId: assignee.kind === "group" ? assignee.id : null,
-                            note: null,
-                            notify: true
-                        }, { taskId: created.id });
+                        await post("AssignBatch", requests, { taskId: created.id });
                     } catch (assignError) {
-                        toast("Gorev olusturuldu ama " + assignee.label + " icin atama yapilamadi: " + assignError.message, "warning");
+                        toast("Gorev olusturuldu ama atama yapilamadi: " + assignError.message, "warning");
                     }
                 }
 

@@ -81,6 +81,11 @@ public sealed class BookRunnerApiClient(HttpClient httpClient, ILogger<BookRunne
     public Task<TaskAssignmentDto?> AssignAsync(Guid taskId, AssignTaskRequest request, CancellationToken ct = default)
         => PostAsync<AssignTaskRequest, TaskAssignmentDto>($"api/tasks/{taskId}/assignments", request, ct);
 
+    public Task<IReadOnlyList<TaskAssignmentDto>?> AssignManyAsync(
+        Guid taskId, IReadOnlyList<AssignTaskRequest> requests, CancellationToken ct = default)
+        => PostAsync<IReadOnlyList<AssignTaskRequest>, IReadOnlyList<TaskAssignmentDto>>(
+            $"api/tasks/{taskId}/assignments/batch", requests, ct);
+
     public Task<TaskAssignmentDto?> HandoverAsync(Guid taskId, HandoverTaskRequest request, CancellationToken ct = default)
         => PostAsync<HandoverTaskRequest, TaskAssignmentDto>($"api/tasks/{taskId}/assignments/handover", request, ct);
 

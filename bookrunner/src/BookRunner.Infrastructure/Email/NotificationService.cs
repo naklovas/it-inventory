@@ -79,6 +79,78 @@ public sealed class NotificationService(
         await db.SaveChangesAsync(ct);
     }
 
+    public async Task NotifyTaskAssignedBatchAsync(Guid taskId, IReadOnlyList<Guid> assignmentIds, CancellationToken ct = default)
+    {
+        if (assignmentIds.Count == 0)
+        {
+            return;
+        }
+
+        var context = await LoadContextAsync(taskId, ct);
+        if (context is null)
+        {
+            return;
+        }
+
+        var assignments = await db.Assignments
+            .Include(a => a.User)
+            .Include(a => a.Group)
+            .Where(a => assignmentIds.Contains(a.Id))
+            .ToListAsync(ct);
+
+        if (assignments.Count == 0)
+        {
+            return;
+        }
+
+        var recipients = new List<string>();
+        var targetNames = new List<string>();
+
+        foreach (var assignment in assignments)
+        {
+            recipients.AddRange(await ResolveRecipientsAsync(assignment, ct));
+            targetNames.Add(assignment.AssigneeType == AssigneeType.User
+                ? assignment.User?.DisplayName ?? "-"
+                : $"{assignment.Group?.Name} takimi");
+        }
+
+        recipients = recipients.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        if (recipients.Count == 0)
+        {
+            logger.LogDebug("Toplu atama bildirimi icin e-posta adresi bulunamadi (gorev {Task}).", taskId);
+            return;
+        }
+
+        var body = BuildBody(
+            title: "Goreve yeni sorumlular eklendi",
+            intro: $"<strong>{Encode(context.Task.Title)}</strong> gorevine su sorumlular eklendi: " +
+                   $"<strong>{Encode(string.Join(", ", targetNames))}</strong>.",
+            context: context,
+            extraRows:
+            [
+                ("Oncelik", Application.Common.DisplayText.Priority(context.Task.Priority)),
+                ("Planlanan baslangic", Format(context.Task.PlannedStart))
+            ]);
+
+        await emailSender.SendAsync(new EmailMessage
+        {
+            To = recipients,
+            Subject = $"[BookRunner] {context.Runbook.Code} - '{context.Task.Title}' gorevine atandiniz",
+            HtmlBody = body,
+            Reason = "TaskAssigned",
+            RunbookId = context.Runbook.Id,
+            TaskId = taskId
+        }, ct);
+
+        var now = DateTimeOffset.UtcNow;
+        foreach (var assignment in assignments)
+        {
+            assignment.NotifiedAt = now;
+        }
+
+        await db.SaveChangesAsync(ct);
+    }
+
     public async Task NotifyTaskHandedOverAsync(Guid taskId, Guid newAssignmentId, string? note, CancellationToken ct = default)
     {
         var context = await LoadContextAsync(taskId, ct);
@@ -257,6 +329,48 @@ public sealed class NotificationService(
             Reason = "TaskStatusChanged",
             RunbookId = context.Runbook.Id,
             TaskId = taskId
+        }, ct);
+    }
+
+    public async Task NotifyCollaboratorAddedAsync(Guid runbookId, Guid userId, CancellationToken ct = default)
+    {
+        var runbook = await db.Runbooks.AsNoTracking().FirstOrDefaultAsync(r => r.Id == runbookId, ct);
+        var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId, ct);
+
+        if (runbook is null || user?.Email is not { Length: > 0 } email)
+        {
+            return;
+        }
+
+        var url = $"{_options.WebBaseUrl.TrimEnd('/')}/Runbooks/Details/{runbook.Id}";
+
+        var body = $"""
+        <div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#1f2933;">
+          <div style="border-left:4px solid #2f5bd7;padding:12px 16px;background:#f5f7fa;">
+            <h2 style="margin:0 0 8px;font-size:18px;">Bir runbook'a editor olarak eklendiniz</h2>
+            <p style="margin:0;">
+              <strong>{Encode(runbook.Code)} - {Encode(runbook.Title)}</strong> runbook'unda artik gorev
+              ekleyebilir, gorev atayabilir ve yorum yapabilirsiniz.
+            </p>
+          </div>
+          <p style="margin-top:16px;">
+            <a href="{url}" style="background:#2f5bd7;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;">
+              Runbook'u ac
+            </a>
+          </p>
+          <p style="color:#7b8794;font-size:12px;margin-top:24px;">
+            Bu e-posta BookRunner tarafindan otomatik olarak gonderilmistir.
+          </p>
+        </div>
+        """;
+
+        await emailSender.SendAsync(new EmailMessage
+        {
+            To = [email],
+            Subject = $"[BookRunner] {runbook.Code} - editor olarak eklendiniz",
+            HtmlBody = body,
+            Reason = "RunbookCollaboratorAdded",
+            RunbookId = runbook.Id
         }, ct);
     }
 
