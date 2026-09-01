@@ -25,6 +25,14 @@ public interface IDirectorySyncService
     Task<IReadOnlyList<GroupSummary>> SearchGroupsAsync(string term, int take, CancellationToken ct = default);
 
     /// <summary>
+    /// Personel servisindeki tum ekip adlarini sanal takim grubu olarak yerel
+    /// tabloya yansitir. Boylece henuz BookRunner'da kimsesi giris yapmamis bir
+    /// takim bile atama arama kutusunda goruntulenebilir; uyelik ise kisilerin
+    /// kendi girisleri/aramalari uzerinden ayrica kurulur.
+    /// </summary>
+    Task SyncTeamCatalogAsync(CancellationToken ct = default);
+
+    /// <summary>
     /// Kimlige gore tek bir kisinin ozetini dondurur (ad, unvan, bas harfler,
     /// avatar rengi, fotograf var mi). Bulunamazsa null.
     /// </summary>

@@ -86,6 +86,7 @@ public static class DependencyInjection
         AddPersonnelDirectory(services, configuration);
 
         services.AddHostedService<EmailOutboxProcessor>();
+        services.AddHostedService<TeamCatalogSyncService>();
 
         // QuestPDF Community lisansi: kurum ici, ucretsiz kullanim icin.
         QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;

@@ -21,5 +21,11 @@ public sealed class PersonnelDirectoryOptions
     /// </summary>
     public string LookupPathTemplate { get; set; } = "/api/personel/{0}";
 
+    /// <summary>Sirketteki tum ekipleri listeleyen toplu uc. Orn. "/api/takimlar".</summary>
+    public string TeamsPath { get; set; } = "/api/takimlar";
+
+    /// <summary>Ekip katalogunun (bkz. TeamsPath) ne siklikla yenilenecegi.</summary>
+    public int TeamCatalogSyncMinutes { get; set; } = 60;
+
     public int TimeoutSeconds { get; set; } = 5;
 }

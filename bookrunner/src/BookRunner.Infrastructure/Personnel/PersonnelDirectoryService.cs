@@ -57,11 +57,51 @@ public sealed class PersonnelDirectoryService(
         }
     }
 
+    public async Task<IReadOnlyList<string>> GetTeamNamesAsync(CancellationToken ct = default)
+    {
+        if (!_options.Enabled || string.IsNullOrWhiteSpace(_options.BaseUrl))
+        {
+            return Array.Empty<string>();
+        }
+
+        try
+        {
+            var teams = await httpClient.GetFromJsonAsync<List<TeamResponse>>(_options.TeamsPath, ct);
+            if (teams is null)
+            {
+                return Array.Empty<string>();
+            }
+
+            return teams
+                .Select(t => t.EkipAdi?.Trim())
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Select(name => name!)
+                .ToList();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
+        {
+            logger.LogWarning(ex, "Personel servisinden ekip listesi alinamadi.");
+            return Array.Empty<string>();
+        }
+    }
+
     private sealed class PersonnelResponse
     {
         public string? Username { get; set; }
         public string? TeamName { get; set; }
         public string? Thumbnail { get; set; }
+    }
+
+    /// <summary>
+    /// "/api/takimlar" yanitindaki tek bir ekip. Uye listeleri (kadrolu/yoneticiler/
+    /// danisman) yalnizca ad-soyad iceriyor, kullanici adi (samAccountName) yok;
+    /// bu yuzden BookRunner uyeligi kisilerin kendi girisleri/aramalari uzerinden
+    /// kurulmaya devam eder - burada yalnizca ekip adi kullanilir.
+    /// </summary>
+    private sealed class TeamResponse
+    {
+        public string? EkipAdi { get; set; }
     }
 }
 
@@ -70,4 +110,7 @@ public sealed class NullPersonnelDirectoryService : IPersonnelDirectoryService
 {
     public Task<PersonnelProfile?> GetProfileAsync(string username, CancellationToken ct = default)
         => Task.FromResult<PersonnelProfile?>(null);
+
+    public Task<IReadOnlyList<string>> GetTeamNamesAsync(CancellationToken ct = default)
+        => Task.FromResult<IReadOnlyList<string>>(Array.Empty<string>());
 }

@@ -246,6 +246,32 @@ public sealed class DirectorySyncService(
         return teams.Select(g => g.ToSummary()).ToList();
     }
 
+    public async Task SyncTeamCatalogAsync(CancellationToken ct = default)
+    {
+        IReadOnlyList<string> teamNames;
+        try
+        {
+            teamNames = await personnelDirectory.GetTeamNamesAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Personel servisinden ekip listesi cekilemedi; katalog senkronu atlandi.");
+            return;
+        }
+
+        if (teamNames.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var teamName in teamNames)
+        {
+            await EnsureTeamGroupAsync(teamName, ct);
+        }
+
+        await db.SaveChangesAsync(ct);
+    }
+
     public async Task<PersonSummary?> GetPersonAsync(Guid userId, CancellationToken ct = default)
     {
         var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId, ct);

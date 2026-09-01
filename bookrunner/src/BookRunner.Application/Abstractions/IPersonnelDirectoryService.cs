@@ -8,6 +8,13 @@ namespace BookRunner.Application.Abstractions;
 public interface IPersonnelDirectoryService
 {
     Task<PersonnelProfile?> GetProfileAsync(string username, CancellationToken ct = default);
+
+    /// <summary>
+    /// Sirketteki tum ekiplerin adlarini toplu olarak dondurur (personel servisi
+    /// "/api/takimlar" ucu). Henuz BookRunner'da hic kimsesi giris yapmamis
+    /// takimlarin da atama arama kutusunda gorunebilmesi icin kullanilir.
+    /// </summary>
+    Task<IReadOnlyList<string>> GetTeamNamesAsync(CancellationToken ct = default);
 }
 
 /// <summary>Personel servisinden donen profil. Thumbnail, varsa JPEG bayt dizisidir.</summary>
