@@ -198,6 +198,23 @@
             return;
         }
 
+        const removeCollaboratorButton = event.target.closest(".br-remove-collaborator-btn");
+        if (removeCollaboratorButton) {
+            if (!confirm("Bu editor kaldirilacak. Emin misiniz?")) {
+                return;
+            }
+            try {
+                await post("RemoveCollaborator", undefined, {
+                    id: config.runbookId,
+                    collaboratorId: removeCollaboratorButton.dataset.collaboratorId
+                });
+                reload();
+            } catch (error) {
+                toast(error.message, "danger");
+            }
+            return;
+        }
+
         const scriptButton = event.target.closest(".br-script-btn");
         if (scriptButton) {
             try {
@@ -303,7 +320,7 @@
     // ------------------------------------------------------- AD arama kutulari
 
     /** Secilen kisi/grup; atama, devir ve yeni gorev formunda paylasilir. */
-    const selection = { assign: null, handover: null, newTask: null };
+    const selection = { assign: null, handover: null, newTask: null, collaborator: null };
 
     function wireSearch(inputId, suggestId, kind, scope) {
         const input = document.getElementById(inputId);
@@ -373,6 +390,8 @@
                 confirmAssign();
             } else if (scope === "handover") {
                 confirmHandover();
+            } else if (scope === "collaborator") {
+                confirmAddCollaborator();
             }
             // scope === "newTask": secim sadece saklanir, gorev "Ekle" ile olusturulunca atanir.
         });
@@ -390,6 +409,7 @@
     wireSearch("handoverGroupSearch", "handoverGroupSuggest", "group", "handover");
     wireSearch("newTaskAssigneeUserSearch", "newTaskAssigneeUserSuggest", "user", "newTask");
     wireSearch("newTaskAssigneeGroupSearch", "newTaskAssigneeGroupSuggest", "group", "newTask");
+    wireSearch("collaboratorSearch", "collaboratorSuggest", "user", "collaborator");
 
     // -------------------------------------------------------------- atama
 
@@ -471,6 +491,33 @@
             }, { taskId: document.getElementById("handoverTaskId").value });
 
             handoverModal.hide();
+            reload();
+        } catch (error) {
+            toast(error.message, "danger");
+        }
+    }
+
+    // -------------------------------------------------------------- editorler
+
+    const collaboratorsModalElement = document.getElementById("collaboratorsModal");
+    if (collaboratorsModalElement) {
+        collaboratorsModalElement.addEventListener("show.bs.modal", () => {
+            selection.collaborator = null;
+            const searchInput = document.getElementById("collaboratorSearch");
+            if (searchInput) {
+                searchInput.value = "";
+            }
+        });
+    }
+
+    async function confirmAddCollaborator() {
+        const target = selection.collaborator;
+        if (!target) {
+            return;
+        }
+
+        try {
+            await post("AddCollaborator", { userId: target.id }, { id: config.runbookId });
             reload();
         } catch (error) {
             toast(error.message, "danger");

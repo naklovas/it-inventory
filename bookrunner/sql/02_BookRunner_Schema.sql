@@ -439,6 +439,25 @@ END
 GO
 
 /* ---------------------------------------------------------------------------
+   Runbook'a ozel "Editor" yetkisi: sahibin, kendi runbook'una global role
+   dokunmadan ekledigi kisiler.
+   --------------------------------------------------------------------------- */
+
+IF OBJECT_ID(N'[bookrunner].[RunbookCollaborators]', N'U') IS NULL
+BEGIN
+    CREATE TABLE [bookrunner].[RunbookCollaborators] (
+        [Id] uniqueidentifier NOT NULL,
+        [RunbookId] uniqueidentifier NOT NULL,
+        [UserId] uniqueidentifier NOT NULL,
+        [AddedAt] datetimeoffset NOT NULL,
+        [AddedBy] nvarchar(256) NOT NULL,
+        CONSTRAINT [PK_RunbookCollaborators] PRIMARY KEY ([Id])
+    );
+    PRINT N'Tablo olusturuldu: RunbookCollaborators';
+END
+GO
+
+/* ---------------------------------------------------------------------------
    Indeksler
    --------------------------------------------------------------------------- */
 
@@ -844,6 +863,26 @@ GO
 
 IF NOT EXISTS (
     SELECT 1 FROM sys.indexes
+    WHERE name = N'IX_RunbookCollaborators_RunbookId_UserId' AND object_id = OBJECT_ID(N'[bookrunner].[RunbookCollaborators]')
+)
+BEGIN
+    CREATE UNIQUE INDEX [IX_RunbookCollaborators_RunbookId_UserId] ON [bookrunner].[RunbookCollaborators] ([RunbookId], [UserId]);
+    PRINT N'Indeks olusturuldu: IX_RunbookCollaborators_RunbookId_UserId';
+END
+GO
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.indexes
+    WHERE name = N'IX_RunbookCollaborators_UserId' AND object_id = OBJECT_ID(N'[bookrunner].[RunbookCollaborators]')
+)
+BEGIN
+    CREATE INDEX [IX_RunbookCollaborators_UserId] ON [bookrunner].[RunbookCollaborators] ([UserId]);
+    PRINT N'Indeks olusturuldu: IX_RunbookCollaborators_UserId';
+END
+GO
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.indexes
     WHERE name = N'IX_Users_DisplayName' AND object_id = OBJECT_ID(N'[bookrunner].[Users]')
 )
 BEGIN
@@ -1215,6 +1254,34 @@ BEGIN
 END
 GO
 
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_RunbookCollaborators_Runbooks_RunbookId')
+BEGIN
+    BEGIN TRY
+        ALTER TABLE [bookrunner].[RunbookCollaborators] WITH CHECK
+            ADD CONSTRAINT [FK_RunbookCollaborators_Runbooks_RunbookId] FOREIGN KEY ([RunbookId])
+            REFERENCES [bookrunner].[Runbooks] ([Id]) ON DELETE CASCADE;
+        PRINT N'Iliski eklendi: FK_RunbookCollaborators_Runbooks_RunbookId';
+    END TRY
+    BEGIN CATCH
+        PRINT N'UYARI: FK_RunbookCollaborators_Runbooks_RunbookId eklenemedi -> ' + ERROR_MESSAGE();
+    END CATCH
+END
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_RunbookCollaborators_Users_UserId')
+BEGIN
+    BEGIN TRY
+        ALTER TABLE [bookrunner].[RunbookCollaborators] WITH CHECK
+            ADD CONSTRAINT [FK_RunbookCollaborators_Users_UserId] FOREIGN KEY ([UserId])
+            REFERENCES [bookrunner].[Users] ([Id]) ON DELETE CASCADE;
+        PRINT N'Iliski eklendi: FK_RunbookCollaborators_Users_UserId';
+    END TRY
+    BEGIN CATCH
+        PRINT N'UYARI: FK_RunbookCollaborators_Users_UserId eklenemedi -> ' + ERROR_MESSAGE();
+    END CATCH
+END
+GO
+
 /* ---------------------------------------------------------------------------
    Rozet katalogu (seed)
 
@@ -1256,7 +1323,7 @@ GO
    eder.
    --------------------------------------------------------------------------- */
 
-DECLARE @expectedTables int = 17;
+DECLARE @expectedTables int = 18;
 DECLARE @actualTables int = (
     SELECT COUNT(*) FROM sys.tables WHERE schema_id = SCHEMA_ID(N'bookrunner')
 );
@@ -1279,6 +1346,15 @@ BEGIN
     BEGIN
         INSERT INTO [bookrunner].[__EFMigrationsHistory] ([MigrationId], [ProductVersion])
         VALUES (N'20260831071620_AddGamification', N'9.0.19');
+    END
+
+    IF NOT EXISTS (
+        SELECT 1 FROM [bookrunner].[__EFMigrationsHistory]
+        WHERE [MigrationId] = N'20260901060033_AddRunbookCollaborators'
+    )
+    BEGIN
+        INSERT INTO [bookrunner].[__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+        VALUES (N'20260901060033_AddRunbookCollaborators', N'9.0.19');
     END
 
     PRINT N'';

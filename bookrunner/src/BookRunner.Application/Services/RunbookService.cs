@@ -179,7 +179,9 @@ public sealed class RunbookService(
             .Select(t => t.ToDto(includeComments: true, mentionLookup))
             .ToList();
 
-        return runbook.ToDetailDto(tasks);
+        var collaborators = await GetCollaboratorsAsync(id, ct);
+
+        return runbook.ToDetailDto(tasks, collaborators);
     }
 
     public async Task<RunbookDetailDto> CreateAsync(CreateRunbookRequest request, CancellationToken ct = default)
@@ -481,6 +483,97 @@ public sealed class RunbookService(
                 AssignedVia = t.DirectlyAssigned ? "Dogrudan" : t.GroupName ?? "Grup"
             }).ToList()
         };
+    }
+
+    public async Task<IReadOnlyList<RunbookCollaboratorDto>> GetCollaboratorsAsync(Guid runbookId, CancellationToken ct = default)
+    {
+        var collaborators = await db.RunbookCollaborators
+            .AsNoTracking()
+            .Where(c => c.RunbookId == runbookId)
+            .OrderBy(c => c.AddedAt)
+            .ToListAsync(ct);
+
+        if (collaborators.Count == 0)
+        {
+            return [];
+        }
+
+        var userIds = collaborators.Select(c => c.UserId).ToList();
+        var users = await db.Users.AsNoTracking()
+            .Where(u => userIds.Contains(u.Id))
+            .ToDictionaryAsync(u => u.Id, ct);
+
+        return collaborators
+            .Where(c => users.ContainsKey(c.UserId))
+            .Select(c => new RunbookCollaboratorDto
+            {
+                Id = c.Id,
+                Person = users[c.UserId].ToSummary(),
+                AddedAt = c.AddedAt,
+                AddedBy = c.AddedBy
+            })
+            .ToList();
+    }
+
+    public async Task<RunbookCollaboratorDto> AddCollaboratorAsync(Guid runbookId, Guid userId, CancellationToken ct = default)
+    {
+        // Editor eklemek/kaldirmak rol izniyle degil, bilerek yalnizca sahibe
+        // birakilmistir (bkz. IRunbookAccess.EnsureOwnerAsync).
+        await access.EnsureOwnerAsync(runbookId, ct);
+
+        var runbook = await db.Runbooks.FirstOrDefaultAsync(r => r.Id == runbookId, ct)
+            ?? throw new NotFoundException("Runbook", runbookId);
+
+        var user = await db.Users.FirstOrDefaultAsync(u => u.Id == userId, ct)
+            ?? throw new NotFoundException("Kullanici", userId);
+
+        if (userId == runbook.OwnerUserId)
+        {
+            throw new BusinessRuleException("Runbook sahibi zaten tum yetkilere sahip; ayrica editor olarak eklenemez.");
+        }
+
+        if (await db.RunbookCollaborators.AnyAsync(c => c.RunbookId == runbookId && c.UserId == userId, ct))
+        {
+            throw new BusinessRuleException($"{user.DisplayName} zaten bu runbook'ta editor.");
+        }
+
+        var collaborator = new RunbookCollaborator
+        {
+            RunbookId = runbookId,
+            UserId = userId,
+            AddedBy = currentUser.DisplayName
+        };
+
+        db.RunbookCollaborators.Add(collaborator);
+        await db.SaveChangesAsync(ct);
+
+        await audit.LogAsync(AuditAction.Update, nameof(Runbook), runbookId.ToString(),
+            $"{user.DisplayName} editor olarak eklendi.", runbookId, ct: ct);
+        await realtime.RunbookChangedAsync(runbookId, "updated", ct);
+
+        return new RunbookCollaboratorDto
+        {
+            Id = collaborator.Id,
+            Person = user.ToSummary(),
+            AddedAt = collaborator.AddedAt,
+            AddedBy = collaborator.AddedBy
+        };
+    }
+
+    public async Task RemoveCollaboratorAsync(Guid runbookId, Guid collaboratorId, CancellationToken ct = default)
+    {
+        await access.EnsureOwnerAsync(runbookId, ct);
+
+        var collaborator = await db.RunbookCollaborators
+            .FirstOrDefaultAsync(c => c.Id == collaboratorId && c.RunbookId == runbookId, ct)
+            ?? throw new NotFoundException("Editor kaydi", collaboratorId);
+
+        db.RunbookCollaborators.Remove(collaborator);
+        await db.SaveChangesAsync(ct);
+
+        await audit.LogAsync(AuditAction.Update, nameof(Runbook), runbookId.ToString(),
+            "Bir editor kaldirildi.", runbookId, ct: ct);
+        await realtime.RunbookChangedAsync(runbookId, "updated", ct);
     }
 
     /// <summary>Detay ekrani icin runbook'u tum iliskileriyle yukler.</summary>

@@ -41,6 +41,15 @@ public sealed class BookRunnerApiClient(HttpClient httpClient, ILogger<BookRunne
     public Task DeleteRunbookAsync(Guid id, CancellationToken ct = default)
         => SendAsync(HttpMethod.Delete, $"api/runbooks/{id}", ct);
 
+    public Task<IReadOnlyList<RunbookCollaboratorDto>?> GetCollaboratorsAsync(Guid runbookId, CancellationToken ct = default)
+        => GetAsync<IReadOnlyList<RunbookCollaboratorDto>>($"api/runbooks/{runbookId}/collaborators", ct);
+
+    public Task<RunbookCollaboratorDto?> AddCollaboratorAsync(Guid runbookId, AddRunbookCollaboratorRequest request, CancellationToken ct = default)
+        => PostAsync<AddRunbookCollaboratorRequest, RunbookCollaboratorDto>($"api/runbooks/{runbookId}/collaborators", request, ct);
+
+    public Task RemoveCollaboratorAsync(Guid runbookId, Guid collaboratorId, CancellationToken ct = default)
+        => SendAsync(HttpMethod.Delete, $"api/runbooks/{runbookId}/collaborators/{collaboratorId}", ct);
+
     public Task<RunbookDetailDto?> SaveAsTemplateAsync(Guid id, string title, string? category, CancellationToken ct = default)
         => PostAsync<object, RunbookDetailDto>($"api/runbooks/{id}/save-as-template", new { title, category }, ct);
 

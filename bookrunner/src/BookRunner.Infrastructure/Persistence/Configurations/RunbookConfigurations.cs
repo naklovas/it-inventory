@@ -134,6 +134,29 @@ public sealed class TaskAssignmentConfiguration : IEntityTypeConfiguration<TaskA
     }
 }
 
+public sealed class RunbookCollaboratorConfiguration : IEntityTypeConfiguration<RunbookCollaborator>
+{
+    public void Configure(EntityTypeBuilder<RunbookCollaborator> builder)
+    {
+        builder.ToTable("RunbookCollaborators");
+        builder.HasKey(c => c.Id);
+
+        builder.Property(c => c.AddedBy).HasMaxLength(256).IsRequired();
+
+        builder.HasOne<Runbook>()
+            .WithMany()
+            .HasForeignKey(c => c.RunbookId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasOne<AppUser>()
+            .WithMany()
+            .HasForeignKey(c => c.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasIndex(c => new { c.RunbookId, c.UserId }).IsUnique();
+    }
+}
+
 public sealed class TaskCommentConfiguration : IEntityTypeConfiguration<TaskComment>
 {
     public void Configure(EntityTypeBuilder<TaskComment> builder)

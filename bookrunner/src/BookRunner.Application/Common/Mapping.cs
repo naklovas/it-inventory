@@ -136,7 +136,8 @@ public static class Mapping
 
     public static RunbookDetailDto ToDetailDto(
         this Runbook runbook,
-        IReadOnlyList<RunbookTaskDto> tasks) => new()
+        IReadOnlyList<RunbookTaskDto> tasks,
+        IReadOnlyList<RunbookCollaboratorDto>? collaborators = null) => new()
     {
         Id = runbook.Id,
         Code = runbook.Code,
@@ -156,6 +157,7 @@ public static class Mapping
         ServiceManagerWorkItemId = runbook.ServiceManagerWorkItemId,
         Tags = SplitTags(runbook.Tags),
         Tasks = tasks,
+        Collaborators = collaborators ?? [],
         CreatedAt = runbook.CreatedAt,
         CreatedBy = runbook.CreatedBy,
         UpdatedAt = runbook.UpdatedAt,

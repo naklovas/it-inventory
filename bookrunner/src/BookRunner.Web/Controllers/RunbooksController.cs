@@ -343,6 +343,22 @@ public sealed class RunbooksController(
     public Task<IActionResult> Assign(Guid taskId, [FromBody] AssignTaskRequest request, CancellationToken ct)
         => JsonResultAsync(() => Api.AssignAsync(taskId, request, ct));
 
+    /// <summary>Runbook'a "Editor" ekler. Yalnizca runbook sahibi cagirabilir.</summary>
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public Task<IActionResult> AddCollaborator(Guid id, [FromBody] AddRunbookCollaboratorRequest request, CancellationToken ct)
+        => JsonResultAsync(() => Api.AddCollaboratorAsync(id, request, ct));
+
+    /// <summary>Editor kaldirir. Yalnizca runbook sahibi cagirabilir.</summary>
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public Task<IActionResult> RemoveCollaborator(Guid id, Guid collaboratorId, CancellationToken ct)
+        => JsonResultAsync<object?>(async () =>
+        {
+            await Api.RemoveCollaboratorAsync(id, collaboratorId, ct);
+            return null;
+        });
+
     /// <summary>Gorevi baska kisiye/gruba devreder.</summary>
     [HttpPost]
     [ValidateAntiForgeryToken]

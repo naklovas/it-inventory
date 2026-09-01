@@ -47,6 +47,23 @@
                         </span>
                     }
                 }
+                @if (r.Collaborators.Count > 0)
+                {
+                    <span class="d-inline-flex align-items-center gap-1 flex-wrap">
+                        <i class="bi bi-people"></i> Editorler:
+                        @foreach (var c in r.Collaborators)
+                        {
+                            <span class="badge text-bg-light border" title="@c.AddedBy tarafindan eklendi (@Fmt(c.AddedAt))">@c.Person.DisplayName</span>
+                        }
+                    </span>
+                }
+                @if (Model.IsCollaborator)
+                {
+                    <span class="badge text-bg-info-subtle border border-info-subtle text-info-emphasis"
+                          title="Sahip sizi bu runbook'ta gorev ekleme/atama/yorum yapmak uzere editor olarak ekledi.">
+                        <i class="bi bi-pencil-square me-1"></i>Editorsunuz
+                    </span>
+                }
                 <span><i class="bi bi-calendar-event"></i> Plan: @Fmt(r.PlannedStart) - @Fmt(r.PlannedEnd)</span>
                 @if (r.ActualStart.HasValue)
                 {
@@ -102,6 +119,12 @@
         {
             <button class="btn btn-sm btn-outline-info" data-bs-toggle="modal" data-bs-target="#templateModal">
                 <i class="bi bi-bookmark-plus me-1"></i>Sablon yap
+            </button>
+        }
+        @if (Model.CanManageCollaborators)
+        {
+            <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#collaboratorsModal">
+                <i class="bi bi-person-plus me-1"></i>Editorleri yonet
             </button>
         }
         @if (Model.CanDeleteRunbookThis)
@@ -304,6 +327,53 @@
         </div>
     </div>
 </div>
+
+@if (Model.CanManageCollaborators)
+{
+    <div class="modal fade" id="collaboratorsModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Editorleri yonet</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="small br-muted">
+                        Editor olarak eklenen kisiler, global rolleri ne olursa olsun bu runbook'ta
+                        gorev ekleyebilir, gorev atayabilir ve yorum yapabilir. Runbook'u duzenleyemez,
+                        silemez, sablon yayinlayamaz ve disa/ice aktarim yapamazlar.
+                    </p>
+                    <label class="form-label small br-muted">Active Directory'de kisi ara</label>
+                    <div class="position-relative">
+                        <input class="form-control br-search" id="collaboratorSearch" data-target="user"
+                               autocomplete="off" placeholder="En az 2 harf yazin" />
+                        <div class="br-suggest" id="collaboratorSuggest"></div>
+                    </div>
+                    <hr />
+                    <h6 class="small br-muted mb-2">Mevcut editorler</h6>
+                    <div id="collaboratorList">
+                        @if (r.Collaborators.Count == 0)
+                        {
+                            <div class="br-muted small" id="collaboratorEmpty">Henuz editor eklenmemis.</div>
+                        }
+                        @foreach (var c in r.Collaborators)
+                        {
+                            <div class="d-flex align-items-center justify-content-between py-1" data-collaborator-id="@c.Id">
+                                <span class="d-inline-flex align-items-center gap-2">
+                                    <partial name="_Avatar" model="@(new AvatarModel(c.Person.Id, c.Person.DisplayName, c.Person.Initials, c.Person.AvatarColor, c.Person.HasPhoto, AvatarSize.Small, false, c.Person.Title))" />
+                                    @c.Person.DisplayName
+                                </span>
+                                <button type="button" class="btn btn-sm btn-outline-danger br-remove-collaborator-btn" data-collaborator-id="@c.Id">
+                                    <i class="bi bi-x-lg"></i>
+                                </button>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
 
 @if (Model.CanImportThis)
 {

@@ -25,6 +25,7 @@ public interface IAppDbContext
     DbSet<GamificationEvent> GamificationEvents { get; }
     DbSet<Badge> Badges { get; }
     DbSet<UserBadge> UserBadges { get; }
+    DbSet<RunbookCollaborator> RunbookCollaborators { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

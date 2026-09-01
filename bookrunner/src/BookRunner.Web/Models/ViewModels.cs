@@ -60,10 +60,20 @@ public sealed class RunbookDetailViewModel : PageViewModel
     /// </summary>
     public bool IsOwner => CurrentUser?.Id is { } userId && Runbook.Owner?.Id == userId;
 
-    public bool CanEditThis => IsOwner || CanWrite;
-    public bool CanAssignThis => IsOwner || CanAssign;
+    /// <summary>
+    /// Sahibin bu runbook'a ozel olarak "Editor" olarak ekledigi kisi mi.
+    /// Global role dokunmadan yalnizca gorev yazma/atama/yorum acar - runbook'u
+    /// duzenleyemez/silemez, sablon yayinlayamaz, disa/ice aktaramaz.
+    /// </summary>
+    public bool IsCollaborator => CurrentUser?.Id is { } userId && Runbook.Collaborators.Any(c => c.Person.Id == userId);
+
+    /// <summary>Editor ekleme/kaldirma yalnizca sahipte - yonetici rolu bile atlayamaz.</summary>
+    public bool CanManageCollaborators => IsOwner;
+
+    public bool CanEditThis => IsOwner || IsCollaborator || CanWrite;
+    public bool CanAssignThis => IsOwner || IsCollaborator || CanAssign;
     public bool CanExecuteThis => IsOwner || CanExecute;
-    public bool CanCommentThis => IsOwner || CanComment;
+    public bool CanCommentThis => IsOwner || IsCollaborator || CanComment;
     public bool CanImportThis => IsOwner || CanImport;
     public bool CanPublishTemplateThis => IsOwner || CanPublishTemplate;
 

@@ -91,12 +91,33 @@ public sealed record RunbookDetailDto
     public string? ServiceManagerWorkItemId { get; init; }
     public IReadOnlyList<string> Tags { get; init; } = Array.Empty<string>();
     public IReadOnlyList<RunbookTaskDto> Tasks { get; init; } = Array.Empty<RunbookTaskDto>();
+    /// <summary>Sahibin bu runbook'a ozel olarak "Editor" yetkisi verdigi kisiler.</summary>
+    public IReadOnlyList<RunbookCollaboratorDto> Collaborators { get; init; } = Array.Empty<RunbookCollaboratorDto>();
     public DateTimeOffset CreatedAt { get; init; }
     public required string CreatedBy { get; init; }
     public DateTimeOffset? UpdatedAt { get; init; }
     public string? UpdatedBy { get; init; }
     /// <summary>Iyimser eszamanlilik damgasi (Base64 rowversion).</summary>
     public string? RowVersion { get; init; }
+}
+
+/// <summary>
+/// Bir runbook'a sahibi tarafindan "Editor" olarak eklenmis kisi. Editor,
+/// global rolu ne olursa olsun bu runbook'ta gorev ekleyip duzenleyebilir,
+/// atama yapabilir ve yorum yazabilir; runbook'u silemez/duzenleyemez.
+/// </summary>
+public sealed record RunbookCollaboratorDto
+{
+    public Guid Id { get; init; }
+    public required PersonSummary Person { get; init; }
+    public DateTimeOffset AddedAt { get; init; }
+    public required string AddedBy { get; init; }
+}
+
+/// <summary>Runbook'a editor ekleme istegi.</summary>
+public sealed record AddRunbookCollaboratorRequest
+{
+    public Guid UserId { get; init; }
 }
 
 /// <summary>Runbook olusturma istegi.</summary>

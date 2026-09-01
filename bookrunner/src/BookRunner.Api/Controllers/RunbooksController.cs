@@ -41,6 +41,36 @@ public sealed class RunbooksController(IRunbookService runbooks) : ControllerBas
     public async Task<ActionResult<RunbookDetailDto>> Get(Guid id, CancellationToken ct)
         => Ok(await runbooks.GetAsync(id, ct));
 
+    /// <summary>Runbook'a sahibin ozel olarak "Editor" olarak ekledigi kisiler.</summary>
+    [HttpGet("{id:guid}/collaborators")]
+    [Authorize(Policy = Permissions.RunbookRead)]
+    [ProducesResponseType(typeof(IReadOnlyList<RunbookCollaboratorDto>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<RunbookCollaboratorDto>>> Collaborators(Guid id, CancellationToken ct)
+        => Ok(await runbooks.GetCollaboratorsAsync(id, ct));
+
+    /// <summary>Runbook'a editor ekler.</summary>
+    /// <remarks>Yalnizca runbook sahibi cagirabilir (rol izni yeterli degildir).</remarks>
+    [HttpPost("{id:guid}/collaborators")]
+    [Authorize(Policy = Permissions.RunbookRead)]
+    [ProducesResponseType(typeof(RunbookCollaboratorDto), StatusCodes.Status201Created)]
+    public async Task<ActionResult<RunbookCollaboratorDto>> AddCollaborator(
+        Guid id, [FromBody] AddRunbookCollaboratorRequest request, CancellationToken ct)
+    {
+        var created = await runbooks.AddCollaboratorAsync(id, request.UserId, ct);
+        return CreatedAtAction(nameof(Collaborators), new { id }, created);
+    }
+
+    /// <summary>Editor kaldirir.</summary>
+    /// <remarks>Yalnizca runbook sahibi cagirabilir.</remarks>
+    [HttpDelete("{id:guid}/collaborators/{collaboratorId:guid}")]
+    [Authorize(Policy = Permissions.RunbookRead)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> RemoveCollaborator(Guid id, Guid collaboratorId, CancellationToken ct)
+    {
+        await runbooks.RemoveCollaboratorAsync(id, collaboratorId, ct);
+        return NoContent();
+    }
+
     /// <summary>Yeni runbook veya sablon olusturur.</summary>
     [HttpPost]
     [Authorize(Policy = Permissions.RunbookWrite)]

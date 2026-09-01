@@ -27,6 +27,7 @@ public class BookRunnerDbContext(DbContextOptions<BookRunnerDbContext> options)
     public DbSet<GamificationEvent> GamificationEvents => Set<GamificationEvent>();
     public DbSet<Badge> Badges => Set<Badge>();
     public DbSet<UserBadge> UserBadges => Set<UserBadge>();
+    public DbSet<RunbookCollaborator> RunbookCollaborators => Set<RunbookCollaborator>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -27,4 +27,12 @@ public interface IRunbookAccess
 
     /// <summary>Oturum acan kullanici bu gorevin bagli oldugu runbook'un sahibi mi.</summary>
     Task<bool> IsOwnerOfTaskAsync(Guid taskId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Yalnizca runbook sahibine izin verir (rol izni gecerli degildir). Editor
+    /// ekleme/kaldirma gibi, yonetici rolunun bile atlayamayacagi, bilerek
+    /// sahibe ozel birakilmis islemler icin.
+    /// </summary>
+    /// <exception cref="Common.ForbiddenException">Sahibi degilse.</exception>
+    Task EnsureOwnerAsync(Guid runbookId, CancellationToken ct = default);
 }

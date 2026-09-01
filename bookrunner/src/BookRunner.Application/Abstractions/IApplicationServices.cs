@@ -57,6 +57,15 @@ public interface IRunbookService
     Task<RunbookDetailDto> CreateFromTemplateAsync(Guid templateId, CreateFromTemplateRequest request, CancellationToken ct = default);
 
     Task<DashboardDto> GetDashboardAsync(CancellationToken ct = default);
+
+    /// <summary>Runbook'a sahibin ozel olarak "Editor" yetkisi verdigi kisiler.</summary>
+    Task<IReadOnlyList<RunbookCollaboratorDto>> GetCollaboratorsAsync(Guid runbookId, CancellationToken ct = default);
+
+    /// <summary>Yalnizca runbook sahibi cagirabilir (bkz. IRunbookAccess.EnsureOwnerAsync).</summary>
+    Task<RunbookCollaboratorDto> AddCollaboratorAsync(Guid runbookId, Guid userId, CancellationToken ct = default);
+
+    /// <summary>Yalnizca runbook sahibi cagirabilir.</summary>
+    Task RemoveCollaboratorAsync(Guid runbookId, Guid collaboratorId, CancellationToken ct = default);
 }
 
 /// <summary>Gorev islemleri.</summary>
