@@ -124,6 +124,17 @@ public sealed class AuditViewModel : PageViewModel
     public PagedResult<AuditLogDto> Results { get; init; } = PagedResult<AuditLogDto>.Create([], 1, 50, 0);
 }
 
+/// <summary>
+/// Giden e-posta kuyrugu ekrani. Email:Enabled=false iken de her bildirim
+/// buraya yazilir; boylece gercek mail atmadan hangi olayin kime, ne konuda
+/// bildirim urettigi test edilebilir.
+/// </summary>
+public sealed class EmailOutboxViewModel : PageViewModel
+{
+    public EmailOutboxFilter Filter { get; init; } = new();
+    public PagedResult<EmailOutboxDto> Results { get; init; } = PagedResult<EmailOutboxDto>.Create([], 1, 50, 0);
+}
+
 /// <summary>Yonetim / entegrasyon durumu ekrani.</summary>
 public sealed class AdminViewModel : PageViewModel
 {

@@ -75,4 +75,13 @@ public static class DisplayText
         AppRole.Administrator => "Yonetici",
         _ => role.ToString()
     };
+
+    public static string EmailStatus(Domain.Enums.EmailStatus status) => status switch
+    {
+        Domain.Enums.EmailStatus.Pending => "Beklemede",
+        Domain.Enums.EmailStatus.Sent => "Gonderildi",
+        Domain.Enums.EmailStatus.Failed => "Basarisiz",
+        Domain.Enums.EmailStatus.Cancelled => "Iptal",
+        _ => status.ToString()
+    };
 }

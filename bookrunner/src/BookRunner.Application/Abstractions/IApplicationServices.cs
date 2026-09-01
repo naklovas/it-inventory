@@ -132,6 +132,17 @@ public interface IAuditQueryService
 }
 
 /// <summary>
+/// Giden e-posta kuyrugunu (bkz. EmailOutboxMessage) yalnizca izleme amacli
+/// sorgular. Email:Enabled=false iken de her bildirim buraya yazilir; boylece
+/// gercek SMTP baglantisi olmadan "hangi olay kime, ne konuda mail atardi"
+/// test edilebilir.
+/// </summary>
+public interface IEmailOutboxQueryService
+{
+    Task<PagedResult<EmailOutboxDto>> ListAsync(EmailOutboxFilter filter, CancellationToken ct = default);
+}
+
+/// <summary>
 /// Puan/rozet olaylarini kaydeder ve siralama tablolarini hesaplar. Puan
 /// degerleri appsettings "Gamification" bolumunden gelir (bkz. GamificationOptions);
 /// bir olay olustugu andaki puan degeri GamificationEvent'e yazilir, sonradan

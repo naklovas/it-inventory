@@ -31,6 +31,31 @@ public sealed class AdminController(BookRunnerApiClient api, ILogger<AdminContro
         }
     }
 
+    /// <summary>
+    /// Giden e-posta kuyrugu (test/izleme). Email:Enabled=false iken de her
+    /// bildirim burada gorunur; gercek SMTP olmadan tetikleme dogrulanabilir.
+    /// </summary>
+    public async Task<IActionResult> Emails([FromQuery] EmailOutboxFilter filter, CancellationToken ct)
+    {
+        var currentUser = await GetCurrentUserAsync(ct);
+
+        try
+        {
+            var results = await Api.ListEmailOutboxAsync(filter, ct);
+            return View(await FillAsync(new EmailOutboxViewModel
+            {
+                CurrentUser = currentUser,
+                Filter = filter,
+                Results = results ?? Application.Common.PagedResult<EmailOutboxDto>.Create([], 1, filter.PageSize, 0)
+            }, ct));
+        }
+        catch (ApiException ex)
+        {
+            TempData["Error"] = ex.Message;
+            return View(await FillAsync(new EmailOutboxViewModel { CurrentUser = currentUser, Filter = filter }, ct));
+        }
+    }
+
     /// <summary>Service Manager baglantisi ve script kutuphanesi durumu.</summary>
     public async Task<IActionResult> Integrations(CancellationToken ct)
     {

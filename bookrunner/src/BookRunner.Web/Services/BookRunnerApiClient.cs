@@ -194,6 +194,23 @@ public sealed class BookRunnerApiClient(HttpClient httpClient, ILogger<BookRunne
         return GetAsync<PagedResult<AuditLogDto>>(QueryHelpers.AddQueryString("api/audit", parameters), ct);
     }
 
+    // ----------------------------------------------------------- email outbox
+
+    public Task<PagedResult<EmailOutboxDto>?> ListEmailOutboxAsync(EmailOutboxFilter filter, CancellationToken ct = default)
+    {
+        var parameters = new Dictionary<string, string?>
+        {
+            ["status"] = filter.Status?.ToString(),
+            ["reason"] = filter.Reason,
+            ["to"] = filter.To,
+            ["runbookId"] = filter.RunbookId?.ToString(),
+            ["page"] = filter.Page.ToString(),
+            ["pageSize"] = filter.PageSize.ToString()
+        };
+
+        return GetAsync<PagedResult<EmailOutboxDto>>(QueryHelpers.AddQueryString("api/email-outbox", parameters), ct);
+    }
+
     // ---------------------------------------------------------- service manager
 
     public Task<IReadOnlyList<ServiceManagerWorkItem>?> SearchWorkItemsAsync(string term, int take = 15, CancellationToken ct = default)

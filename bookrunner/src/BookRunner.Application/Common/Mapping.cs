@@ -182,6 +182,25 @@ public static class Mapping
         CorrelationId = log.CorrelationId
     };
 
+    public static EmailOutboxDto ToDto(this EmailOutboxMessage message) => new()
+    {
+        Id = message.Id,
+        To = message.To,
+        Cc = message.Cc,
+        Subject = message.Subject,
+        HtmlBody = message.HtmlBody,
+        Status = message.Status,
+        StatusText = DisplayText.EmailStatus(message.Status),
+        AttemptCount = message.AttemptCount,
+        CreatedAt = message.CreatedAt,
+        SentAt = message.SentAt,
+        NextAttemptAt = message.NextAttemptAt,
+        LastError = message.LastError,
+        Reason = message.Reason,
+        RunbookId = message.RunbookId,
+        TaskId = message.TaskId
+    };
+
     public static ScriptDto ToDto(this RunbookScript script) => new()
     {
         Id = script.Id,

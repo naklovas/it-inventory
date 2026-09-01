@@ -134,6 +134,41 @@ public sealed record ExternalEvent
     public DateTimeOffset OccurredAt { get; init; } = DateTimeOffset.UtcNow;
 }
 
+/// <summary>Giden e-posta kuyrugu listeleme filtresi (yonetici ekrani, sadece test/izleme icin).</summary>
+public sealed record EmailOutboxFilter
+{
+    public EmailStatus? Status { get; init; }
+    public string? Reason { get; init; }
+    public string? To { get; init; }
+    public Guid? RunbookId { get; init; }
+
+    [Range(1, int.MaxValue)]
+    public int Page { get; init; } = 1;
+
+    [Range(1, 200)]
+    public int PageSize { get; init; } = 50;
+}
+
+/// <summary>Giden e-posta kuyrugundaki tek kayit.</summary>
+public sealed record EmailOutboxDto
+{
+    public long Id { get; init; }
+    public required string To { get; init; }
+    public string? Cc { get; init; }
+    public required string Subject { get; init; }
+    public required string HtmlBody { get; init; }
+    public EmailStatus Status { get; init; }
+    public required string StatusText { get; init; }
+    public int AttemptCount { get; init; }
+    public DateTimeOffset CreatedAt { get; init; }
+    public DateTimeOffset? SentAt { get; init; }
+    public DateTimeOffset? NextAttemptAt { get; init; }
+    public string? LastError { get; init; }
+    public string? Reason { get; init; }
+    public Guid? RunbookId { get; init; }
+    public Guid? TaskId { get; init; }
+}
+
 /// <summary>Audit kaydi listeleme filtresi.</summary>
 public sealed record AuditFilter
 {
