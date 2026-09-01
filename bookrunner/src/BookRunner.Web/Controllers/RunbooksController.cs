@@ -337,7 +337,7 @@ public sealed class RunbooksController(
     public Task<IActionResult> TaskHistory(Guid taskId, CancellationToken ct)
         => JsonResultAsync(() => Api.GetTaskHistoryAsync(taskId, ct));
 
-    /// <summary>Goreve kisi veya AD grubu atar.</summary>
+    /// <summary>Goreve kisi veya takim atar.</summary>
     [HttpPost]
     [ValidateAntiForgeryToken]
     public Task<IActionResult> Assign(Guid taskId, [FromBody] AssignTaskRequest request, CancellationToken ct)
@@ -394,7 +394,7 @@ public sealed class RunbooksController(
     public Task<IActionResult> SearchUsers(string term, CancellationToken ct)
         => JsonResultAsync(() => Api.SearchUsersAsync(term, 15, ct));
 
-    /// <summary>Atama kutusundaki grup arama kutusu icin AD sorgusu.</summary>
+    /// <summary>Atama kutusundaki takim arama kutusu.</summary>
     [HttpGet]
     public Task<IActionResult> SearchGroups(string term, CancellationToken ct)
         => JsonResultAsync(() => Api.SearchGroupsAsync(term, 15, ct));

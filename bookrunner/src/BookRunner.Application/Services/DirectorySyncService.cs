@@ -220,6 +220,12 @@ public sealed class DirectorySyncService(
         return results;
     }
 
+    /// <summary>
+    /// Gorev atama arama kutusundaki "grup" sonuclari. AD'nin tum guvenlik
+    /// gruplarini (yuzlerce kayit) listelemek yerine, yalnizca personel
+    /// servisinden gelen takim adlarindan turetilmis sanal gruplar (bkz.
+    /// <see cref="AppGroup.IsTeam"/>) aranir. AD'ye hic gidilmez.
+    /// </summary>
     public async Task<IReadOnlyList<GroupSummary>> SearchGroupsAsync(string term, int take, CancellationToken ct = default)
     {
         take = Math.Clamp(take, 1, 100);
@@ -230,39 +236,14 @@ public sealed class DirectorySyncService(
 
         term = term.Trim();
 
-        var local = await db.Groups
-            .Where(g => g.IsActive &&
+        var teams = await db.Groups
+            .Where(g => g.IsTeam && g.IsActive &&
                         (EF.Functions.Like(g.Name, $"%{term}%") || EF.Functions.Like(g.DisplayName, $"%{term}%")))
             .OrderBy(g => g.Name)
             .Take(take)
             .ToListAsync(ct);
 
-        var results = local.Select(g => g.ToSummary()).ToList();
-        if (results.Count >= take)
-        {
-            return results;
-        }
-
-        try
-        {
-            var known = local.Select(g => g.Sid).ToHashSet(StringComparer.OrdinalIgnoreCase);
-            foreach (var adGroup in await directory.SearchGroupsAsync(term, take - results.Count, ct))
-            {
-                if (known.Contains(adGroup.Sid))
-                {
-                    continue;
-                }
-
-                var saved = await EnsureGroupBySidAsync(adGroup.Sid, ct);
-                results.Add(saved.ToSummary());
-            }
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "AD grup aramasi basarisiz oldu; yalnizca yerel sonuclar donuluyor.");
-        }
-
-        return results;
+        return teams.Select(g => g.ToSummary()).ToList();
     }
 
     public async Task<PersonSummary?> GetPersonAsync(Guid userId, CancellationToken ct = default)
@@ -309,6 +290,19 @@ public sealed class DirectorySyncService(
     {
         var group = await db.Groups.FirstOrDefaultAsync(g => g.Id == groupId, ct)
             ?? throw new NotFoundException("Grup", groupId);
+
+        // Takim gruplarinin uyeligi AD'de degil, yerel Users.TeamName projeksiyonunda
+        // tutulur; AD'ye sorulmasinin (basarisiz olacak) bir anlami yok.
+        if (group.IsTeam)
+        {
+            var teamMembers = await db.UserGroups
+                .Where(ug => ug.GroupId == groupId)
+                .Select(ug => ug.User)
+                .OrderBy(u => u.DisplayName)
+                .ToListAsync(ct);
+
+            return teamMembers.Select(u => u.ToSummary()).ToList();
+        }
 
         var members = new List<PersonSummary>();
         try
@@ -414,6 +408,7 @@ public sealed class DirectorySyncService(
         var personnel = await personnelDirectory.GetProfileAsync(adUser.SamAccountName, ct);
 
         user.TeamName = string.IsNullOrWhiteSpace(personnel?.TeamName) ? user.TeamName : personnel.TeamName;
+        await SyncTeamMembershipAsync(user, ct);
 
         var photo = personnel?.Thumbnail ?? adUser.Photo;
         if (photo is not { Length: > 0 })
@@ -431,6 +426,60 @@ public sealed class DirectorySyncService(
         user.PhotoContentType = "image/jpeg";
         user.PhotoHash = hash;
     }
+
+    /// <summary>
+    /// Kullanicinin gorev atama arama kutusunda ("Takim" sekmesi) gorunecek sanal
+    /// grup uyeligini, personel servisinden gelen TeamName ile hizalar. Bir kisi
+    /// ayni anda yalnizca bir takimda olabilir; takim degisirse eski uyelik silinir.
+    /// </summary>
+    private async Task SyncTeamMembershipAsync(AppUser user, CancellationToken ct)
+    {
+        var existingTeamMemberships = await db.UserGroups
+            .Include(ug => ug.Group)
+            .Where(ug => ug.UserId == user.Id && ug.Group.IsTeam)
+            .ToListAsync(ct);
+
+        if (string.IsNullOrWhiteSpace(user.TeamName))
+        {
+            db.UserGroups.RemoveRange(existingTeamMemberships);
+            return;
+        }
+
+        var team = await EnsureTeamGroupAsync(user.TeamName, ct);
+
+        foreach (var stale in existingTeamMemberships.Where(ug => ug.GroupId != team.Id))
+        {
+            db.UserGroups.Remove(stale);
+        }
+
+        if (!existingTeamMemberships.Any(ug => ug.GroupId == team.Id))
+        {
+            db.UserGroups.Add(new AppUserGroup { UserId = user.Id, GroupId = team.Id, SyncedAt = DateTimeOffset.UtcNow });
+        }
+    }
+
+    /// <summary>Takim adina karsilik gelen sanal AppGroup kaydini olusturur/gunceller.</summary>
+    private async Task<AppGroup> EnsureTeamGroupAsync(string teamName, CancellationToken ct)
+    {
+        var sid = TeamSid(teamName);
+        var group = await db.Groups.FirstOrDefaultAsync(g => g.Sid == sid, ct);
+        if (group is null)
+        {
+            group = new AppGroup { Sid = sid, IsTeam = true, AvatarColor = AvatarHelper.Color(sid) };
+            db.Groups.Add(group);
+        }
+
+        group.Name = teamName;
+        group.DisplayName = teamName;
+        group.Description = "Personel servisinden gelen takim";
+        group.IsActive = true;
+        group.LastSyncedAt = DateTimeOffset.UtcNow;
+
+        return group;
+    }
+
+    /// <summary>Takim adindan AD SID'leriyle cakismayacak sabit bir sanal kimlik uretir.</summary>
+    private static string TeamSid(string teamName) => "TEAM:" + teamName.Trim().ToLowerInvariant();
 
     private static bool NeedsRefresh(DateTimeOffset? lastSyncedAt)
         => lastSyncedAt is null || DateTimeOffset.UtcNow - lastSyncedAt.Value > RefreshInterval;

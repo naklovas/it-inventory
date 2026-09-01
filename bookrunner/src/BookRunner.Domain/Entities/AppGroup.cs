@@ -22,6 +22,14 @@ public class AppGroup
 
     public string? DistinguishedName { get; set; }
 
+    /// <summary>
+    /// true ise bu bir AD guvenlik grubu degil, personel servisinden gelen
+    /// takim adindan (AppUser.TeamName) turetilmis sanal bir gruptur. Gorev
+    /// atama arama kutusu artik yalnizca bu turdeki gruplari gosterir - AD'de
+    /// yuzlerce grup oldugundan hepsini listelemek pratik degildi.
+    /// </summary>
+    public bool IsTeam { get; set; }
+
     /// <summary>Grup rozetinin arayuzdeki rengi (#RRGGBB).</summary>
     public string AvatarColor { get; set; } = "#7A5AA8";
 

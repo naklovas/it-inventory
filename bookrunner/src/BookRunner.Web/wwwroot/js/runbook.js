@@ -125,8 +125,7 @@
                     rollbackNotes: document.getElementById("newTaskRollback").value || null
                 }, { id: config.runbookId });
 
-                const assignee = selection.newTask;
-                if (assignee) {
+                for (const assignee of selection.newTask) {
                     try {
                         await post("Assign", {
                             assigneeType: assignee.kind === "user" ? "User" : "Group",
@@ -136,13 +135,11 @@
                             notify: true
                         }, { taskId: created.id });
                     } catch (assignError) {
-                        toast("Gorev olusturuldu ama atama yapilamadi: " + assignError.message, "warning");
-                        reload();
-                        return;
+                        toast("Gorev olusturuldu ama " + assignee.label + " icin atama yapilamadi: " + assignError.message, "warning");
                     }
                 }
 
-                selection.newTask = null;
+                selection.newTask = [];
                 reload();
             } catch (error) {
                 toast(error.message, "danger");
@@ -320,7 +317,31 @@
     // ------------------------------------------------------- AD arama kutulari
 
     /** Secilen kisi/grup; atama, devir ve yeni gorev formunda paylasilir. */
-    const selection = { assign: null, handover: null, newTask: null, collaborator: null };
+    const selection = { assign: null, handover: null, newTask: [], collaborator: null };
+
+    /** Yeni gorev formundaki secili sorumlu "cip"lerini cizer. */
+    function renderNewTaskAssigneeChips() {
+        const container = document.getElementById("newTaskAssigneeChips");
+        if (!container) {
+            return;
+        }
+
+        container.innerHTML = selection.newTask.map((item, index) => {
+            const icon = item.kind === "user" ? "bi-person" : "bi-people";
+            return '<span class="badge text-bg-light border d-inline-flex align-items-center gap-1" data-index="' + index + '">' +
+                '<i class="bi ' + icon + '"></i>' + escapeHtml(item.label) +
+                '<button type="button" class="btn-close btn-close-sm br-remove-new-task-assignee" ' +
+                'style="font-size:.6rem;" data-index="' + index + '" aria-label="Kaldir"></button></span>';
+        }).join("");
+    }
+
+    document.addEventListener("click", (event) => {
+        const removeChip = event.target.closest(".br-remove-new-task-assignee");
+        if (removeChip) {
+            selection.newTask.splice(parseInt(removeChip.dataset.index, 10), 1);
+            renderNewTaskAssigneeChips();
+        }
+    });
 
     function wireSearch(inputId, suggestId, kind, scope) {
         const input = document.getElementById(inputId);
@@ -364,7 +385,7 @@
                 const label = kind === "user" ? item.displayName : (item.displayName || item.name);
                 const subtitle = kind === "user"
                     ? [item.title, item.department].filter(Boolean).join(" - ")
-                    : "AD grubu";
+                    : "Takim";
 
                 const avatar = avatarHtml(item, { size: "sm", isGroup: kind === "group" });
 
@@ -382,9 +403,22 @@
                 return;
             }
 
-            selection[scope] = { kind: kind, id: item.dataset.id, label: item.dataset.label };
-            input.value = item.dataset.label;
+            const picked = { kind: kind, id: item.dataset.id, label: item.dataset.label };
             suggest.classList.remove("show");
+
+            if (scope === "newTask") {
+                // Birden fazla sorumlu eklenebilir: secim listeye eklenir, gorev
+                // "Ekle" ile olusturulunca hepsine sirayla atama yapilir.
+                if (!selection.newTask.some((existing) => existing.kind === picked.kind && existing.id === picked.id)) {
+                    selection.newTask.push(picked);
+                    renderNewTaskAssigneeChips();
+                }
+                input.value = "";
+                return;
+            }
+
+            selection[scope] = picked;
+            input.value = item.dataset.label;
 
             if (scope === "assign") {
                 confirmAssign();
@@ -393,7 +427,6 @@
             } else if (scope === "collaborator") {
                 confirmAddCollaborator();
             }
-            // scope === "newTask": secim sadece saklanir, gorev "Ekle" ile olusturulunca atanir.
         });
 
         document.addEventListener("click", (event) => {
@@ -410,6 +443,14 @@
     wireSearch("newTaskAssigneeUserSearch", "newTaskAssigneeUserSuggest", "user", "newTask");
     wireSearch("newTaskAssigneeGroupSearch", "newTaskAssigneeGroupSuggest", "group", "newTask");
     wireSearch("collaboratorSearch", "collaboratorSuggest", "user", "collaborator");
+
+    const newTaskPanel = document.getElementById("newTaskPanel");
+    if (newTaskPanel) {
+        newTaskPanel.addEventListener("hidden.bs.collapse", () => {
+            selection.newTask = [];
+            renderNewTaskAssigneeChips();
+        });
+    }
 
     // -------------------------------------------------------------- atama
 

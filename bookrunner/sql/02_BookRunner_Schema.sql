@@ -120,10 +120,19 @@ BEGIN
         [DistinguishedName] nvarchar(512) NULL,
         [AvatarColor] nvarchar(9) NOT NULL,
         [IsActive] bit NOT NULL,
+        [IsTeam] bit NOT NULL CONSTRAINT [DF_Groups_IsTeam] DEFAULT (0),
         [LastSyncedAt] datetimeoffset NULL,
         CONSTRAINT [PK_Groups] PRIMARY KEY ([Id])
     );
     PRINT N'Tablo olusturuldu: Groups';
+END
+GO
+
+-- Mevcut kurulumlarda Groups tablosu IsTeam olmadan olusturulmus olabilir; personel
+-- servisinden gelen takim adlarindan turetilmis sanal gruplari ayirt etmek icin eklenir.
+IF COL_LENGTH(N'bookrunner.Groups', 'IsTeam') IS NULL
+BEGIN
+    ALTER TABLE [bookrunner].[Groups] ADD [IsTeam] bit NOT NULL CONSTRAINT [DF_Groups_IsTeam] DEFAULT (0);
 END
 GO
 
@@ -1355,6 +1364,15 @@ BEGIN
     BEGIN
         INSERT INTO [bookrunner].[__EFMigrationsHistory] ([MigrationId], [ProductVersion])
         VALUES (N'20260901060033_AddRunbookCollaborators', N'9.0.19');
+    END
+
+    IF NOT EXISTS (
+        SELECT 1 FROM [bookrunner].[__EFMigrationsHistory]
+        WHERE [MigrationId] = N'20260901062644_AddAppGroupIsTeam'
+    )
+    BEGIN
+        INSERT INTO [bookrunner].[__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+        VALUES (N'20260901062644_AddAppGroupIsTeam', N'9.0.19');
     END
 
     PRINT N'';
