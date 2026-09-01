@@ -57,11 +57,11 @@ public sealed class PersonnelDirectoryService(
         }
     }
 
-    public async Task<IReadOnlyList<string>> GetTeamNamesAsync(CancellationToken ct = default)
+    public async Task<IReadOnlyList<PersonnelTeamSummary>> GetTeamsAsync(CancellationToken ct = default)
     {
         if (!_options.Enabled || string.IsNullOrWhiteSpace(_options.BaseUrl))
         {
-            return Array.Empty<string>();
+            return Array.Empty<PersonnelTeamSummary>();
         }
 
         try
@@ -69,20 +69,26 @@ public sealed class PersonnelDirectoryService(
             var teams = await httpClient.GetFromJsonAsync<List<TeamResponse>>(_options.TeamsPath, ct);
             if (teams is null)
             {
-                return Array.Empty<string>();
+                return Array.Empty<PersonnelTeamSummary>();
             }
 
             return teams
-                .Select(t => t.EkipAdi?.Trim())
-                .Where(name => !string.IsNullOrWhiteSpace(name))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .Select(name => name!)
+                .Where(t => !string.IsNullOrWhiteSpace(t.EkipAdi))
+                .GroupBy(t => t.EkipAdi!.Trim(), StringComparer.OrdinalIgnoreCase)
+                .Select(g => new PersonnelTeamSummary(
+                    g.Key,
+                    g.SelectMany(t => (t.Yoneticiler ?? []).Concat(t.Kadrolu ?? []).Concat(t.Danisman ?? []))
+                        .Select(m => m?.Trim())
+                        .Where(m => !string.IsNullOrWhiteSpace(m))
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .Select(m => m!)
+                        .ToList()))
                 .ToList();
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
         {
             logger.LogWarning(ex, "Personel servisinden ekip listesi alinamadi.");
-            return Array.Empty<string>();
+            return Array.Empty<PersonnelTeamSummary>();
         }
     }
 
@@ -96,12 +102,15 @@ public sealed class PersonnelDirectoryService(
     /// <summary>
     /// "/api/takimlar" yanitindaki tek bir ekip. Uye listeleri (kadrolu/yoneticiler/
     /// danisman) yalnizca ad-soyad iceriyor, kullanici adi (samAccountName) yok;
-    /// bu yuzden BookRunner uyeligi kisilerin kendi girisleri/aramalari uzerinden
-    /// kurulmaya devam eder - burada yalnizca ekip adi kullanilir.
+    /// bu yuzden AD'de ad-soyada gore aranip TEK ve KESIN eslesme bulunursa o kisi
+    /// ekibe baglanir (bkz. DirectorySyncService.SyncTeamCatalogAsync).
     /// </summary>
     private sealed class TeamResponse
     {
         public string? EkipAdi { get; set; }
+        public List<string?>? Yoneticiler { get; set; }
+        public List<string?>? Kadrolu { get; set; }
+        public List<string?>? Danisman { get; set; }
     }
 }
 
@@ -111,6 +120,6 @@ public sealed class NullPersonnelDirectoryService : IPersonnelDirectoryService
     public Task<PersonnelProfile?> GetProfileAsync(string username, CancellationToken ct = default)
         => Task.FromResult<PersonnelProfile?>(null);
 
-    public Task<IReadOnlyList<string>> GetTeamNamesAsync(CancellationToken ct = default)
-        => Task.FromResult<IReadOnlyList<string>>(Array.Empty<string>());
+    public Task<IReadOnlyList<PersonnelTeamSummary>> GetTeamsAsync(CancellationToken ct = default)
+        => Task.FromResult<IReadOnlyList<PersonnelTeamSummary>>(Array.Empty<PersonnelTeamSummary>());
 }

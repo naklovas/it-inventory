@@ -248,10 +248,10 @@ public sealed class DirectorySyncService(
 
     public async Task SyncTeamCatalogAsync(CancellationToken ct = default)
     {
-        IReadOnlyList<string> teamNames;
+        IReadOnlyList<PersonnelTeamSummary> teams;
         try
         {
-            teamNames = await personnelDirectory.GetTeamNamesAsync(ct);
+            teams = await personnelDirectory.GetTeamsAsync(ct);
         }
         catch (Exception ex)
         {
@@ -259,14 +259,23 @@ public sealed class DirectorySyncService(
             return;
         }
 
-        if (teamNames.Count == 0)
+        if (teams.Count == 0)
         {
             return;
         }
 
-        foreach (var teamName in teamNames)
+        foreach (var team in teams)
         {
-            await EnsureTeamGroupAsync(teamName, ct);
+            var group = await EnsureTeamGroupAsync(team.Name, ct);
+
+            // Uyelik yalnizca kisiler kendi AD/personel senkronlarindan gecerse
+            // kurulsaydi, henuz hic BookRunner'a girmemis kisiler bildirim
+            // alamazdi (bkz. gorev atama e-postasi). Bu yuzden ekipteki her isim
+            // burada da AD'de aranip kesin eslesirse dogrudan baglanir.
+            foreach (var memberName in team.MemberNames)
+            {
+                await TryLinkTeamMemberByNameAsync(group, memberName, ct);
+            }
         }
 
         await db.SaveChangesAsync(ct);
@@ -506,6 +515,50 @@ public sealed class DirectorySyncService(
 
     /// <summary>Takim adindan AD SID'leriyle cakismayacak sabit bir sanal kimlik uretir.</summary>
     private static string TeamSid(string teamName) => "TEAM:" + teamName.Trim().ToLowerInvariant();
+
+    /// <summary>
+    /// Personel servisinin ekip listesindeki bir ad-soyadi (kullanici adi degil)
+    /// AD'de arar; TEK ve KESIN eslesme varsa o kisiyi yerel hesaba donusturup
+    /// ekibe ekler. 0 veya birden fazla eslesme varsa (ayni isimde birden fazla
+    /// kisi, veya AD'de hic yoksa) sessizce atlanir - yanlis kisiye gorev
+    /// bildirimi gitmesindense hic gitmemesi tercih edilir; bir sonraki
+    /// senkronda (AD verisi degisirse) tekrar denenir.
+    /// </summary>
+    private async Task TryLinkTeamMemberByNameAsync(AppGroup team, string rawName, CancellationToken ct)
+    {
+        var name = AvatarHelper.StripTrailingAnnotation(rawName)?.Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return;
+        }
+
+        IReadOnlyList<DirectoryUser> matches;
+        try
+        {
+            matches = await directory.SearchUsersAsync(name, 5, ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "{Name} icin AD aramasi basarisiz oldu; bir sonraki senkronda tekrar denenecek.", name);
+            return;
+        }
+
+        var exact = matches
+            .Where(m => string.Equals(AvatarHelper.StripTrailingAnnotation(m.DisplayName), name, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (exact.Count != 1)
+        {
+            return;
+        }
+
+        var user = await UpsertAsync(exact[0], ct);
+
+        if (!await db.UserGroups.AnyAsync(ug => ug.UserId == user.Id && ug.GroupId == team.Id, ct))
+        {
+            db.UserGroups.Add(new AppUserGroup { UserId = user.Id, GroupId = team.Id, SyncedAt = DateTimeOffset.UtcNow });
+        }
+    }
 
     private static bool NeedsRefresh(DateTimeOffset? lastSyncedAt)
         => lastSyncedAt is null || DateTimeOffset.UtcNow - lastSyncedAt.Value > RefreshInterval;
