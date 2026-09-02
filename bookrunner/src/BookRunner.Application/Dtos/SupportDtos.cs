@@ -187,6 +187,30 @@ public sealed record AuditFilter
     public int PageSize { get; init; } = 50;
 }
 
+/// <summary>
+/// Bir takim adini uygulama rolune esleyen kayit (bkz. RoleMapping). Kullanicinin
+/// rolu, uyesi oldugu AD gruplarindan degil, personel servisinin dondurdugu bu
+/// takim adindan turetilir - eslesme yoksa Authorization:DefaultRole uygulanir.
+/// </summary>
+public sealed record RoleMappingDto
+{
+    public Guid Id { get; init; }
+    public required string TeamName { get; init; }
+    public AppRole Role { get; init; }
+    public required string RoleText { get; init; }
+    public bool IsActive { get; init; }
+    public DateTimeOffset CreatedAt { get; init; }
+}
+
+/// <summary>Yeni takim-rol eslemesi olusturma istegi.</summary>
+public sealed record SaveRoleMappingRequest
+{
+    [Required, StringLength(256, MinimumLength = 1)]
+    public required string TeamName { get; init; }
+
+    public AppRole Role { get; init; }
+}
+
 /// <summary>Audit kaydi.</summary>
 public sealed record AuditLogDto
 {

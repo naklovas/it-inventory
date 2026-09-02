@@ -18,6 +18,7 @@ public static class DependencyInjection
         services.AddScoped<ICommentService, CommentService>();
         services.AddScoped<IAuditQueryService, AuditQueryService>();
         services.AddScoped<IEmailOutboxQueryService, EmailOutboxQueryService>();
+        services.AddScoped<IRoleMappingService, RoleMappingService>();
         services.AddScoped<IScriptService, ScriptService>();
         services.AddScoped<IGamificationService, GamificationService>();
         return services;

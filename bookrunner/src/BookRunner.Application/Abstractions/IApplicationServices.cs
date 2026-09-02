@@ -132,6 +132,19 @@ public interface IAuditQueryService
 }
 
 /// <summary>
+/// Takim adi -> rol eslemelerini yonetir (bkz. RoleMapping). Yalnizca
+/// admin.manage yetkisi olanlar erisir; bir takima rol atamak dogrudan
+/// yetki dagitmak demektir.
+/// </summary>
+public interface IRoleMappingService
+{
+    Task<IReadOnlyList<RoleMappingDto>> ListAsync(CancellationToken ct = default);
+    Task<RoleMappingDto> CreateAsync(SaveRoleMappingRequest request, CancellationToken ct = default);
+    Task SetActiveAsync(Guid id, bool isActive, CancellationToken ct = default);
+    Task DeleteAsync(Guid id, CancellationToken ct = default);
+}
+
+/// <summary>
 /// Giden e-posta kuyrugunu (bkz. EmailOutboxMessage) yalnizca izleme amacli
 /// sorgular. Email:Enabled=false iken de her bildirim buraya yazilir; boylece
 /// gercek SMTP baglantisi olmadan "hangi olay kime, ne konuda mail atardi"

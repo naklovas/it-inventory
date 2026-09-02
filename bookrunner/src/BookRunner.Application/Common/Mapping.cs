@@ -182,6 +182,16 @@ public static class Mapping
         CorrelationId = log.CorrelationId
     };
 
+    public static RoleMappingDto ToDto(this RoleMapping mapping) => new()
+    {
+        Id = mapping.Id,
+        TeamName = mapping.TeamName,
+        Role = mapping.Role,
+        RoleText = DisplayText.Role(mapping.Role),
+        IsActive = mapping.IsActive,
+        CreatedAt = mapping.CreatedAt
+    };
+
     public static EmailOutboxDto ToDto(this EmailOutboxMessage message) => new()
     {
         Id = message.Id,

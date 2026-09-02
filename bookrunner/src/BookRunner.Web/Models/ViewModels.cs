@@ -23,6 +23,7 @@ public class PageViewModel
     public bool CanDelete => Can(Permissions.RunbookDelete);
     public bool CanViewAudit => Can(Permissions.AuditRead);
     public bool CanRunScript => Can(Permissions.ScriptExecute);
+    public bool CanManageAdmin => Can(Permissions.AdminManage);
 }
 
 /// <summary>Ana ekran.</summary>
@@ -140,6 +141,15 @@ public sealed class AdminViewModel : PageViewModel
 {
     public ServiceManagerHealth? ServiceManager { get; init; }
     public IReadOnlyList<ScriptDto> Scripts { get; init; } = Array.Empty<ScriptDto>();
+}
+
+/// <summary>
+/// Takim adi -> rol eslemeleri ekrani. Bir takima rol atamak, personel
+/// servisinden o takim adi gelen HERKESE o rolun yetkilerini vermek demektir.
+/// </summary>
+public sealed class RoleMappingsViewModel : PageViewModel
+{
+    public IReadOnlyList<RoleMappingDto> Mappings { get; init; } = Array.Empty<RoleMappingDto>();
 }
 
 /// <summary>Hata sayfasi.</summary>

@@ -56,6 +56,64 @@ public sealed class AdminController(BookRunnerApiClient api, ILogger<AdminContro
         }
     }
 
+    /// <summary>
+    /// Takim adi -> rol eslemeleri. Kullanicinin rolu, uyesi oldugu AD gruplarindan
+    /// degil, personel servisinin dondurdugu tek bir takim adindan turetilir; bu
+    /// ekran o eslemeyi yonetir (Authorization:DefaultRole ise eslesme olmayanlar icin gecerli).
+    /// </summary>
+    public async Task<IActionResult> Roles(CancellationToken ct)
+    {
+        var currentUser = await GetCurrentUserAsync(ct);
+
+        IReadOnlyList<RoleMappingDto> mappings = Array.Empty<RoleMappingDto>();
+        try
+        {
+            mappings = await Api.ListRoleMappingsAsync(ct) ?? mappings;
+        }
+        catch (ApiException ex)
+        {
+            TempData["Error"] = ex.Message;
+        }
+
+        return View(await FillAsync(new RoleMappingsViewModel { CurrentUser = currentUser, Mappings = mappings }, ct));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> AddRoleMapping(SaveRoleMappingRequest request, CancellationToken ct)
+    {
+        if (await TryAsync(async () => { await Api.CreateRoleMappingAsync(request, ct); }, "Esleme eklenemedi"))
+        {
+            TempData["Success"] = $"'{request.TeamName}' -> {request.Role} eslemesi eklendi.";
+        }
+
+        return RedirectToAction(nameof(Roles));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SetRoleMappingActive(Guid id, bool isActive, CancellationToken ct)
+    {
+        if (await TryAsync(() => Api.SetRoleMappingActiveAsync(id, isActive, ct), "Esleme guncellenemedi"))
+        {
+            TempData["Success"] = isActive ? "Esleme etkinlestirildi." : "Esleme devre disi birakildi.";
+        }
+
+        return RedirectToAction(nameof(Roles));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteRoleMapping(Guid id, CancellationToken ct)
+    {
+        if (await TryAsync(() => Api.DeleteRoleMappingAsync(id, ct), "Esleme silinemedi"))
+        {
+            TempData["Success"] = "Esleme silindi.";
+        }
+
+        return RedirectToAction(nameof(Roles));
+    }
+
     /// <summary>Service Manager baglantisi ve script kutuphanesi durumu.</summary>
     public async Task<IActionResult> Integrations(CancellationToken ct)
     {

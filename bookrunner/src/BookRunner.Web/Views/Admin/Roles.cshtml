@@ -1,0 +1,105 @@
+@model RoleMappingsViewModel
+@using BookRunner.Domain.Enums
+@{
+    ViewData["Title"] = "Rol eslemeleri";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h1 class="br-page-title h3 mb-1">Rol eslemeleri</h1>
+        <p class="br-muted mb-0">
+            Kullanicinin rolu, uyesi oldugu AD gruplarindan degil, personel servisinin
+            dondurdugu tek bir takim adindan turetilir. Asagida eslesmeyen bir takimdaki
+            herkes <code>Authorization:DefaultRole</code> (appsettings) ile gelen rolu alir -
+            su an bu genellikle "Izleyici" (yalnizca okuma).
+        </p>
+    </div>
+    <a class="btn btn-outline-secondary btn-sm" asp-action="Audit">
+        <i class="bi bi-shield-check me-1"></i>Denetim
+    </a>
+</div>
+
+<form class="br-card p-3 mb-3" method="post" asp-action="AddRoleMapping">
+    @Html.AntiForgeryToken()
+    <h2 class="h6 mb-3">Yeni esleme ekle</h2>
+    <div class="row g-2 align-items-end">
+        <div class="col-md-6">
+            <label class="form-label small br-muted">Takim adi</label>
+            <input class="form-control" name="TeamName" required
+                   placeholder="Personel servisindeki ekipAdi ile BIREBIR ayni yazilmali" />
+        </div>
+        <div class="col-md-4">
+            <label class="form-label small br-muted">Rol</label>
+            <select class="form-select" name="Role">
+                @foreach (AppRole role in Enum.GetValues<AppRole>())
+                {
+                    <option value="@role">@DisplayText.Role(role)</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-2 d-grid">
+            <button class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>Ekle</button>
+        </div>
+    </div>
+</form>
+
+<div class="br-card">
+    <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+            <thead class="table-light">
+            <tr>
+                <th>Takim adi</th>
+                <th style="width:180px;">Rol</th>
+                <th style="width:110px;">Durum</th>
+                <th style="width:150px;">Eklendi</th>
+                <th style="width:160px;"></th>
+            </tr>
+            </thead>
+            <tbody>
+            @if (Model.Mappings.Count == 0)
+            {
+                <tr><td colspan="5" class="text-center br-muted py-4">Henuz bir esleme yok. Herkes varsayilan rolu aliyor.</td></tr>
+            }
+            else
+            {
+                foreach (var mapping in Model.Mappings)
+                {
+                    <tr>
+                        <td>@mapping.TeamName</td>
+                        <td><span class="badge text-bg-light border">@mapping.RoleText</span></td>
+                        <td>
+                            @if (mapping.IsActive)
+                            {
+                                <span class="badge text-bg-success-subtle border border-success-subtle text-success-emphasis">Etkin</span>
+                            }
+                            else
+                            {
+                                <span class="badge text-bg-secondary-subtle border">Devre disi</span>
+                            }
+                        </td>
+                        <td class="small br-muted">@mapping.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</td>
+                        <td class="text-end">
+                            <form method="post" asp-action="SetRoleMappingActive" class="d-inline">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="id" value="@mapping.Id" />
+                                <input type="hidden" name="isActive" value="@(!mapping.IsActive)" />
+                                <button class="btn btn-sm btn-outline-secondary" type="submit">
+                                    @(mapping.IsActive ? "Devre disi birak" : "Etkinlestir")
+                                </button>
+                            </form>
+                            <form method="post" asp-action="DeleteRoleMapping" class="d-inline"
+                                  onsubmit="return confirm('Bu esleme silinecek. Emin misiniz?');">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="id" value="@mapping.Id" />
+                                <button class="btn btn-sm btn-outline-danger" type="submit">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+            }
+            </tbody>
+        </table>
+    </div>
+</div>

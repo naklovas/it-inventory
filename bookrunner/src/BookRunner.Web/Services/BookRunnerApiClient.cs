@@ -194,6 +194,20 @@ public sealed class BookRunnerApiClient(HttpClient httpClient, ILogger<BookRunne
         return GetAsync<PagedResult<AuditLogDto>>(QueryHelpers.AddQueryString("api/audit", parameters), ct);
     }
 
+    // ------------------------------------------------------------ rol eslemesi
+
+    public Task<IReadOnlyList<RoleMappingDto>?> ListRoleMappingsAsync(CancellationToken ct = default)
+        => GetAsync<IReadOnlyList<RoleMappingDto>>("api/role-mappings", ct);
+
+    public Task<RoleMappingDto?> CreateRoleMappingAsync(SaveRoleMappingRequest request, CancellationToken ct = default)
+        => PostAsync<SaveRoleMappingRequest, RoleMappingDto>("api/role-mappings", request, ct);
+
+    public Task SetRoleMappingActiveAsync(Guid id, bool isActive, CancellationToken ct = default)
+        => SendAsync(HttpMethod.Post, $"api/role-mappings/{id}/active?isActive={isActive}", ct);
+
+    public Task DeleteRoleMappingAsync(Guid id, CancellationToken ct = default)
+        => SendAsync(HttpMethod.Delete, $"api/role-mappings/{id}", ct);
+
     // ----------------------------------------------------------- email outbox
 
     public Task<PagedResult<EmailOutboxDto>?> ListEmailOutboxAsync(EmailOutboxFilter filter, CancellationToken ct = default)
