@@ -495,10 +495,6 @@ namespace BookRunner.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset?>("PlannedStart")
                         .HasColumnType("datetimeoffset");
 
-                    b.Property<string>("ProgramName")
-                        .HasMaxLength(150)
-                        .HasColumnType("nvarchar(150)");
-
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAddOrUpdate()
@@ -507,6 +503,10 @@ namespace BookRunner.Infrastructure.Persistence.Migrations
                     b.Property<string>("ServiceManagerWorkItemId")
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("SeyirName")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
 
                     b.Property<Guid?>("SourceTemplateId")
                         .HasColumnType("uniqueidentifier");
@@ -543,9 +543,9 @@ namespace BookRunner.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("PlannedStart");
 
-                    b.HasIndex("ProgramName");
-
                     b.HasIndex("ServiceManagerWorkItemId");
+
+                    b.HasIndex("SeyirName");
 
                     b.HasIndex("SourceTemplateId");
 

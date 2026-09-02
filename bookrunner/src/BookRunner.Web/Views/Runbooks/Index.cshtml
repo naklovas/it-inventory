@@ -55,12 +55,12 @@
     </div>
     <div class="row g-2 align-items-end mt-1">
         <div class="col-md-3">
-            <label class="form-label small br-muted">Program (ust baslik)</label>
-            <select class="form-select" name="programName">
+            <label class="form-label small br-muted">Seyir (ust baslik)</label>
+            <select class="form-select" name="seyirName">
                 <option value="">Tumu</option>
-                @foreach (var name in Model.ProgramNames)
+                @foreach (var name in Model.SeyirNames)
                 {
-                    <option value="@name" selected="@(f.ProgramName == name)">@name</option>
+                    <option value="@name" selected="@(f.SeyirName == name)">@name</option>
                 }
             </select>
         </div>
@@ -126,9 +126,9 @@ else
                         <td><code>@runbook.Code</code></td>
                         <td>
                             <a class="fw-semibold text-decoration-none" asp-action="Details" asp-route-id="@runbook.Id">@runbook.Title</a>
-                            @if (!string.IsNullOrWhiteSpace(runbook.ProgramName))
+                            @if (!string.IsNullOrWhiteSpace(runbook.SeyirName))
                             {
-                                <small class="d-block br-muted"><i class="bi bi-diagram-3"></i> @runbook.ProgramName</small>
+                                <small class="d-block br-muted"><i class="bi bi-diagram-3"></i> @runbook.SeyirName</small>
                             }
                             @if (runbook.Tags.Count > 0)
                             {
@@ -193,7 +193,7 @@ else
         if (!string.IsNullOrWhiteSpace(filter.Tag)) values["tag"] = filter.Tag;
         if (!string.IsNullOrWhiteSpace(filter.ServiceManagerWorkItemId)) values["serviceManagerWorkItemId"] = filter.ServiceManagerWorkItemId;
         if (!string.IsNullOrWhiteSpace(filter.TemplateCategory)) values["templateCategory"] = filter.TemplateCategory;
-        if (!string.IsNullOrWhiteSpace(filter.ProgramName)) values["programName"] = filter.ProgramName;
+        if (!string.IsNullOrWhiteSpace(filter.SeyirName)) values["seyirName"] = filter.SeyirName;
         if (filter.PlannedStartFrom.HasValue) values["plannedStartFrom"] = filter.PlannedStartFrom.Value.ToString("O");
         if (filter.PlannedStartTo.HasValue) values["plannedStartTo"] = filter.PlannedStartTo.Value.ToString("O");
 

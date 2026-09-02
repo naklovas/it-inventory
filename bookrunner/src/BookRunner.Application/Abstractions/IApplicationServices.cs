@@ -52,9 +52,9 @@ public interface IRunbookService
 
     /// <summary>
     /// Suzme/otomatik tamamlama icin kullanilan, mevcut runbook'lardaki
-    /// tekil "program" (ust baslik, bkz. Runbook.ProgramName) adlari.
+    /// tekil "seyir" (ust baslik, bkz. Runbook.SeyirName) adlari.
     /// </summary>
-    Task<IReadOnlyList<string>> GetProgramNamesAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<string>> GetSeyirNamesAsync(CancellationToken ct = default);
 
     Task<RunbookDetailDto> GetAsync(Guid id, CancellationToken ct = default);
 

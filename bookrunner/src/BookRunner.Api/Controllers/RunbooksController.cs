@@ -27,14 +27,14 @@ public sealed class RunbooksController(IRunbookService runbooks) : ControllerBas
         => Ok(await runbooks.ListAsync(filter, ct));
 
     /// <summary>
-    /// Suzme/otomatik tamamlama icin mevcut runbook'lardaki tekil "program"
+    /// Suzme/otomatik tamamlama icin mevcut runbook'lardaki tekil "seyir"
     /// (ust baslik, orn. "Karti Sistemler Online Gecisi") adlari.
     /// </summary>
-    [HttpGet("programs")]
+    [HttpGet("seyirler")]
     [Authorize(Policy = Permissions.RunbookRead)]
     [ProducesResponseType(typeof(IReadOnlyList<string>), StatusCodes.Status200OK)]
-    public async Task<ActionResult<IReadOnlyList<string>>> Programs(CancellationToken ct)
-        => Ok(await runbooks.GetProgramNamesAsync(ct));
+    public async Task<ActionResult<IReadOnlyList<string>>> Seyirler(CancellationToken ct)
+        => Ok(await runbooks.GetSeyirNamesAsync(ct));
 
     /// <summary>Ana ekran ozet kartlari ve "bana atanan gorevler" listesi.</summary>
     [HttpGet("dashboard")]

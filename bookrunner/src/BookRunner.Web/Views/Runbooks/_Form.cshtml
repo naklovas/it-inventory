@@ -40,16 +40,16 @@
     </div>
 
     <div class="col-md-3">
-        <label class="form-label small br-muted">Program (ust baslik)</label>
-        <input class="form-control" asp-for="ProgramName" list="programNameOptions"
+        <label class="form-label small br-muted">Seyir (ust baslik)</label>
+        <input class="form-control" asp-for="SeyirName" list="seyirNameOptions"
                autocomplete="off" placeholder="orn. Veri Merkezi Migrasyonu" />
-        <datalist id="programNameOptions">
-            @foreach (var name in Model.ProgramNames)
+        <datalist id="seyirNameOptions">
+            @foreach (var name in Model.SeyirNames)
             {
                 <option value="@name"></option>
             }
         </datalist>
-        <small class="br-muted">Birden fazla runbook'u ayni baslik altinda gruplar; listede aramak icin de kullanilir.</small>
+        <small class="br-muted">Birden fazla runbook'u ayni seyir altinda gruplar; listede aramak icin de kullanilir.</small>
     </div>
 
     <div class="col-md-3">

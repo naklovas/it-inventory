@@ -32,7 +32,7 @@ public class Runbook : AuditableEntity, ISoftDeletable
     /// orn. "Karti Sistemler Online Gecisi" veya "Veri Merkezi Migrasyonu".
     /// Sablonlar disinda TUM runbook'larda kullanilabilir; serbest metindir.
     /// </summary>
-    public string? ProgramName { get; set; }
+    public string? SeyirName { get; set; }
 
     /// <summary>Bu runbook bir sablondan uretildiyse kaynak sablonun kimligi.</summary>
     public Guid? SourceTemplateId { get; set; }

@@ -64,11 +64,11 @@
                         <i class="bi bi-pencil-square me-1"></i>Editorsunuz
                     </span>
                 }
-                @if (!string.IsNullOrWhiteSpace(r.ProgramName))
+                @if (!string.IsNullOrWhiteSpace(r.SeyirName))
                 {
-                    <a class="text-decoration-none" asp-action="Index" asp-route-programName="@r.ProgramName"
-                       title="Bu programdaki tum runbook'lari gor">
-                        <i class="bi bi-diagram-3"></i> @r.ProgramName
+                    <a class="text-decoration-none" asp-action="Index" asp-route-seyirName="@r.SeyirName"
+                       title="Bu seyirdeki tum runbook'lari gor">
+                        <i class="bi bi-diagram-3"></i> @r.SeyirName
                     </a>
                 }
                 <span><i class="bi bi-calendar-event"></i> Plan: @Fmt(r.PlannedStart) - @Fmt(r.PlannedEnd)</span>

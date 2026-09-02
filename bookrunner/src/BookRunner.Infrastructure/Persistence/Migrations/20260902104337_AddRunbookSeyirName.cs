@@ -5,38 +5,38 @@
 namespace BookRunner.Infrastructure.Persistence.Migrations
 {
     /// <inheritdoc />
-    public partial class AddRunbookProgramName : Migration
+    public partial class AddRunbookSeyirName : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<string>(
+            migrationBuilder.RenameColumn(
                 name: "ProgramName",
                 schema: "bookrunner",
                 table: "Runbooks",
-                type: "nvarchar(150)",
-                maxLength: 150,
-                nullable: true);
+                newName: "SeyirName");
 
-            migrationBuilder.CreateIndex(
+            migrationBuilder.RenameIndex(
                 name: "IX_Runbooks_ProgramName",
                 schema: "bookrunner",
                 table: "Runbooks",
-                column: "ProgramName");
+                newName: "IX_Runbooks_SeyirName");
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropIndex(
-                name: "IX_Runbooks_ProgramName",
+            migrationBuilder.RenameColumn(
+                name: "SeyirName",
                 schema: "bookrunner",
-                table: "Runbooks");
+                table: "Runbooks",
+                newName: "ProgramName");
 
-            migrationBuilder.DropColumn(
-                name: "ProgramName",
+            migrationBuilder.RenameIndex(
+                name: "IX_Runbooks_SeyirName",
                 schema: "bookrunner",
-                table: "Runbooks");
+                table: "Runbooks",
+                newName: "IX_Runbooks_ProgramName");
         }
     }
 }

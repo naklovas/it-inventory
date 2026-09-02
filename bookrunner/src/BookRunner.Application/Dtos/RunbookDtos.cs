@@ -16,8 +16,8 @@ public sealed record RunbookFilter
 
     public string? TemplateCategory { get; init; }
 
-    /// <summary>Birden fazla runbook'u kapsayan ust baslik (bkz. Runbook.ProgramName).</summary>
-    public string? ProgramName { get; init; }
+    /// <summary>Birden fazla runbook'u kapsayan ust baslik (bkz. Runbook.SeyirName).</summary>
+    public string? SeyirName { get; init; }
 
     public Guid? OwnerUserId { get; init; }
 
@@ -57,7 +57,7 @@ public sealed record RunbookListItemDto
     public required string StatusText { get; init; }
     public bool IsTemplate { get; init; }
     public string? TemplateCategory { get; init; }
-    public string? ProgramName { get; init; }
+    public string? SeyirName { get; init; }
     public DateTimeOffset? PlannedStart { get; init; }
     public DateTimeOffset? PlannedEnd { get; init; }
     public PersonSummary? Owner { get; init; }
@@ -85,7 +85,7 @@ public sealed record RunbookDetailDto
     public required string StatusText { get; init; }
     public bool IsTemplate { get; init; }
     public string? TemplateCategory { get; init; }
-    public string? ProgramName { get; init; }
+    public string? SeyirName { get; init; }
     public Guid? SourceTemplateId { get; init; }
     public string? SourceTemplateTitle { get; init; }
     public DateTimeOffset? PlannedStart { get; init; }
@@ -140,7 +140,7 @@ public sealed record CreateRunbookRequest
     public string? TemplateCategory { get; init; }
 
     [StringLength(150)]
-    public string? ProgramName { get; init; }
+    public string? SeyirName { get; init; }
 
     public DateTimeOffset? PlannedStart { get; init; }
 
@@ -170,7 +170,7 @@ public sealed record UpdateRunbookRequest
     public string? TemplateCategory { get; init; }
 
     [StringLength(150)]
-    public string? ProgramName { get; init; }
+    public string? SeyirName { get; init; }
 
     public DateTimeOffset? PlannedStart { get; init; }
 

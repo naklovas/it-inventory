@@ -32,8 +32,8 @@ public sealed class BookRunnerApiClient(HttpClient httpClient, ILogger<BookRunne
     public Task<DashboardDto?> GetDashboardAsync(CancellationToken ct = default)
         => GetAsync<DashboardDto>("api/runbooks/dashboard", ct);
 
-    public Task<IReadOnlyList<string>?> GetProgramNamesAsync(CancellationToken ct = default)
-        => GetAsync<IReadOnlyList<string>>("api/runbooks/programs", ct);
+    public Task<IReadOnlyList<string>?> GetSeyirNamesAsync(CancellationToken ct = default)
+        => GetAsync<IReadOnlyList<string>>("api/runbooks/seyirler", ct);
 
     public Task<RunbookDetailDto?> CreateRunbookAsync(CreateRunbookRequest request, CancellationToken ct = default)
         => PostAsync<CreateRunbookRequest, RunbookDetailDto>("api/runbooks", request, ct);
@@ -255,6 +255,7 @@ public sealed class BookRunnerApiClient(HttpClient httpClient, ILogger<BookRunne
             ["search"] = filter.Search,
             ["isTemplate"] = filter.IsTemplate?.ToString(),
             ["templateCategory"] = filter.TemplateCategory,
+            ["seyirName"] = filter.SeyirName,
             ["ownerUserId"] = filter.OwnerUserId?.ToString(),
             ["assignedToUserId"] = filter.AssignedToUserId?.ToString(),
             ["assignedToGroupId"] = filter.AssignedToGroupId?.ToString(),

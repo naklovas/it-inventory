@@ -221,7 +221,7 @@ BEGIN
         [Status] int NOT NULL,
         [IsTemplate] bit NOT NULL,
         [TemplateCategory] nvarchar(100) NULL,
-        [ProgramName] nvarchar(150) NULL,
+        [SeyirName] nvarchar(150) NULL,
         [SourceTemplateId] uniqueidentifier NULL,
         [PlannedStart] datetimeoffset NULL,
         [PlannedEnd] datetimeoffset NULL,
@@ -244,20 +244,20 @@ BEGIN
 END
 GO
 
--- Mevcut kurulumlarda Runbooks tablosu ProgramName olmadan olusturulmus olabilir;
+-- Mevcut kurulumlarda Runbooks tablosu SeyirName olmadan olusturulmus olabilir;
 -- birden fazla runbook'u kapsayan ust baslik (Jira'daki "Epic" karsiligi) icin eklenir.
-IF COL_LENGTH(N'bookrunner.Runbooks', 'ProgramName') IS NULL
+IF COL_LENGTH(N'bookrunner.Runbooks', 'SeyirName') IS NULL
 BEGIN
-    ALTER TABLE [bookrunner].[Runbooks] ADD [ProgramName] nvarchar(150) NULL;
+    ALTER TABLE [bookrunner].[Runbooks] ADD [SeyirName] nvarchar(150) NULL;
 END
 GO
 
 IF NOT EXISTS (
     SELECT 1 FROM sys.indexes
-    WHERE name = N'IX_Runbooks_ProgramName' AND object_id = OBJECT_ID(N'[bookrunner].[Runbooks]')
+    WHERE name = N'IX_Runbooks_SeyirName' AND object_id = OBJECT_ID(N'[bookrunner].[Runbooks]')
 )
 BEGIN
-    CREATE INDEX [IX_Runbooks_ProgramName] ON [bookrunner].[Runbooks] ([ProgramName]);
+    CREATE INDEX [IX_Runbooks_SeyirName] ON [bookrunner].[Runbooks] ([SeyirName]);
 END
 GO
 
@@ -1395,11 +1395,11 @@ BEGIN
 
     IF NOT EXISTS (
         SELECT 1 FROM [bookrunner].[__EFMigrationsHistory]
-        WHERE [MigrationId] = N'20260902064932_AddRunbookProgramName'
+        WHERE [MigrationId] = N'20260902104337_AddRunbookSeyirName'
     )
     BEGIN
         INSERT INTO [bookrunner].[__EFMigrationsHistory] ([MigrationId], [ProductVersion])
-        VALUES (N'20260902064932_AddRunbookProgramName', N'9.0.19');
+        VALUES (N'20260902104337_AddRunbookSeyirName', N'9.0.19');
     END
 
     PRINT N'';

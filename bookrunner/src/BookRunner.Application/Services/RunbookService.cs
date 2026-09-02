@@ -37,7 +37,7 @@ public sealed class RunbookService(
                 EF.Functions.Like(r.Title, term) ||
                 EF.Functions.Like(r.Code, term) ||
                 (r.Description != null && EF.Functions.Like(r.Description, term)) ||
-                (r.ProgramName != null && EF.Functions.Like(r.ProgramName, term)));
+                (r.SeyirName != null && EF.Functions.Like(r.SeyirName, term)));
         }
 
         if (filter.Statuses is { Length: > 0 })
@@ -50,9 +50,9 @@ public sealed class RunbookService(
             query = query.Where(r => r.TemplateCategory == filter.TemplateCategory);
         }
 
-        if (!string.IsNullOrWhiteSpace(filter.ProgramName))
+        if (!string.IsNullOrWhiteSpace(filter.SeyirName))
         {
-            query = query.Where(r => r.ProgramName == filter.ProgramName);
+            query = query.Where(r => r.SeyirName == filter.SeyirName);
         }
 
         if (filter.OwnerUserId.HasValue)
@@ -155,7 +155,7 @@ public sealed class RunbookService(
             StatusText = DisplayText.Status(row.Runbook.Status),
             IsTemplate = row.Runbook.IsTemplate,
             TemplateCategory = row.Runbook.TemplateCategory,
-            ProgramName = row.Runbook.ProgramName,
+            SeyirName = row.Runbook.SeyirName,
             PlannedStart = row.Runbook.PlannedStart,
             PlannedEnd = row.Runbook.PlannedEnd,
             Owner = row.Owner?.ToSummary(),
@@ -175,11 +175,11 @@ public sealed class RunbookService(
         return PagedResult<RunbookListItemDto>.Create(items, page, pageSize, total);
     }
 
-    public async Task<IReadOnlyList<string>> GetProgramNamesAsync(CancellationToken ct = default)
+    public async Task<IReadOnlyList<string>> GetSeyirNamesAsync(CancellationToken ct = default)
     {
         return await db.Runbooks.AsNoTracking()
-            .Where(r => r.ProgramName != null && r.ProgramName != "")
-            .Select(r => r.ProgramName!)
+            .Where(r => r.SeyirName != null && r.SeyirName != "")
+            .Select(r => r.SeyirName!)
             .Distinct()
             .OrderBy(name => name)
             .ToListAsync(ct);
@@ -225,7 +225,7 @@ public sealed class RunbookService(
             Status = RunbookStatus.Draft,
             IsTemplate = request.IsTemplate,
             TemplateCategory = request.TemplateCategory,
-            ProgramName = NormalizeProgramName(request.ProgramName),
+            SeyirName = NormalizeSeyirName(request.SeyirName),
             PlannedStart = request.PlannedStart,
             PlannedEnd = request.PlannedEnd,
             OwnerUserId = ownerId,
@@ -268,7 +268,7 @@ public sealed class RunbookService(
         runbook.Title = request.Title.Trim();
         runbook.Description = request.Description;
         runbook.TemplateCategory = request.TemplateCategory;
-        runbook.ProgramName = NormalizeProgramName(request.ProgramName);
+        runbook.SeyirName = NormalizeSeyirName(request.SeyirName);
         runbook.PlannedStart = request.PlannedStart;
         runbook.PlannedEnd = request.PlannedEnd;
         runbook.ServiceManagerWorkItemId = request.ServiceManagerWorkItemId;
@@ -768,7 +768,7 @@ public sealed class RunbookService(
     private static string? Truncate(string? value, int maxLength)
         => value is null || value.Length <= maxLength ? value : value[..maxLength] + "...";
 
-    private static string? NormalizeProgramName(string? value)
+    private static string? NormalizeSeyirName(string? value)
     {
         var trimmed = value?.Trim();
         return string.IsNullOrEmpty(trimmed) ? null : trimmed;
