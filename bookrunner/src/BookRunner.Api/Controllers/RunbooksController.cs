@@ -81,9 +81,13 @@ public sealed class RunbooksController(IRunbookService runbooks) : ControllerBas
         return NoContent();
     }
 
-    /// <summary>Yeni runbook veya sablon olusturur.</summary>
+    /// <summary>
+    /// Yeni runbook veya sablon olusturur. Buradaki politika bilerek dusuk
+    /// bardir (RunbookRead); asil karar RunbookService.CreateAsync icindeki
+    /// RunbookCreate kontrolundedir - digerleri gibi tek yerde toplanir.
+    /// </summary>
     [HttpPost]
-    [Authorize(Policy = Permissions.RunbookWrite)]
+    [Authorize(Policy = Permissions.RunbookRead)]
     [ProducesResponseType(typeof(RunbookDetailDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<RunbookDetailDto>> Create(
