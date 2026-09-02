@@ -40,6 +40,19 @@
     </div>
 
     <div class="col-md-3">
+        <label class="form-label small br-muted">Program (ust baslik)</label>
+        <input class="form-control" asp-for="ProgramName" list="programNameOptions"
+               autocomplete="off" placeholder="orn. Veri Merkezi Migrasyonu" />
+        <datalist id="programNameOptions">
+            @foreach (var name in Model.ProgramNames)
+            {
+                <option value="@name"></option>
+            }
+        </datalist>
+        <small class="br-muted">Birden fazla runbook'u ayni baslik altinda gruplar; listede aramak icin de kullanilir.</small>
+    </div>
+
+    <div class="col-md-3">
         <label class="form-label small br-muted">Planlanan baslangic</label>
         <input class="form-control" type="datetime-local" asp-for="PlannedStart" />
     </div>

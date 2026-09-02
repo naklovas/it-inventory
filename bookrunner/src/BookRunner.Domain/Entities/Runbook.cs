@@ -27,6 +27,13 @@ public class Runbook : AuditableEntity, ISoftDeletable
     /// <summary>Sablonlarin arayuzde gruplanmasi icin kategori, orn. "Veritabani Gecisi".</summary>
     public string? TemplateCategory { get; set; }
 
+    /// <summary>
+    /// Birden fazla runbook'u kapsayan ust baslik (Jira'daki "Epic" karsiligi),
+    /// orn. "Karti Sistemler Online Gecisi" veya "Veri Merkezi Migrasyonu".
+    /// Sablonlar disinda TUM runbook'larda kullanilabilir; serbest metindir.
+    /// </summary>
+    public string? ProgramName { get; set; }
+
     /// <summary>Bu runbook bir sablondan uretildiyse kaynak sablonun kimligi.</summary>
     public Guid? SourceTemplateId { get; set; }
     public Runbook? SourceTemplate { get; set; }

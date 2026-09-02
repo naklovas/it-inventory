@@ -50,6 +50,12 @@ public interface IRunbookService
 {
     Task<PagedResult<RunbookListItemDto>> ListAsync(RunbookFilter filter, CancellationToken ct = default);
 
+    /// <summary>
+    /// Suzme/otomatik tamamlama icin kullanilan, mevcut runbook'lardaki
+    /// tekil "program" (ust baslik, bkz. Runbook.ProgramName) adlari.
+    /// </summary>
+    Task<IReadOnlyList<string>> GetProgramNamesAsync(CancellationToken ct = default);
+
     Task<RunbookDetailDto> GetAsync(Guid id, CancellationToken ct = default);
 
     Task<RunbookDetailDto> CreateAsync(CreateRunbookRequest request, CancellationToken ct = default);

@@ -221,6 +221,7 @@ BEGIN
         [Status] int NOT NULL,
         [IsTemplate] bit NOT NULL,
         [TemplateCategory] nvarchar(100) NULL,
+        [ProgramName] nvarchar(150) NULL,
         [SourceTemplateId] uniqueidentifier NULL,
         [PlannedStart] datetimeoffset NULL,
         [PlannedEnd] datetimeoffset NULL,
@@ -240,6 +241,23 @@ BEGIN
         CONSTRAINT [PK_Runbooks] PRIMARY KEY ([Id])
     );
     PRINT N'Tablo olusturuldu: Runbooks';
+END
+GO
+
+-- Mevcut kurulumlarda Runbooks tablosu ProgramName olmadan olusturulmus olabilir;
+-- birden fazla runbook'u kapsayan ust baslik (Jira'daki "Epic" karsiligi) icin eklenir.
+IF COL_LENGTH(N'bookrunner.Runbooks', 'ProgramName') IS NULL
+BEGIN
+    ALTER TABLE [bookrunner].[Runbooks] ADD [ProgramName] nvarchar(150) NULL;
+END
+GO
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.indexes
+    WHERE name = N'IX_Runbooks_ProgramName' AND object_id = OBJECT_ID(N'[bookrunner].[Runbooks]')
+)
+BEGIN
+    CREATE INDEX [IX_Runbooks_ProgramName] ON [bookrunner].[Runbooks] ([ProgramName]);
 END
 GO
 
@@ -1373,6 +1391,15 @@ BEGIN
     BEGIN
         INSERT INTO [bookrunner].[__EFMigrationsHistory] ([MigrationId], [ProductVersion])
         VALUES (N'20260901062644_AddAppGroupIsTeam', N'9.0.19');
+    END
+
+    IF NOT EXISTS (
+        SELECT 1 FROM [bookrunner].[__EFMigrationsHistory]
+        WHERE [MigrationId] = N'20260902064932_AddRunbookProgramName'
+    )
+    BEGIN
+        INSERT INTO [bookrunner].[__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+        VALUES (N'20260902064932_AddRunbookProgramName', N'9.0.19');
     END
 
     PRINT N'';

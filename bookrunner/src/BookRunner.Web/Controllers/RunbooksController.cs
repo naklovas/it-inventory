@@ -30,6 +30,16 @@ public sealed class RunbooksController(
         var currentUser = await GetCurrentUserAsync(ct);
         var emptyResults = Application.Common.PagedResult<RunbookListItemDto>.Create([], 1, filter.PageSize, 0);
 
+        IReadOnlyList<string> programNames;
+        try
+        {
+            programNames = await Api.GetProgramNamesAsync(ct) ?? Array.Empty<string>();
+        }
+        catch (ApiException)
+        {
+            programNames = Array.Empty<string>();
+        }
+
         try
         {
             var results = await Api.ListRunbooksAsync(filter, ct);
@@ -37,7 +47,8 @@ public sealed class RunbooksController(
             {
                 CurrentUser = currentUser,
                 Filter = filter,
-                Results = results ?? emptyResults
+                Results = results ?? emptyResults,
+                ProgramNames = programNames
             }, ct));
         }
         catch (ApiException ex)
@@ -47,7 +58,8 @@ public sealed class RunbooksController(
             {
                 CurrentUser = currentUser,
                 Filter = filter,
-                Results = emptyResults
+                Results = emptyResults,
+                ProgramNames = programNames
             }, ct));
         }
     }
@@ -98,11 +110,15 @@ public sealed class RunbooksController(
 
     [HttpGet]
     public async Task<IActionResult> Create(bool isTemplate, CancellationToken ct)
-        => View(await FillAsync(new RunbookFormViewModel
+    {
+        var form = new RunbookFormViewModel
         {
             CurrentUser = await GetCurrentUserAsync(ct),
             IsTemplate = isTemplate
-        }, ct));
+        };
+        await PopulateProgramNamesAsync(form, ct);
+        return View(await FillAsync(form, ct));
+    }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
@@ -110,6 +126,7 @@ public sealed class RunbooksController(
     {
         if (!ModelState.IsValid)
         {
+            await PopulateProgramNamesAsync(form, ct);
             return View(await FillAsync(form, ct));
         }
 
@@ -122,6 +139,7 @@ public sealed class RunbooksController(
                 Description = form.Description,
                 IsTemplate = form.IsTemplate,
                 TemplateCategory = form.TemplateCategory,
+                ProgramName = form.ProgramName,
                 PlannedStart = ToOffset(form.PlannedStart),
                 PlannedEnd = ToOffset(form.PlannedEnd),
                 ServiceManagerWorkItemId = form.ServiceManagerWorkItemId,
@@ -131,6 +149,7 @@ public sealed class RunbooksController(
 
         if (!ok || created is null)
         {
+            await PopulateProgramNamesAsync(form, ct);
             return View(await FillAsync(form, ct));
         }
 
@@ -147,7 +166,7 @@ public sealed class RunbooksController(
             return NotFound();
         }
 
-        return View(await FillAsync(new RunbookFormViewModel
+        var form = new RunbookFormViewModel
         {
             CurrentUser = await GetCurrentUserAsync(ct),
             Id = runbook.Id,
@@ -157,12 +176,15 @@ public sealed class RunbooksController(
             Status = runbook.Status,
             IsTemplate = runbook.IsTemplate,
             TemplateCategory = runbook.TemplateCategory,
+            ProgramName = runbook.ProgramName,
             PlannedStart = runbook.PlannedStart?.LocalDateTime,
             PlannedEnd = runbook.PlannedEnd?.LocalDateTime,
             ServiceManagerWorkItemId = runbook.ServiceManagerWorkItemId,
             TagsText = string.Join(", ", runbook.Tags),
             RowVersion = runbook.RowVersion
-        }, ct));
+        };
+        await PopulateProgramNamesAsync(form, ct);
+        return View(await FillAsync(form, ct));
     }
 
     [HttpPost]
@@ -171,6 +193,7 @@ public sealed class RunbooksController(
     {
         if (!ModelState.IsValid)
         {
+            await PopulateProgramNamesAsync(form, ct);
             return View(await FillAsync(form, ct));
         }
 
@@ -180,6 +203,7 @@ public sealed class RunbooksController(
             Description = form.Description,
             Status = form.Status,
             TemplateCategory = form.TemplateCategory,
+            ProgramName = form.ProgramName,
             PlannedStart = ToOffset(form.PlannedStart),
             PlannedEnd = ToOffset(form.PlannedEnd),
             ServiceManagerWorkItemId = form.ServiceManagerWorkItemId,
@@ -189,6 +213,7 @@ public sealed class RunbooksController(
 
         if (!ok)
         {
+            await PopulateProgramNamesAsync(form, ct);
             return View(await FillAsync(form, ct));
         }
 
@@ -427,4 +452,17 @@ public sealed class RunbooksController(
 
     private static DateTimeOffset? ToOffset(DateTime? value)
         => value.HasValue ? new DateTimeOffset(DateTime.SpecifyKind(value.Value, DateTimeKind.Local)) : null;
+
+    /// <summary>Program alanindaki otomatik tamamlama listesini doldurur; API'ye ulasilamazsa form yine de gosterilir.</summary>
+    private async Task PopulateProgramNamesAsync(RunbookFormViewModel form, CancellationToken ct)
+    {
+        try
+        {
+            form.ProgramNames = await Api.GetProgramNamesAsync(ct) ?? [];
+        }
+        catch (ApiException)
+        {
+            form.ProgramNames = [];
+        }
+    }
 }

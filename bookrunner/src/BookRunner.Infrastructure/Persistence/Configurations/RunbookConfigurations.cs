@@ -18,6 +18,7 @@ public sealed class RunbookConfiguration : IEntityTypeConfiguration<Runbook>
         builder.Property(r => r.Description).HasMaxLength(8000);
         builder.Property(r => r.Status).HasConversion<int>();
         builder.Property(r => r.TemplateCategory).HasMaxLength(100);
+        builder.Property(r => r.ProgramName).HasMaxLength(150);
         builder.Property(r => r.ServiceManagerWorkItemId).HasMaxLength(64);
         builder.Property(r => r.Tags).HasMaxLength(1000);
         builder.Property(r => r.CreatedBy).HasMaxLength(256).IsRequired();
@@ -39,6 +40,7 @@ public sealed class RunbookConfiguration : IEntityTypeConfiguration<Runbook>
 
         builder.HasIndex(r => new { r.IsTemplate, r.Status });
         builder.HasIndex(r => r.ServiceManagerWorkItemId);
+        builder.HasIndex(r => r.ProgramName);
         builder.HasIndex(r => r.PlannedStart);
 
         // Silinen runbook'lar sorgularda otomatik gizlenir.

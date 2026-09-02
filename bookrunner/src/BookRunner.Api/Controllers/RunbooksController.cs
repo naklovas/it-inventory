@@ -26,6 +26,16 @@ public sealed class RunbooksController(IRunbookService runbooks) : ControllerBas
         [FromQuery] RunbookFilter filter, CancellationToken ct)
         => Ok(await runbooks.ListAsync(filter, ct));
 
+    /// <summary>
+    /// Suzme/otomatik tamamlama icin mevcut runbook'lardaki tekil "program"
+    /// (ust baslik, orn. "Karti Sistemler Online Gecisi") adlari.
+    /// </summary>
+    [HttpGet("programs")]
+    [Authorize(Policy = Permissions.RunbookRead)]
+    [ProducesResponseType(typeof(IReadOnlyList<string>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<string>>> Programs(CancellationToken ct)
+        => Ok(await runbooks.GetProgramNamesAsync(ct));
+
     /// <summary>Ana ekran ozet kartlari ve "bana atanan gorevler" listesi.</summary>
     [HttpGet("dashboard")]
     [Authorize(Policy = Permissions.RunbookRead)]

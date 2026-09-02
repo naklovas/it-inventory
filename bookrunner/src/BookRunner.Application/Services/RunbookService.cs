@@ -36,7 +36,8 @@ public sealed class RunbookService(
             query = query.Where(r =>
                 EF.Functions.Like(r.Title, term) ||
                 EF.Functions.Like(r.Code, term) ||
-                (r.Description != null && EF.Functions.Like(r.Description, term)));
+                (r.Description != null && EF.Functions.Like(r.Description, term)) ||
+                (r.ProgramName != null && EF.Functions.Like(r.ProgramName, term)));
         }
 
         if (filter.Statuses is { Length: > 0 })
@@ -47,6 +48,11 @@ public sealed class RunbookService(
         if (!string.IsNullOrWhiteSpace(filter.TemplateCategory))
         {
             query = query.Where(r => r.TemplateCategory == filter.TemplateCategory);
+        }
+
+        if (!string.IsNullOrWhiteSpace(filter.ProgramName))
+        {
+            query = query.Where(r => r.ProgramName == filter.ProgramName);
         }
 
         if (filter.OwnerUserId.HasValue)
@@ -149,6 +155,7 @@ public sealed class RunbookService(
             StatusText = DisplayText.Status(row.Runbook.Status),
             IsTemplate = row.Runbook.IsTemplate,
             TemplateCategory = row.Runbook.TemplateCategory,
+            ProgramName = row.Runbook.ProgramName,
             PlannedStart = row.Runbook.PlannedStart,
             PlannedEnd = row.Runbook.PlannedEnd,
             Owner = row.Owner?.ToSummary(),
@@ -166,6 +173,16 @@ public sealed class RunbookService(
         }).ToList();
 
         return PagedResult<RunbookListItemDto>.Create(items, page, pageSize, total);
+    }
+
+    public async Task<IReadOnlyList<string>> GetProgramNamesAsync(CancellationToken ct = default)
+    {
+        return await db.Runbooks.AsNoTracking()
+            .Where(r => r.ProgramName != null && r.ProgramName != "")
+            .Select(r => r.ProgramName!)
+            .Distinct()
+            .OrderBy(name => name)
+            .ToListAsync(ct);
     }
 
     public async Task<RunbookDetailDto> GetAsync(Guid id, CancellationToken ct = default)
@@ -208,6 +225,7 @@ public sealed class RunbookService(
             Status = RunbookStatus.Draft,
             IsTemplate = request.IsTemplate,
             TemplateCategory = request.TemplateCategory,
+            ProgramName = NormalizeProgramName(request.ProgramName),
             PlannedStart = request.PlannedStart,
             PlannedEnd = request.PlannedEnd,
             OwnerUserId = ownerId,
@@ -250,6 +268,7 @@ public sealed class RunbookService(
         runbook.Title = request.Title.Trim();
         runbook.Description = request.Description;
         runbook.TemplateCategory = request.TemplateCategory;
+        runbook.ProgramName = NormalizeProgramName(request.ProgramName);
         runbook.PlannedStart = request.PlannedStart;
         runbook.PlannedEnd = request.PlannedEnd;
         runbook.ServiceManagerWorkItemId = request.ServiceManagerWorkItemId;
@@ -748,4 +767,10 @@ public sealed class RunbookService(
 
     private static string? Truncate(string? value, int maxLength)
         => value is null || value.Length <= maxLength ? value : value[..maxLength] + "...";
+
+    private static string? NormalizeProgramName(string? value)
+    {
+        var trimmed = value?.Trim();
+        return string.IsNullOrEmpty(trimmed) ? null : trimmed;
+    }
 }

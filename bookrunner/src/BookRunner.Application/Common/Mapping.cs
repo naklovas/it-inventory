@@ -147,6 +147,7 @@ public static class Mapping
         StatusText = DisplayText.Status(runbook.Status),
         IsTemplate = runbook.IsTemplate,
         TemplateCategory = runbook.TemplateCategory,
+        ProgramName = runbook.ProgramName,
         SourceTemplateId = runbook.SourceTemplateId,
         SourceTemplateTitle = runbook.SourceTemplate?.Title,
         PlannedStart = runbook.PlannedStart,

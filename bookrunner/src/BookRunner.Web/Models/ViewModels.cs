@@ -50,6 +50,8 @@ public sealed class RunbookListViewModel : PageViewModel
     public RunbookFilter Filter { get; init; } = new();
     public PagedResult<RunbookListItemDto> Results { get; init; } = PagedResult<RunbookListItemDto>.Create([], 1, 25, 0);
     public bool TemplatesView { get; init; }
+    /// <summary>"Program" (ust baslik) suzme listesi icin mevcut tekil degerler.</summary>
+    public IReadOnlyList<string> ProgramNames { get; init; } = Array.Empty<string>();
 }
 
 /// <summary>Runbook detay ekrani (gorev barlari, yorumlar, tarihce).</summary>
@@ -110,11 +112,16 @@ public sealed class RunbookFormViewModel : PageViewModel
     public Domain.Enums.RunbookStatus Status { get; set; } = Domain.Enums.RunbookStatus.Draft;
     public bool IsTemplate { get; set; }
     public string? TemplateCategory { get; set; }
+    /// <summary>Birden fazla runbook'u kapsayan ust baslik (bkz. Runbook.ProgramName).</summary>
+    public string? ProgramName { get; set; }
     public DateTime? PlannedStart { get; set; }
     public DateTime? PlannedEnd { get; set; }
     public string? ServiceManagerWorkItemId { get; set; }
     public string? TagsText { get; set; }
     public string? RowVersion { get; set; }
+
+    /// <summary>Program alaninda otomatik tamamlama icin mevcut program adlari.</summary>
+    public IReadOnlyList<string> ProgramNames { get; set; } = Array.Empty<string>();
 
     public IReadOnlyList<string> Tags => string.IsNullOrWhiteSpace(TagsText)
         ? Array.Empty<string>()
