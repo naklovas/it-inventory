@@ -66,8 +66,11 @@ public sealed class RunbookAccess(IAppDbContext db, ICurrentUser currentUser) : 
 
     public async Task<bool> IsOwnerOfRunbookAsync(Guid runbookId, CancellationToken ct = default)
     {
+        // Test modunda (bkz. ICurrentUser.IsImpersonating) sahiplik hic sayilmaz;
+        // aksi halde bir yonetici kendi actigi runbook'larda sahiplik yoluyla
+        // her zaman tam yetkili kalir ve rol testi anlamsizlasir.
         var userId = currentUser.UserId;
-        if (userId is null)
+        if (userId is null || currentUser.IsImpersonating)
         {
             return false;
         }
@@ -78,7 +81,7 @@ public sealed class RunbookAccess(IAppDbContext db, ICurrentUser currentUser) : 
     public async Task<bool> IsOwnerOfTaskAsync(Guid taskId, CancellationToken ct = default)
     {
         var userId = currentUser.UserId;
-        if (userId is null)
+        if (userId is null || currentUser.IsImpersonating)
         {
             return false;
         }
@@ -104,7 +107,7 @@ public sealed class RunbookAccess(IAppDbContext db, ICurrentUser currentUser) : 
         }
 
         var userId = currentUser.UserId;
-        if (userId is null)
+        if (userId is null || currentUser.IsImpersonating)
         {
             return false;
         }

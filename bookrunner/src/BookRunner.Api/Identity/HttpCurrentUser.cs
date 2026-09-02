@@ -45,6 +45,8 @@ public sealed class HttpCurrentUser(IHttpContextAccessor accessor) : ICurrentUse
     public AppRole RealRole =>
         Enum.TryParse<AppRole>(Principal?.FindFirst(RealRoleClaim)?.Value, out var role) ? role : Role;
 
+    public bool IsImpersonating => Role != RealRole;
+
     public bool IsInRole(AppRole role) => Role >= role;
 
     public string? IpAddress => accessor.HttpContext?.Connection.RemoteIpAddress?.ToString();

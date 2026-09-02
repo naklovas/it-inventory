@@ -63,15 +63,21 @@ public sealed class RunbookDetailViewModel : PageViewModel
     /// Oturum acan kullanici bu runbook'un sahibi mi. Sahip, rol izni olmasa da
     /// kendi runbook'unda her degisikligi yapabilir (API tarafinda da ayni kural
     /// IRunbookAccess ile uygulanir; buradaki bayraklar yalnizca arayuzu sekillendirir).
+    /// Test modunda (bkz. CurrentUser.IsRoleOverridden) sahiplik hic sayilmaz -
+    /// aksi halde bir yonetici kendi actigi runbook'larda "X rolu olsaydim" testini
+    /// hicbir zaman gerceklestiremez, cunku sahiplik yoluyla hep tam yetkili kalir.
     /// </summary>
-    public bool IsOwner => CurrentUser?.Id is { } userId && Runbook.Owner?.Id == userId;
+    public bool IsOwner => CurrentUser?.IsRoleOverridden != true &&
+        CurrentUser?.Id is { } userId && Runbook.Owner?.Id == userId;
 
     /// <summary>
     /// Sahibin bu runbook'a ozel olarak "Editor" olarak ekledigi kisi mi.
     /// Global role dokunmadan yalnizca gorev yazma/atama/yorum acar - runbook'u
-    /// duzenleyemez/silemez, sablon yayinlayamaz, disa/ice aktaramaz.
+    /// duzenleyemez/silemez, sablon yayinlayamaz, disa/ice aktaramaz. Test
+    /// modunda IsOwner ile ayni sebeple hic sayilmaz.
     /// </summary>
-    public bool IsCollaborator => CurrentUser?.Id is { } userId && Runbook.Collaborators.Any(c => c.Person.Id == userId);
+    public bool IsCollaborator => CurrentUser?.IsRoleOverridden != true &&
+        CurrentUser?.Id is { } userId && Runbook.Collaborators.Any(c => c.Person.Id == userId);
 
     /// <summary>Editor ekleme/kaldirma yalnizca sahipte - yonetici rolu bile atlayamaz.</summary>
     public bool CanManageCollaborators => IsOwner;
