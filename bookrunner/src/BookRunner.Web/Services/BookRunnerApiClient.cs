@@ -398,4 +398,12 @@ public sealed record FileDownload(byte[] Content, string ContentType, string Fil
 public sealed class ApiException(HttpStatusCode statusCode, string message) : Exception(message)
 {
     public HttpStatusCode StatusCode { get; } = statusCode;
+
+    /// <summary>
+    /// 4xx: istek gecerli bir gerekceyle reddedildi (dogrulama, yetki, bulunamadi,
+    /// is kurali ihlali) - bu bir GIRIS/KULLANIM HATASIDIR, uygulama arizasi degil.
+    /// API tarafindaki ExceptionHandlingMiddleware da ayni sinirdan (status &lt; 500)
+    /// gercek hata mesajini gosterip gostermeyecegine karar verir.
+    /// </summary>
+    public bool IsInputError => (int)StatusCode is >= 400 and < 500;
 }

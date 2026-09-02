@@ -11,6 +11,27 @@
 
     // --------------------------------------------------------------- yardimci
 
+    /**
+     * Sunucudan gelen { ok, error, kind } yanitini bir Error'a cevirir.
+     * "kind" GIRIS HATASI (input - kullanicinin duzeltebilecegi bir sorun,
+     * orn. gecersiz tarih araligi/dongu olusturan bagimlilik) ile UYGULAMA
+     * HATASI (application - sistemsel bir ariza) ayrimini tasir; error.kind
+     * uzerinden showActionError() bu ayrimi hem metinde hem renkte gosterir -
+     * boylece ekrani gorebilecek bir gelistirici de bunu uygulama arizasi sanmaz.
+     */
+    function toActionError(payload) {
+        const kind = payload && payload.kind === "application" ? "application" : "input";
+        const label = kind === "application" ? "Uygulama hatasi" : "Giris hatasi";
+        const error = new Error(label + ": " + ((payload && payload.error) || "Islem basarisiz."));
+        error.kind = kind;
+        return error;
+    }
+
+    /** post()/get() catch bloklarinin ortak hata gosterimi: giris hatasi sari, uygulama hatasi kirmizi uyari olur. */
+    function showActionError(error) {
+        toast((error && error.message) || "Islem basarisiz.", error && error.kind === "application" ? "danger" : "warning");
+    }
+
     /** Web katmanindaki JSON ucuna POST eder. */
     async function post(action, body, query) {
         const url = "/Runbooks/" + action + (query ? "?" + new URLSearchParams(query) : "");
@@ -23,9 +44,9 @@
             body: body === undefined ? null : JSON.stringify(body)
         });
 
-        const payload = await response.json().catch(() => ({ ok: false, error: "Yanit okunamadi." }));
+        const payload = await response.json().catch(() => ({ ok: false, error: "Yanit okunamadi.", kind: "application" }));
         if (!payload.ok) {
-            throw new Error(payload.error || "Islem basarisiz.");
+            throw toActionError(payload);
         }
         return payload.data;
     }
@@ -33,9 +54,9 @@
     async function get(action, query) {
         const url = "/Runbooks/" + action + (query ? "?" + new URLSearchParams(query) : "");
         const response = await fetch(url, { headers: { "Accept": "application/json" } });
-        const payload = await response.json().catch(() => ({ ok: false, error: "Yanit okunamadi." }));
+        const payload = await response.json().catch(() => ({ ok: false, error: "Yanit okunamadi.", kind: "application" }));
         if (!payload.ok) {
-            throw new Error(payload.error || "Islem basarisiz.");
+            throw toActionError(payload);
         }
         return payload.data;
     }
@@ -177,7 +198,7 @@
                 selection.newTask = [];
                 reload();
             } catch (error) {
-                toast(error.message, "danger");
+                showActionError(error);
             }
         });
     }
@@ -266,7 +287,7 @@
                 editTaskModal.hide();
                 reload();
             } catch (error) {
-                toast(error.message, "danger");
+                showActionError(error);
             }
         });
     }
@@ -283,7 +304,7 @@
                 });
                 reload();
             } catch (error) {
-                toast(error.message, "danger");
+                showActionError(error);
             }
             return;
         }
@@ -297,7 +318,7 @@
                 await post("DeleteTask", undefined, { taskId: deleteButton.dataset.taskId });
                 reload();
             } catch (error) {
-                toast(error.message, "danger");
+                showActionError(error);
             }
             return;
         }
@@ -314,7 +335,7 @@
                 });
                 reload();
             } catch (error) {
-                toast(error.message, "danger");
+                showActionError(error);
             }
             return;
         }
@@ -331,7 +352,7 @@
                 });
                 reload();
             } catch (error) {
-                toast(error.message, "danger");
+                showActionError(error);
             }
             return;
         }
@@ -345,7 +366,7 @@
                 });
                 toast("Script sonucu: " + result.status, result.status === "Succeeded" ? "success" : "warning");
             } catch (error) {
-                toast(error.message, "danger");
+                showActionError(error);
             }
         }
     });
@@ -363,7 +384,7 @@
             input.value = "";
             appendComment(taskId, comment);
         } catch (error) {
-            toast(error.message, "danger");
+            showActionError(error);
         }
     }
 
@@ -613,7 +634,7 @@
             assignModal.hide();
             reload();
         } catch (error) {
-            toast(error.message, "danger");
+            showActionError(error);
         }
     }
 
@@ -659,7 +680,7 @@
             handoverModal.hide();
             reload();
         } catch (error) {
-            toast(error.message, "danger");
+            showActionError(error);
         }
     }
 
@@ -686,7 +707,7 @@
             await post("AddCollaborator", { userId: target.id }, { id: config.runbookId });
             reload();
         } catch (error) {
-            toast(error.message, "danger");
+            showActionError(error);
         }
     }
 
@@ -716,7 +737,7 @@
                 await post("ReorderTasks", { taskIdsInOrder: ids }, { id: config.runbookId });
                 reload();
             } catch (error) {
-                toast(error.message, "danger");
+                showActionError(error);
                 reload();
             }
         });

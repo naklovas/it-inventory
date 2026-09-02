@@ -22,6 +22,7 @@ public sealed class HomeController(BookRunnerApiClient api, ILogger<HomeControll
         }
         catch (ApiException ex)
         {
+            TempData["ErrorKind"] = ex.IsInputError ? "input" : "application";
             TempData["Error"] = $"Ozet bilgiler alinamadi: {ex.Message}";
             return View(await FillAsync(new DashboardViewModel { CurrentUser = currentUser }, ct));
         }

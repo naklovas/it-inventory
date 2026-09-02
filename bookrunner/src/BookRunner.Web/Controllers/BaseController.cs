@@ -45,7 +45,14 @@ public abstract class BaseController(BookRunnerApiClient api, ILogger logger) : 
         return model;
     }
 
-    /// <summary>API cagrisini calistirir; hata olursa kullaniciya bildirim birakir.</summary>
+    /// <summary>
+    /// API cagrisini calistirir; hata olursa kullaniciya bildirim birakir.
+    /// TempData["ErrorKind"] GIRIS HATASI (4xx - dogrulama/yetki/is kurali,
+    /// kullanicinin duzeltebilecegi bir sey) ile UYGULAMA HATASI (bir seyler
+    /// bozuldu, sistem yoneticisine basvurulmali) ayrimini tasir; _Layout bu
+    /// alana gore bandin rengini/basligini degistirir, boylece hem kullanici
+    /// hem ekrani izleyen gelistirici hangisiyle karsilastigini karistirmaz.
+    /// </summary>
     protected async Task<bool> TryAsync(Func<Task> action, string errorPrefix)
     {
         try
@@ -53,21 +60,36 @@ public abstract class BaseController(BookRunnerApiClient api, ILogger logger) : 
             await action();
             return true;
         }
+        catch (ApiException ex) when (ex.IsInputError)
+        {
+            Logger.LogInformation(ex, "{Prefix}: giris hatasi.", errorPrefix);
+            TempData["ErrorKind"] = "input";
+            TempData["Error"] = $"{errorPrefix}: {ex.Message}";
+            return false;
+        }
         catch (ApiException ex)
         {
-            Logger.LogWarning(ex, "{Prefix}", errorPrefix);
+            Logger.LogError(ex, "{Prefix}: uygulama hatasi.", errorPrefix);
+            TempData["ErrorKind"] = "application";
             TempData["Error"] = $"{errorPrefix}: {ex.Message}";
             return false;
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "{Prefix}", errorPrefix);
+            Logger.LogError(ex, "{Prefix}: beklenmeyen uygulama hatasi.", errorPrefix);
+            TempData["ErrorKind"] = "application";
             TempData["Error"] = $"{errorPrefix}: beklenmeyen bir hata olustu.";
             return false;
         }
     }
 
-    /// <summary>JSON uclarinda API hatalarini istemciye ayni anlamla iletir.</summary>
+    /// <summary>
+    /// JSON uclarinda API hatalarini istemciye iletir. Yanittaki "kind" alani
+    /// hatanin GIRIS HATASI mi (4xx - kullanicinin duzeltebilecegi bir sorun,
+    /// orn. gecersiz tarih araligi, dongu olusturan bagimlilik) yoksa UYGULAMA
+    /// HATASI mi (5xx - sistemsel bir ariza) oldugunu belirtir; runbook.js
+    /// bu alana gore mesaji acikca etiketleyerek gosterir.
+    /// </summary>
     protected async Task<IActionResult> JsonResultAsync<T>(Func<Task<T>> action)
     {
         try
@@ -77,13 +99,18 @@ public abstract class BaseController(BookRunnerApiClient api, ILogger logger) : 
         catch (ApiException ex)
         {
             Response.StatusCode = (int)ex.StatusCode;
-            return Json(new { ok = false, error = ex.Message });
+            if (!ex.IsInputError)
+            {
+                Logger.LogError(ex, "Islem basarisiz: uygulama hatasi.");
+            }
+
+            return Json(new { ok = false, error = ex.Message, kind = ex.IsInputError ? "input" : "application" });
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Islem basarisiz.");
+            Logger.LogError(ex, "Islem basarisiz: beklenmeyen uygulama hatasi.");
             Response.StatusCode = StatusCodes.Status500InternalServerError;
-            return Json(new { ok = false, error = "Beklenmeyen bir hata olustu." });
+            return Json(new { ok = false, error = "Beklenmeyen bir hata olustu.", kind = "application" });
         }
     }
 }

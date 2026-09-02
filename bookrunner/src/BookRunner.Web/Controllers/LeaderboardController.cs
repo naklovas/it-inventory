@@ -30,6 +30,7 @@ public sealed class LeaderboardController(BookRunnerApiClient api, ILogger<Leade
         }
         catch (ApiException ex)
         {
+            TempData["ErrorKind"] = ex.IsInputError ? "input" : "application";
             TempData["Error"] = $"Liderlik tablosu alinamadi: {ex.Message}";
             return View(await FillAsync(new LeaderboardViewModel { CurrentUser = currentUser, Period = period }, ct));
         }

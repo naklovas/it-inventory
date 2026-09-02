@@ -161,8 +161,14 @@
     }
     @if (TempData["Error"] is string error)
     {
-        <div class="alert alert-danger alert-dismissible fade show" role="alert">
-            <i class="bi bi-exclamation-triangle me-1"></i>@error
+        @* "input": kullanicinin duzeltebilecegi bir sorun (dogrulama, yetki,
+           is kurali) - uygulama arizasi degildir, bu yuzden ayri renk/baslikla
+           GIRIS HATASI olarak isaretlenir. Baska her sey (veya bilinmiyorsa,
+           guvenli taraf: uygulama hatasi) kirmizi banda dusen gercek ariza. *@
+        var isInputError = TempData["ErrorKind"] as string == "input";
+        <div class="alert @(isInputError ? "alert-warning" : "alert-danger") alert-dismissible fade show" role="alert">
+            <i class="bi @(isInputError ? "bi-info-circle" : "bi-exclamation-triangle") me-1"></i>
+            <strong>@(isInputError ? "Giriş hatası:" : "Uygulama hatası:")</strong> @error
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
     }

@@ -53,6 +53,7 @@ public sealed class RunbooksController(
         }
         catch (ApiException ex)
         {
+            TempData["ErrorKind"] = ex.IsInputError ? "input" : "application";
             TempData["Error"] = ex.Message;
             return View(await FillAsync(new RunbookListViewModel
             {
@@ -76,6 +77,7 @@ public sealed class RunbooksController(
         }
         catch (ApiException ex)
         {
+            TempData["ErrorKind"] = ex.IsInputError ? "input" : "application";
             TempData["Error"] = ex.Message;
             return RedirectToAction(nameof(Index));
         }
@@ -285,6 +287,7 @@ public sealed class RunbooksController(
     {
         if (file is null || file.Length == 0)
         {
+            TempData["ErrorKind"] = "input";
             TempData["Error"] = "Lutfen bir Excel dosyasi secin.";
             return RedirectToAction(nameof(Details), new { id });
         }
@@ -296,6 +299,7 @@ public sealed class RunbooksController(
 
             if (result is null)
             {
+                TempData["ErrorKind"] = "application";
                 TempData["Error"] = "Ice aktarim sonucu alinamadi.";
             }
             else if (result.Committed)
@@ -304,7 +308,11 @@ public sealed class RunbooksController(
             }
             else
             {
+                // Satir bazli hatalar (gecersiz tarih, bos baslik, runbook araligi
+                // disi tarih vb.) her zaman GIRIS HATASIDIR - dosyanin icerigi
+                // duzeltilmelidir, uygulamada bir ariza yoktur.
                 var details = string.Join(" | ", result.Errors.Take(5).Select(e => $"Satir {e.Row} ({e.Column}): {e.Message}"));
+                TempData["ErrorKind"] = "input";
                 TempData["Error"] = result.Errors.Count > 0
                     ? $"Ice aktarim yapilmadi. {details}"
                     : "Ice aktarilacak gecerli satir bulunamadi.";
@@ -312,6 +320,7 @@ public sealed class RunbooksController(
         }
         catch (ApiException ex)
         {
+            TempData["ErrorKind"] = ex.IsInputError ? "input" : "application";
             TempData["Error"] = $"Ice aktarim basarisiz: {ex.Message}";
         }
 

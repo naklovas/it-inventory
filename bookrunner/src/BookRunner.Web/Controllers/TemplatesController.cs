@@ -33,6 +33,7 @@ public sealed class TemplatesController(BookRunnerApiClient api, ILogger<Templat
         }
         catch (ApiException ex)
         {
+            TempData["ErrorKind"] = ex.IsInputError ? "input" : "application";
             TempData["Error"] = ex.Message;
             return View(await FillAsync(new RunbookListViewModel
             {

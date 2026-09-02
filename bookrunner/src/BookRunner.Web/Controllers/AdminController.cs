@@ -26,6 +26,7 @@ public sealed class AdminController(BookRunnerApiClient api, ILogger<AdminContro
         }
         catch (ApiException ex)
         {
+            TempData["ErrorKind"] = ex.IsInputError ? "input" : "application";
             TempData["Error"] = ex.Message;
             return View(await FillAsync(new AuditViewModel { CurrentUser = currentUser, Filter = filter }, ct));
         }
@@ -51,6 +52,7 @@ public sealed class AdminController(BookRunnerApiClient api, ILogger<AdminContro
         }
         catch (ApiException ex)
         {
+            TempData["ErrorKind"] = ex.IsInputError ? "input" : "application";
             TempData["Error"] = ex.Message;
             return View(await FillAsync(new EmailOutboxViewModel { CurrentUser = currentUser, Filter = filter }, ct));
         }
@@ -72,6 +74,7 @@ public sealed class AdminController(BookRunnerApiClient api, ILogger<AdminContro
         }
         catch (ApiException ex)
         {
+            TempData["ErrorKind"] = ex.IsInputError ? "input" : "application";
             TempData["Error"] = ex.Message;
         }
 
@@ -129,6 +132,7 @@ public sealed class AdminController(BookRunnerApiClient api, ILogger<AdminContro
         }
         catch (ApiException ex)
         {
+            TempData["ErrorKind"] = ex.IsInputError ? "input" : "application";
             TempData["Error"] = ex.Message;
         }
 
