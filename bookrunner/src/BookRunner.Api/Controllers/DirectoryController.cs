@@ -2,6 +2,7 @@ using BookRunner.Application.Abstractions;
 using BookRunner.Application.Common;
 using BookRunner.Application.Dtos;
 using BookRunner.Application.Security;
+using BookRunner.Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -43,7 +44,9 @@ public sealed class DirectoryController(
             PhotoUrl = profile?.PhotoUrl,
             Role = DisplayText.Role(currentUser.Role),
             Permissions = Permissions.ForRole(currentUser.Role),
-            Groups = currentUser.GroupSids.ToList()
+            Groups = currentUser.GroupSids.ToList(),
+            IsAdministrator = currentUser.RealRole == AppRole.Administrator,
+            IsRoleOverridden = currentUser.Role != currentUser.RealRole
         });
     }
 

@@ -21,6 +21,8 @@ public sealed class SystemCurrentUser : ICurrentUser
 
     public AppRole Role => AppRole.Administrator;
 
+    public AppRole RealRole => AppRole.Administrator;
+
     public bool IsInRole(AppRole role) => true;
 
     public string? IpAddress => null;

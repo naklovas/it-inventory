@@ -73,4 +73,8 @@ public sealed record CurrentUserDto
     public required string Role { get; init; }
     public IReadOnlyList<string> Permissions { get; init; } = Array.Empty<string>();
     public IReadOnlyList<string> Groups { get; init; } = Array.Empty<string>();
+    /// <summary>Kullanicinin GERCEK rolu Yonetici mi (test modu aktifken bile degismez).</summary>
+    public bool IsAdministrator { get; init; }
+    /// <summary>Su an "test modu" ile baska bir rol gibi goruntuluyor mu.</summary>
+    public bool IsRoleOverridden { get; init; }
 }

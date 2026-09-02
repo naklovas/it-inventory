@@ -21,11 +21,20 @@ namespace BookRunner.Api.Authorization;
 /// </summary>
 public sealed class BookRunnerClaimsTransformation(
     IServiceScopeFactory scopeFactory,
+    IHttpContextAccessor httpContextAccessor,
     IMemoryCache cache,
     IOptions<RoleOptions> roleOptions,
     ILogger<BookRunnerClaimsTransformation> logger) : IClaimsTransformation
 {
     private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(15);
+
+    /// <summary>
+    /// "Test modu" ile Web katmani, tarayicidaki cerezden okudugu istenen rolu
+    /// bu basaligiyla API'ye iletir (bkz. WindowsIdentityHandler). Yalnizca
+    /// GERCEK rolu Yonetici olan biri icin dikkate alinir - baskasi bu basligi
+    /// gonderse bile yok sayilir; bu yuzden istemcinin kendisine guvenilmez.
+    /// </summary>
+    private const string RoleOverrideHeader = "X-Role-Override";
 
     private readonly RoleOptions _roleOptions = roleOptions.Value;
 
@@ -56,7 +65,10 @@ public sealed class BookRunnerClaimsTransformation(
             identity.AddClaim(new Claim(HttpCurrentUser.UserIdClaim, profile.UserId.Value.ToString()));
         }
 
-        identity.AddClaim(new Claim(HttpCurrentUser.RoleClaim, profile.Role.ToString()));
+        var effectiveRole = ResolveRoleOverride(profile.Role);
+
+        identity.AddClaim(new Claim(HttpCurrentUser.RoleClaim, effectiveRole.ToString()));
+        identity.AddClaim(new Claim(HttpCurrentUser.RealRoleClaim, profile.Role.ToString()));
         identity.AddClaim(new Claim(ClaimTypes.GivenName, profile.DisplayName));
         identity.AddClaim(new Claim("displayName", profile.DisplayName));
 
@@ -70,7 +82,7 @@ public sealed class BookRunnerClaimsTransformation(
             identity.AddClaim(new Claim(HttpCurrentUser.GroupSidClaim, groupSid));
         }
 
-        foreach (var permission in Permissions.ForRole(profile.Role))
+        foreach (var permission in Permissions.ForRole(effectiveRole))
         {
             identity.AddClaim(new Claim(Permissions.ClaimType, permission));
         }
@@ -189,6 +201,25 @@ public sealed class BookRunnerClaimsTransformation(
 
         // Esleme varsa en yuksegi, yoksa varsayilan rol gecerlidir.
         return roles.Count == 0 ? defaultRole : roles.Max();
+    }
+
+    /// <summary>
+    /// Test modu: yalnizca GERCEK rolu Yonetici olan biri kendini baska bir rol
+    /// gibi goruntuleyebilir. Boylece surekli baskasina "sen giris yap" demeden,
+    /// izin modelini farkli roller icin test edebilir. Yonetici olmayanlar icin
+    /// (veya gecersiz/eksik basaslikta) her zaman gercek rol donulur.
+    /// </summary>
+    private AppRole ResolveRoleOverride(AppRole realRole)
+    {
+        if (realRole != AppRole.Administrator)
+        {
+            return realRole;
+        }
+
+        var header = httpContextAccessor.HttpContext?.Request.Headers[RoleOverrideHeader].ToString();
+        return !string.IsNullOrWhiteSpace(header) && Enum.TryParse<AppRole>(header, true, out var overrideRole)
+            ? overrideRole
+            : realRole;
     }
 
     private sealed record UserProfile(

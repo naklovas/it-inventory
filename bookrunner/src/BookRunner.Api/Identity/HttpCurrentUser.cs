@@ -14,6 +14,11 @@ public sealed class HttpCurrentUser(IHttpContextAccessor accessor) : ICurrentUse
     /// <summary>Uygulamanin kendi ekledigi claim turleri.</summary>
     public const string UserIdClaim = "bookrunner:userid";
     public const string RoleClaim = "bookrunner:role";
+    /// <summary>
+    /// Test modu icin: kullanicinin GERCEK rolu. Yalnizca bir yonetici kendini
+    /// baska bir rol gibi goruntulerken RoleClaim'den farkli olur.
+    /// </summary>
+    public const string RealRoleClaim = "bookrunner:realrole";
     public const string GroupSidClaim = "bookrunner:groupsid";
 
     private ClaimsPrincipal? Principal => accessor.HttpContext?.User;
@@ -36,6 +41,9 @@ public sealed class HttpCurrentUser(IHttpContextAccessor accessor) : ICurrentUse
 
     public AppRole Role =>
         Enum.TryParse<AppRole>(Principal?.FindFirst(RoleClaim)?.Value, out var role) ? role : AppRole.Viewer;
+
+    public AppRole RealRole =>
+        Enum.TryParse<AppRole>(Principal?.FindFirst(RealRoleClaim)?.Value, out var role) ? role : Role;
 
     public bool IsInRole(AppRole role) => Role >= role;
 

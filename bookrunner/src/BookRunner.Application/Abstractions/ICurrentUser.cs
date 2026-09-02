@@ -19,8 +19,18 @@ public interface ICurrentUser
     /// <summary>Kullanicinin uyesi oldugu AD gruplarinin SID listesi.</summary>
     IReadOnlyCollection<string> GroupSids { get; }
 
-    /// <summary>AD grup eslemelerinden turetilen en yuksek uygulama rolu.</summary>
+    /// <summary>
+    /// Su an gecerli rol. Bir yonetici "test modu" ile kendini baska bir rol
+    /// gibi goruntuluyorsa (bkz. RealRole), yetki kontrolleri BUNU kullanir.
+    /// </summary>
     AppRole Role { get; }
+
+    /// <summary>
+    /// Kullanicinin GERCEK rolu; test modu aktifken bile degismez. Yalnizca
+    /// "test modunu kimin acabilecegini" belirlemek icin kullanilir - yetki
+    /// kontrollerinde asla Role yerine bu kullanilmaz.
+    /// </summary>
+    AppRole RealRole { get; }
 
     bool IsInRole(AppRole role);
 

@@ -96,6 +96,40 @@
                         }
                         <li><hr class="dropdown-divider" /></li>
                         <li><span class="dropdown-item-text small">Rol: <strong>@me.Role</strong></span></li>
+                        @if (me.IsAdministrator)
+                        {
+                            var returnUrl = Context.Request.Path + Context.Request.QueryString;
+                            <li><hr class="dropdown-divider" /></li>
+                            <li><h6 class="dropdown-header">Test modu</h6></li>
+                            @if (me.IsRoleOverridden)
+                            {
+                                <li>
+                                    <form method="post" asp-controller="TestMode" asp-action="Clear">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="returnUrl" value="@returnUrl" />
+                                        <button type="submit" class="dropdown-item">
+                                            <i class="bi bi-arrow-counterclockwise me-1"></i>Gercek rolume don
+                                        </button>
+                                    </form>
+                                </li>
+                            }
+                            else
+                            {
+                                foreach (var testRole in new[] { AppRole.Viewer, AppRole.Contributor, AppRole.RunbookAuthor })
+                                {
+                                    <li>
+                                        <form method="post" asp-controller="TestMode" asp-action="SetRole">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="role" value="@testRole" />
+                                            <input type="hidden" name="returnUrl" value="@returnUrl" />
+                                            <button type="submit" class="dropdown-item">
+                                                <i class="bi bi-eye me-1"></i>@DisplayText.Role(testRole) gibi gor
+                                            </button>
+                                        </form>
+                                    </li>
+                                }
+                            }
+                        }
                     </ul>
                 </div>
             }
@@ -104,6 +138,20 @@
 </nav>
 
 <main class="container-xl py-4">
+    @if (me?.IsRoleOverridden == true)
+    {
+        <div class="alert alert-warning d-flex justify-content-between align-items-center" role="alert">
+            <span>
+                <i class="bi bi-eye-fill me-1"></i>
+                <strong>TEST MODU:</strong> Su an <strong>@me.Role</strong> rolundeki bir kullanici gibi goruntuluyorsunuz.
+            </span>
+            <form method="post" asp-controller="TestMode" asp-action="Clear" class="d-inline">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="returnUrl" value="@(Context.Request.Path + Context.Request.QueryString)" />
+                <button type="submit" class="btn btn-sm btn-outline-dark">Gercek rolume don</button>
+            </form>
+        </div>
+    }
     @if (TempData["Success"] is string success)
     {
         <div class="alert alert-success alert-dismissible fade show" role="alert">
