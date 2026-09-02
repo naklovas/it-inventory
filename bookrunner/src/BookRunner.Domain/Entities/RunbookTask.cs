@@ -37,9 +37,13 @@ public class RunbookTask : AuditableEntity, ISoftDeletable
     public DateTimeOffset? ActualStart { get; set; }
     public DateTimeOffset? ActualEnd { get; set; }
 
-    /// <summary>Bu gorev baslamadan once tamamlanmasi gereken gorev.</summary>
-    public Guid? DependsOnTaskId { get; set; }
-    public RunbookTask? DependsOnTask { get; set; }
+    /// <summary>Bu gorevin oncelleri: bu gorev baslamadan/tamamlanmadan once
+    /// kapanmis (Tamamlandi/Atlandi) olmasi gereken gorevler. Bir gorevin
+    /// birden fazla onculu olabilir.</summary>
+    public ICollection<TaskDependency> Predecessors { get; set; } = new List<TaskDependency>();
+
+    /// <summary>Bu gorevi oncul olarak bekleyen ardil gorevler.</summary>
+    public ICollection<TaskDependency> Successors { get; set; } = new List<TaskDependency>();
 
     /// <summary>Gorev icin calistirilabilir CSX script'i (opsiyonel).</summary>
     public Guid? ScriptId { get; set; }

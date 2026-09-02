@@ -111,8 +111,27 @@ public static class Mapping
         PlannedEnd = task.PlannedEnd,
         ActualStart = task.ActualStart,
         ActualEnd = task.ActualEnd,
-        DependsOnTaskId = task.DependsOnTaskId,
-        DependsOnTaskTitle = task.DependsOnTask?.Title,
+        Predecessors = task.Predecessors
+            .OrderBy(d => d.DependsOnTask.Order)
+            .Select(d => new TaskDependencyRefDto
+            {
+                TaskId = d.DependsOnTaskId,
+                Title = d.DependsOnTask.Title,
+                Status = d.DependsOnTask.Status,
+                StatusText = DisplayText.Status(d.DependsOnTask.Status)
+            })
+            .ToList(),
+        Successors = task.Successors
+            .OrderBy(d => d.Task.Order)
+            .Select(d => new TaskDependencyRefDto
+            {
+                TaskId = d.TaskId,
+                Title = d.Task.Title,
+                Status = d.Task.Status,
+                StatusText = DisplayText.Status(d.Task.Status)
+            })
+            .ToList(),
+        HasOpenPredecessors = task.Predecessors.Any(d => !d.DependsOnTask.Status.IsClosed()),
         ScriptId = task.ScriptId,
         ScriptName = task.Script?.Name,
         RollbackNotes = task.RollbackNotes,

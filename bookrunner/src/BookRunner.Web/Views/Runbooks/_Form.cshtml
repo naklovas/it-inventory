@@ -53,13 +53,15 @@
     </div>
 
     <div class="col-md-3">
-        <label class="form-label small br-muted">Planlanan baslangic</label>
+        <label class="form-label small br-muted" id="plannedStartLabel">Planlanan baslangic</label>
         <input class="form-control" type="datetime-local" asp-for="PlannedStart" />
+        <span class="text-danger small" asp-validation-for="PlannedStart"></span>
     </div>
 
     <div class="col-md-3">
-        <label class="form-label small br-muted">Planlanan bitis</label>
+        <label class="form-label small br-muted" id="plannedEndLabel">Planlanan bitis</label>
         <input class="form-control" type="datetime-local" asp-for="PlannedEnd" />
+        <span class="text-danger small" asp-validation-for="PlannedEnd"></span>
     </div>
 
     <div class="col-md-4 position-relative">
@@ -77,3 +79,29 @@
 </div>
 
 <input type="hidden" asp-for="RowVersion" />
+
+<script>
+    (function () {
+        var templateToggle = document.getElementById("IsTemplate");
+        var start = document.getElementById("PlannedStart");
+        var end = document.getElementById("PlannedEnd");
+        var startLabel = document.getElementById("plannedStartLabel");
+        var endLabel = document.getElementById("plannedEndLabel");
+
+        // Sablon olmayan runbook'larda planlanan tarih zorunludur (gorev tarihi
+        // kisitlamasi bu araligi kullanir); sablonlar somut bir zamana bagli
+        // olmadigindan muaftir.
+        function apply() {
+            var required = !(templateToggle && templateToggle.checked);
+            if (start) { start.required = required; }
+            if (end) { end.required = required; }
+            if (startLabel) { startLabel.textContent = "Planlanan baslangic" + (required ? " *" : ""); }
+            if (endLabel) { endLabel.textContent = "Planlanan bitis" + (required ? " *" : ""); }
+        }
+
+        if (templateToggle) {
+            templateToggle.addEventListener("change", apply);
+        }
+        apply();
+    })();
+</script>

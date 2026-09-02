@@ -42,10 +42,21 @@
                         <span class="small br-muted"><i class="bi bi-stopwatch"></i> @t.EstimatedMinutes dk</span>
                     }
 
-                    @if (t.DependsOnTaskId.HasValue)
+                    @if (t.Predecessors.Count > 0)
                     {
-                        <span class="small br-muted" title="Onkosul">
-                            <i class="bi bi-diagram-3"></i> @t.DependsOnTaskTitle
+                        <span class="small @(t.HasOpenPredecessors ? "text-warning" : "br-muted")"
+                              title="@(t.HasOpenPredecessors ? "Bu gorev, oncelleri tamamlanmadan baslatilamaz/tamamlanamaz" : "Oncul gorevler")">
+                            <i class="bi bi-diagram-3"></i> @string.Join(", ", t.Predecessors.Select(p => p.Title))
+                            @if (t.HasOpenPredecessors)
+                            {
+                                <i class="bi bi-lock-fill"></i>
+                            }
+                        </span>
+                    }
+                    @if (t.Successors.Count > 0)
+                    {
+                        <span class="small br-muted" title="Bu gorevi bekleyen ardil gorevler">
+                            <i class="bi bi-diagram-2"></i> @string.Join(", ", t.Successors.Select(s => s.Title))
                         </span>
                     }
 
@@ -171,6 +182,13 @@
                     <button class="btn btn-sm btn-outline-dark br-script-btn"
                             data-script-id="@t.ScriptId" data-task-id="@t.Id">
                         <i class="bi bi-terminal me-1"></i>@t.ScriptName calistir
+                    </button>
+                }
+
+                @if (Model.CanEdit)
+                {
+                    <button class="btn btn-sm btn-outline-secondary br-edit-task-btn" data-task-id="@t.Id">
+                        <i class="bi bi-pencil"></i> Duzenle
                     </button>
                 }
 

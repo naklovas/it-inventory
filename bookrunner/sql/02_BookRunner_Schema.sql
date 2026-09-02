@@ -309,7 +309,6 @@ BEGIN
         [PlannedEnd] datetimeoffset NULL,
         [ActualStart] datetimeoffset NULL,
         [ActualEnd] datetimeoffset NULL,
-        [DependsOnTaskId] uniqueidentifier NULL,
         [ScriptId] uniqueidentifier NULL,
         [RollbackNotes] nvarchar(4000) NULL,
         [IsDeleted] bit NOT NULL,
@@ -322,6 +321,53 @@ BEGIN
         CONSTRAINT [PK_Tasks] PRIMARY KEY ([Id])
     );
     PRINT N'Tablo olusturuldu: Tasks';
+END
+GO
+
+IF OBJECT_ID(N'[bookrunner].[TaskDependencies]', N'U') IS NULL
+BEGIN
+    CREATE TABLE [bookrunner].[TaskDependencies] (
+        [Id] uniqueidentifier NOT NULL,
+        [TaskId] uniqueidentifier NOT NULL,
+        [DependsOnTaskId] uniqueidentifier NOT NULL,
+        [CreatedAt] datetimeoffset NOT NULL,
+        CONSTRAINT [PK_TaskDependencies] PRIMARY KEY ([Id])
+    );
+    PRINT N'Tablo olusturuldu: TaskDependencies';
+END
+GO
+
+-- Mevcut kurulumlarda Tasks tablosunda hala eski TEKLI DependsOnTaskId kolonu
+-- olabilir (coklu oncul/ardil iliskisine (TaskDependencies) gecilmeden onceki
+-- surum). Varsa mevcut degerler yeni tabloya tasinir, eski FK/indeks/kolon kaldirilir.
+IF COL_LENGTH(N'bookrunner.Tasks', 'DependsOnTaskId') IS NOT NULL
+BEGIN
+    INSERT INTO [bookrunner].[TaskDependencies] ([Id], [TaskId], [DependsOnTaskId], [CreatedAt])
+    SELECT NEWID(), t.[Id], t.[DependsOnTaskId], SYSDATETIMEOFFSET()
+    FROM [bookrunner].[Tasks] t
+    WHERE t.[DependsOnTaskId] IS NOT NULL
+      AND NOT EXISTS (
+          SELECT 1 FROM [bookrunner].[TaskDependencies] td
+          WHERE td.[TaskId] = t.[Id] AND td.[DependsOnTaskId] = t.[DependsOnTaskId]
+      );
+
+    IF EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_Tasks_Tasks_DependsOnTaskId')
+    BEGIN
+        ALTER TABLE [bookrunner].[Tasks] DROP CONSTRAINT [FK_Tasks_Tasks_DependsOnTaskId];
+        PRINT N'Iliski kaldirildi: FK_Tasks_Tasks_DependsOnTaskId';
+    END
+
+    IF EXISTS (
+        SELECT 1 FROM sys.indexes
+        WHERE name = N'IX_Tasks_DependsOnTaskId' AND object_id = OBJECT_ID(N'[bookrunner].[Tasks]')
+    )
+    BEGIN
+        DROP INDEX [IX_Tasks_DependsOnTaskId] ON [bookrunner].[Tasks];
+        PRINT N'Indeks kaldirildi: IX_Tasks_DependsOnTaskId';
+    END
+
+    ALTER TABLE [bookrunner].[Tasks] DROP COLUMN [DependsOnTaskId];
+    PRINT N'Kolon kaldirildi: Tasks.DependsOnTaskId';
 END
 GO
 
@@ -770,11 +816,21 @@ GO
 
 IF NOT EXISTS (
     SELECT 1 FROM sys.indexes
-    WHERE name = N'IX_Tasks_DependsOnTaskId' AND object_id = OBJECT_ID(N'[bookrunner].[Tasks]')
+    WHERE name = N'IX_TaskDependencies_DependsOnTaskId' AND object_id = OBJECT_ID(N'[bookrunner].[TaskDependencies]')
 )
 BEGIN
-    CREATE INDEX [IX_Tasks_DependsOnTaskId] ON [bookrunner].[Tasks] ([DependsOnTaskId]);
-    PRINT N'Indeks olusturuldu: IX_Tasks_DependsOnTaskId';
+    CREATE INDEX [IX_TaskDependencies_DependsOnTaskId] ON [bookrunner].[TaskDependencies] ([DependsOnTaskId]);
+    PRINT N'Indeks olusturuldu: IX_TaskDependencies_DependsOnTaskId';
+END
+GO
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.indexes
+    WHERE name = N'IX_TaskDependencies_TaskId_DependsOnTaskId' AND object_id = OBJECT_ID(N'[bookrunner].[TaskDependencies]')
+)
+BEGIN
+    CREATE UNIQUE INDEX [IX_TaskDependencies_TaskId_DependsOnTaskId] ON [bookrunner].[TaskDependencies] ([TaskId], [DependsOnTaskId]);
+    PRINT N'Indeks olusturuldu: IX_TaskDependencies_TaskId_DependsOnTaskId';
 END
 GO
 
@@ -1043,16 +1099,30 @@ BEGIN
 END
 GO
 
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_Tasks_Tasks_DependsOnTaskId')
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_TaskDependencies_Tasks_TaskId')
 BEGIN
     BEGIN TRY
-        ALTER TABLE [bookrunner].[Tasks] WITH CHECK
-            ADD CONSTRAINT [FK_Tasks_Tasks_DependsOnTaskId] FOREIGN KEY ([DependsOnTaskId])
+        ALTER TABLE [bookrunner].[TaskDependencies] WITH CHECK
+            ADD CONSTRAINT [FK_TaskDependencies_Tasks_TaskId] FOREIGN KEY ([TaskId])
             REFERENCES [bookrunner].[Tasks] ([Id]) ON DELETE NO ACTION;
-        PRINT N'Iliski eklendi: FK_Tasks_Tasks_DependsOnTaskId';
+        PRINT N'Iliski eklendi: FK_TaskDependencies_Tasks_TaskId';
     END TRY
     BEGIN CATCH
-        PRINT N'UYARI: FK_Tasks_Tasks_DependsOnTaskId eklenemedi -> ' + ERROR_MESSAGE();
+        PRINT N'UYARI: FK_TaskDependencies_Tasks_TaskId eklenemedi -> ' + ERROR_MESSAGE();
+    END CATCH
+END
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_TaskDependencies_Tasks_DependsOnTaskId')
+BEGIN
+    BEGIN TRY
+        ALTER TABLE [bookrunner].[TaskDependencies] WITH CHECK
+            ADD CONSTRAINT [FK_TaskDependencies_Tasks_DependsOnTaskId] FOREIGN KEY ([DependsOnTaskId])
+            REFERENCES [bookrunner].[Tasks] ([Id]) ON DELETE NO ACTION;
+        PRINT N'Iliski eklendi: FK_TaskDependencies_Tasks_DependsOnTaskId';
+    END TRY
+    BEGIN CATCH
+        PRINT N'UYARI: FK_TaskDependencies_Tasks_DependsOnTaskId eklenemedi -> ' + ERROR_MESSAGE();
     END CATCH
 END
 GO
@@ -1350,7 +1420,7 @@ GO
    eder.
    --------------------------------------------------------------------------- */
 
-DECLARE @expectedTables int = 18;
+DECLARE @expectedTables int = 19;
 DECLARE @actualTables int = (
     SELECT COUNT(*) FROM sys.tables WHERE schema_id = SCHEMA_ID(N'bookrunner')
 );
@@ -1400,6 +1470,15 @@ BEGIN
     BEGIN
         INSERT INTO [bookrunner].[__EFMigrationsHistory] ([MigrationId], [ProductVersion])
         VALUES (N'20260902104337_AddRunbookSeyirName', N'9.0.19');
+    END
+
+    IF NOT EXISTS (
+        SELECT 1 FROM [bookrunner].[__EFMigrationsHistory]
+        WHERE [MigrationId] = N'20260902132733_AddTaskDependencies'
+    )
+    BEGIN
+        INSERT INTO [bookrunner].[__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+        VALUES (N'20260902132733_AddTaskDependencies', N'9.0.19');
     END
 
     PRINT N'';

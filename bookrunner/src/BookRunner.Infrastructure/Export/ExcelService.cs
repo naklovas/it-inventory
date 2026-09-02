@@ -248,6 +248,32 @@ public sealed class ExcelService(
                 continue;
             }
 
+            // Gorev tarihi runbook'un planlanan araligini asamaz (bkz.
+            // TaskService.ValidateTaskPlannedRange - ayni kural burada da uygulanir).
+            if (plannedStart.HasValue || plannedEnd.HasValue)
+            {
+                if (runbook.PlannedStart is null || runbook.PlannedEnd is null)
+                {
+                    errors.Add(new ImportError(rowNumber, "Planlanan Baslangic",
+                        "Gorev tarihi girebilmek icin once runbook'un planlanan tarihini girmelisiniz."));
+                    continue;
+                }
+
+                if (plannedStart.HasValue && plannedStart.Value < runbook.PlannedStart.Value)
+                {
+                    errors.Add(new ImportError(rowNumber, "Planlanan Baslangic",
+                        "Gorev baslangici runbook'un planlanan baslangicindan once olamaz."));
+                    continue;
+                }
+
+                if (plannedEnd.HasValue && plannedEnd.Value > runbook.PlannedEnd.Value)
+                {
+                    errors.Add(new ImportError(rowNumber, "Planlanan Bitis",
+                        "Gorev bitisi runbook'un planlanan bitisini asamaz."));
+                    continue;
+                }
+            }
+
             var order = maxOrder + parsed.Count + 1;
             var color = row.Cell(8).GetString().Trim();
             if (!string.IsNullOrWhiteSpace(color) && !IsHexColor(color))

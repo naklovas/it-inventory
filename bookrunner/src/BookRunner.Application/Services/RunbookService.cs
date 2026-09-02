@@ -207,7 +207,7 @@ public sealed class RunbookService(
         // Herkes kendi runbook'unu acabilir; duzenleme/atama yetkisi bundan sonra
         // sahiplik yoluyla gelir (bkz. IRunbookAccess) - RunbookWrite'a ihtiyac yok.
         access.Ensure(Permissions.RunbookCreate);
-        ValidatePlannedRange(request.PlannedStart, request.PlannedEnd);
+        ValidatePlannedRange(request.IsTemplate, request.PlannedStart, request.PlannedEnd);
 
         var ownerId = request.OwnerUserId ?? currentUser.UserId
             ?? throw new BusinessRuleException("Runbook sahibi belirlenemedi. Kullanici Active Directory'den senkronize edilmemis olabilir.");
@@ -248,10 +248,11 @@ public sealed class RunbookService(
     {
         // Runbook'un sahibi, rol izni olmasa da kendi runbook'unu duzenleyebilir.
         await access.EnsureForRunbookAsync(id, Permissions.RunbookWrite, ct);
-        ValidatePlannedRange(request.PlannedStart, request.PlannedEnd);
 
         var runbook = await db.Runbooks.FirstOrDefaultAsync(r => r.Id == id, ct)
             ?? throw new NotFoundException("Runbook", id);
+
+        ValidatePlannedRange(runbook.IsTemplate, request.PlannedStart, request.PlannedEnd);
 
         if (!string.IsNullOrWhiteSpace(request.RowVersion) && runbook.RowVersion is not null)
         {
@@ -377,7 +378,7 @@ public sealed class RunbookService(
         // gerekmez (sablonlar zaten paylasilmak icin var), sadece runbook
         // acma yetkisi yeterlidir.
         access.Ensure(Permissions.RunbookCreate);
-        ValidatePlannedRange(request.PlannedStart, request.PlannedEnd);
+        ValidatePlannedRange(isTemplate: false, request.PlannedStart, request.PlannedEnd);
 
         var template = await LoadDetailAsync(templateId, tracking: false, ct)
             ?? throw new NotFoundException("Sablon", templateId);
@@ -613,7 +614,8 @@ public sealed class RunbookService(
             .Include(r => r.Tasks).ThenInclude(t => t.Comments).ThenInclude(c => c.Author)
             .Include(r => r.Tasks).ThenInclude(t => t.Activities)
             .Include(r => r.Tasks).ThenInclude(t => t.Script)
-            .Include(r => r.Tasks).ThenInclude(t => t.DependsOnTask)
+            .Include(r => r.Tasks).ThenInclude(t => t.Predecessors).ThenInclude(d => d.DependsOnTask)
+            .Include(r => r.Tasks).ThenInclude(t => t.Successors).ThenInclude(d => d.Task)
             .AsSplitQuery();
 
         if (!tracking)
@@ -756,8 +758,21 @@ public sealed class RunbookService(
                 : query.OrderBy(r => r.UpdatedAt ?? r.CreatedAt)
         };
 
-    private static void ValidatePlannedRange(DateTimeOffset? start, DateTimeOffset? end)
+    /// <summary>
+    /// Sablon olmayan runbook'larda planlanan baslangic/bitis ARTIK ZORUNLUDUR:
+    /// gorevlerin tarih araligi runbook'un araligini asamaz (bkz.
+    /// TaskService.ValidateTaskPlannedRange) ve bu kural ancak runbook'un kendi
+    /// araligi biliniyorsa anlamlidir. Sablonlar somut bir zamana bagli
+    /// olmadigindan bu zorunluluktan MUAFTIR.
+    /// </summary>
+    private static void ValidatePlannedRange(bool isTemplate, DateTimeOffset? start, DateTimeOffset? end)
     {
+        if (!isTemplate && (start is null || end is null))
+        {
+            throw ValidationException.Single(nameof(CreateRunbookRequest.PlannedStart),
+                "Sablon olmayan bir runbook icin planlanan baslangic ve bitis tarihi zorunludur.");
+        }
+
         if (start.HasValue && end.HasValue && end.Value < start.Value)
         {
             throw ValidationException.Single(nameof(CreateRunbookRequest.PlannedEnd),

@@ -42,12 +42,7 @@ public sealed class TaskService(
             throw new BusinessRuleException("Kapanmis bir runbook'a yeni gorev eklenemez.");
         }
 
-        if (request.DependsOnTaskId.HasValue &&
-            !await db.Tasks.AnyAsync(t => t.Id == request.DependsOnTaskId.Value && t.RunbookId == runbookId, ct))
-        {
-            throw ValidationException.Single(nameof(request.DependsOnTaskId),
-                "Bagimli gorev ayni runbook icinde bulunamadi.");
-        }
+        ValidateTaskPlannedRange(runbook, request.PlannedStart, request.PlannedEnd);
 
         var maxOrder = await db.Tasks.Where(t => t.RunbookId == runbookId).MaxAsync(t => (int?)t.Order, ct) ?? 0;
         var order = request.Order is > 0 ? request.Order.Value : maxOrder + 1;
@@ -73,11 +68,18 @@ public sealed class TaskService(
             EstimatedMinutes = request.EstimatedMinutes,
             PlannedStart = request.PlannedStart,
             PlannedEnd = request.PlannedEnd,
-            DependsOnTaskId = request.DependsOnTaskId,
             RollbackNotes = request.RollbackNotes
         };
 
+        var dependsOnIds = request.DependsOnTaskIds.Distinct().ToList();
+        await ValidateDependenciesAsync(runbookId, task.Id, dependsOnIds, ct);
+
         db.Tasks.Add(task);
+        foreach (var dependsOnId in dependsOnIds)
+        {
+            db.TaskDependencies.Add(new TaskDependency { TaskId = task.Id, DependsOnTaskId = dependsOnId });
+        }
+
         await db.SaveChangesAsync(ct);
 
         AddActivity(task.Id, TaskActivityType.Created, $"'{task.Title}' gorevi olusturuldu.");
@@ -98,19 +100,13 @@ public sealed class TaskService(
         var task = await db.Tasks.FirstOrDefaultAsync(t => t.Id == taskId, ct)
             ?? throw new NotFoundException("Gorev", taskId);
 
-        if (request.DependsOnTaskId.HasValue)
-        {
-            if (request.DependsOnTaskId.Value == taskId)
-            {
-                throw ValidationException.Single(nameof(request.DependsOnTaskId), "Bir gorev kendisine bagimli olamaz.");
-            }
+        var runbook = await db.Runbooks.FirstOrDefaultAsync(r => r.Id == task.RunbookId, ct)
+            ?? throw new NotFoundException("Runbook", task.RunbookId);
 
-            if (!await db.Tasks.AnyAsync(t => t.Id == request.DependsOnTaskId.Value && t.RunbookId == task.RunbookId, ct))
-            {
-                throw ValidationException.Single(nameof(request.DependsOnTaskId),
-                    "Bagimli gorev ayni runbook icinde bulunamadi.");
-            }
-        }
+        ValidateTaskPlannedRange(runbook, request.PlannedStart, request.PlannedEnd);
+
+        var dependsOnIds = request.DependsOnTaskIds.Distinct().ToList();
+        await ValidateDependenciesAsync(task.RunbookId, taskId, dependsOnIds, ct);
 
         if (request.ScriptId.HasValue &&
             !await db.Scripts.AnyAsync(s => s.Id == request.ScriptId.Value, ct))
@@ -135,13 +131,19 @@ public sealed class TaskService(
         task.EstimatedMinutes = request.EstimatedMinutes;
         task.PlannedStart = request.PlannedStart;
         task.PlannedEnd = request.PlannedEnd;
-        task.DependsOnTaskId = request.DependsOnTaskId;
         task.RollbackNotes = request.RollbackNotes;
         task.ScriptId = request.ScriptId;
 
         if (!string.IsNullOrWhiteSpace(request.ColorHex))
         {
             task.ColorHex = request.ColorHex!;
+        }
+
+        var existingDependencies = await db.TaskDependencies.Where(d => d.TaskId == taskId).ToListAsync(ct);
+        db.TaskDependencies.RemoveRange(existingDependencies);
+        foreach (var dependsOnId in dependsOnIds)
+        {
+            db.TaskDependencies.Add(new TaskDependency { TaskId = taskId, DependsOnTaskId = dependsOnId });
         }
 
         AddActivity(task.Id, TaskActivityType.Updated,
@@ -162,6 +164,7 @@ public sealed class TaskService(
         var task = await db.Tasks
             .Include(t => t.Assignments)
             .Include(t => t.Runbook)
+            .Include(t => t.Predecessors).ThenInclude(d => d.DependsOnTask)
             .FirstOrDefaultAsync(t => t.Id == taskId, ct)
             ?? throw new NotFoundException("Gorev", taskId);
 
@@ -172,13 +175,19 @@ public sealed class TaskService(
             return await GetAsync(taskId, ct);
         }
 
-        if (request.Status is RunbookTaskStatus.InProgress or RunbookTaskStatus.Completed && task.DependsOnTaskId.HasValue)
+        if (request.Status is RunbookTaskStatus.InProgress or RunbookTaskStatus.Completed)
         {
-            var dependency = await db.Tasks.FirstOrDefaultAsync(t => t.Id == task.DependsOnTaskId.Value, ct);
-            if (dependency is not null && !dependency.Status.IsClosed())
+            // Siki kural: ADIL, TUM oncelleri kapanmadan (Tamamlandi/Atlandi)
+            // baslatilamaz/tamamlanamaz - tek bir acik oncul bile yeterlidir.
+            var openPredecessors = task.Predecessors
+                .Where(d => !d.DependsOnTask.Status.IsClosed())
+                .Select(d => d.DependsOnTask.Title)
+                .ToList();
+
+            if (openPredecessors.Count > 0)
             {
                 throw new BusinessRuleException(
-                    $"Bu gorev baslatilamaz: once '{dependency.Title}' gorevi tamamlanmali.");
+                    $"Bu gorev baslatilamaz: once su oncul gorev(ler) tamamlanmali: {string.Join(", ", openPredecessors)}.");
             }
         }
 
@@ -307,11 +316,12 @@ public sealed class TaskService(
             throw new BusinessRuleException("Devam eden bir gorev silinemez.");
         }
 
-        var dependents = await db.Tasks.Where(t => t.DependsOnTaskId == taskId).ToListAsync(ct);
-        foreach (var dependent in dependents)
-        {
-            dependent.DependsOnTaskId = null;
-        }
+        // Bu gorevin hem oncul hem ardil olarak yer aldigi tum bagimlilik
+        // kayitlari silinir; ardillar bu gorevi bekliyordu, artik beklemezler.
+        var relatedDependencies = await db.TaskDependencies
+            .Where(d => d.TaskId == taskId || d.DependsOnTaskId == taskId)
+            .ToListAsync(ct);
+        db.TaskDependencies.RemoveRange(relatedDependencies);
 
         task.IsDeleted = true;
         task.DeletedAt = DateTimeOffset.UtcNow;
@@ -351,7 +361,8 @@ public sealed class TaskService(
             .Include(t => t.Comments).ThenInclude(c => c.Author)
             .Include(t => t.Activities)
             .Include(t => t.Script)
-            .Include(t => t.DependsOnTask)
+            .Include(t => t.Predecessors).ThenInclude(d => d.DependsOnTask)
+            .Include(t => t.Successors).ThenInclude(d => d.Task)
             .AsSplitQuery();
 
         if (!tracking)
@@ -360,6 +371,129 @@ public sealed class TaskService(
         }
 
         return await query.FirstOrDefaultAsync(t => t.Id == taskId, ct);
+    }
+
+    /// <summary>
+    /// Bir gorevin planlanan tarih araligi runbook'un planlanan araliginin
+    /// disina tasamaz. Runbook henuz tarihlendirilmemisse (eski kayitlar,
+    /// yeni runbook'larda artik zorunlu) gorev tarihi girilemez - once
+    /// runbook'un kendi tarihi girilmelidir.
+    /// </summary>
+    private static void ValidateTaskPlannedRange(Runbook runbook, DateTimeOffset? start, DateTimeOffset? end)
+    {
+        if (end.HasValue && start.HasValue && end.Value < start.Value)
+        {
+            throw ValidationException.Single(nameof(CreateTaskRequest.PlannedEnd),
+                "Planlanan bitis, planlanan baslangictan once olamaz.");
+        }
+
+        if (start is null && end is null)
+        {
+            return;
+        }
+
+        if (runbook.PlannedStart is null || runbook.PlannedEnd is null)
+        {
+            throw new BusinessRuleException(
+                "Gorev tarihi girebilmek icin once runbook'un planlanan baslangic/bitis tarihini belirlemelisiniz.");
+        }
+
+        if (start.HasValue && start.Value < runbook.PlannedStart.Value)
+        {
+            throw ValidationException.Single(nameof(CreateTaskRequest.PlannedStart),
+                $"Gorev baslangici runbook'un planlanan baslangicindan " +
+                $"({runbook.PlannedStart.Value.ToLocalTime():dd.MM.yyyy HH:mm}) once olamaz.");
+        }
+
+        if (end.HasValue && end.Value > runbook.PlannedEnd.Value)
+        {
+            throw ValidationException.Single(nameof(CreateTaskRequest.PlannedEnd),
+                $"Gorev bitisi runbook'un planlanan bitisini " +
+                $"({runbook.PlannedEnd.Value.ToLocalTime():dd.MM.yyyy HH:mm}) asamaz.");
+        }
+    }
+
+    /// <summary>
+    /// Secilen oncul kimliklerinin gecerliligini (kendine referans yok, ayni
+    /// runbook icinde) ve bu degisikligin bagimlilik dongusu olusturmadigini
+    /// dogrular. Hem CreateAsync (henuz kaydedilmemis ama Id'si atanmis yeni
+    /// gorev) hem UpdateAsync (mevcut gorevin TUM oncul kumesini degistirir)
+    /// tarafindan kullanilir.
+    /// </summary>
+    private async Task ValidateDependenciesAsync(
+        Guid runbookId, Guid taskId, IReadOnlyList<Guid> dependsOnTaskIds, CancellationToken ct)
+    {
+        if (dependsOnTaskIds.Contains(taskId))
+        {
+            throw ValidationException.Single(nameof(CreateTaskRequest.DependsOnTaskIds), "Bir gorev kendisine oncul olamaz.");
+        }
+
+        if (dependsOnTaskIds.Count == 0)
+        {
+            return;
+        }
+
+        var validIds = await db.Tasks
+            .Where(t => t.RunbookId == runbookId && dependsOnTaskIds.Contains(t.Id))
+            .Select(t => t.Id)
+            .ToListAsync(ct);
+
+        if (validIds.Count != dependsOnTaskIds.Count)
+        {
+            throw ValidationException.Single(nameof(CreateTaskRequest.DependsOnTaskIds),
+                "Secilen oncul gorevlerden biri veya birkaci ayni runbook icinde bulunamadi.");
+        }
+
+        // Dongu kontrolu: bu gorevin KENDI mevcut baglarini haric tutarak
+        // (onlarin yerine yenileri gececek) runbook'taki tum bagimliliklardan
+        // bir komsuluk haritasi cikarilir; her yeni oncul adayindan bu goreve
+        // (dolayli da olsa) zaten bir yol varsa, ekleme bir dongu olusturur.
+        var existingEdges = await db.TaskDependencies
+            .Where(d => d.Task.RunbookId == runbookId && d.TaskId != taskId)
+            .Select(d => new { d.TaskId, d.DependsOnTaskId })
+            .ToListAsync(ct);
+
+        var adjacency = existingEdges
+            .GroupBy(e => e.TaskId)
+            .ToDictionary(g => g.Key, g => g.Select(e => e.DependsOnTaskId).ToList());
+
+        foreach (var candidateId in dependsOnTaskIds)
+        {
+            if (IsReachable(candidateId, taskId, adjacency))
+            {
+                throw new BusinessRuleException(
+                    "Bu bagimlilik bir dongu olusturuyor: secilen oncul, dolayli olarak zaten bu goreve bagli.");
+            }
+        }
+    }
+
+    /// <summary>"Oncul" kenarlari (TaskId -> DependsOnTaskId) uzerinden derinlik-oncelikli arama ile "target"a ulasilabiliyor mu.</summary>
+    private static bool IsReachable(Guid from, Guid target, IReadOnlyDictionary<Guid, List<Guid>> adjacency)
+    {
+        var visited = new HashSet<Guid>();
+        var stack = new Stack<Guid>();
+        stack.Push(from);
+
+        while (stack.Count > 0)
+        {
+            var current = stack.Pop();
+            if (current == target)
+            {
+                return true;
+            }
+
+            if (!visited.Add(current) || !adjacency.TryGetValue(current, out var deps))
+            {
+                continue;
+            }
+
+            foreach (var dep in deps)
+            {
+                stack.Push(dep);
+            }
+        }
+
+        return false;
     }
 
     private void AddActivity(Guid taskId, TaskActivityType type, string summary, string? oldValue = null, string? newValue = null)

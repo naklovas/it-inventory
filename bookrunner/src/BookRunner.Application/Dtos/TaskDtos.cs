@@ -21,8 +21,16 @@ public sealed record RunbookTaskDto
     public DateTimeOffset? PlannedEnd { get; init; }
     public DateTimeOffset? ActualStart { get; init; }
     public DateTimeOffset? ActualEnd { get; init; }
-    public Guid? DependsOnTaskId { get; init; }
-    public string? DependsOnTaskTitle { get; init; }
+
+    /// <summary>Bu gorevin oncelleri (bu gorev baslamadan/tamamlanmadan once kapanmasi gerekenler).</summary>
+    public IReadOnlyList<TaskDependencyRefDto> Predecessors { get; init; } = Array.Empty<TaskDependencyRefDto>();
+
+    /// <summary>Bu gorevi oncul olarak bekleyen ardil gorevler.</summary>
+    public IReadOnlyList<TaskDependencyRefDto> Successors { get; init; } = Array.Empty<TaskDependencyRefDto>();
+
+    /// <summary>Kapanmamis (Tamamlandi/Atlandi disi) en az bir oncul var mi.</summary>
+    public bool HasOpenPredecessors { get; init; }
+
     public Guid? ScriptId { get; init; }
     public string? ScriptName { get; init; }
     public string? RollbackNotes { get; init; }
@@ -37,6 +45,15 @@ public sealed record RunbookTaskDto
     public int ActivityCount { get; init; }
     public DateTimeOffset CreatedAt { get; init; }
     public DateTimeOffset? UpdatedAt { get; init; }
+}
+
+/// <summary>Bir oncul/ardil goreve kisa referans (secim listeleri ve rozetler icin).</summary>
+public sealed record TaskDependencyRefDto
+{
+    public Guid TaskId { get; init; }
+    public required string Title { get; init; }
+    public RunbookTaskStatus Status { get; init; }
+    public required string StatusText { get; init; }
 }
 
 /// <summary>Bir goreve yapilan atama (kisi veya AD grubu).</summary>
@@ -110,7 +127,8 @@ public sealed record CreateTaskRequest
 
     public DateTimeOffset? PlannedEnd { get; init; }
 
-    public Guid? DependsOnTaskId { get; init; }
+    /// <summary>Bu gorevin oncelleri (once kapanmasi gereken gorevler). Bos birakilabilir.</summary>
+    public IReadOnlyList<Guid> DependsOnTaskIds { get; init; } = Array.Empty<Guid>();
 
     [StringLength(4000)]
     public string? RollbackNotes { get; init; }
@@ -140,7 +158,8 @@ public sealed record UpdateTaskRequest
 
     public DateTimeOffset? PlannedEnd { get; init; }
 
-    public Guid? DependsOnTaskId { get; init; }
+    /// <summary>Bu gorevin YENI oncul kumesi; tamami degistirir (kismi ekleme/cikarma degildir).</summary>
+    public IReadOnlyList<Guid> DependsOnTaskIds { get; init; } = Array.Empty<Guid>();
 
     [StringLength(4000)]
     public string? RollbackNotes { get; init; }

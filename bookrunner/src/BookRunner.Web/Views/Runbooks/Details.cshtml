@@ -204,18 +204,49 @@
                     <textarea class="form-control" rows="2" id="newTaskDescription"
                               placeholder="Adimin nasil yapilacagini yazin."></textarea>
                 </div>
+                @if (r.PlannedStart is null || r.PlannedEnd is null)
+                {
+                    <div class="col-12">
+                        <div class="alert alert-warning py-2 px-3 small mb-0">
+                            Gorev tarihi girebilmek icin once runbook'un planlanan baslangic/bitis
+                            tarihini girmelisiniz (<a asp-action="Edit" asp-route-id="@r.Id">Duzenle</a>).
+                        </div>
+                    </div>
+                }
                 <div class="col-md-3">
                     <label class="form-label small br-muted">Planlanan baslangic</label>
-                    <input class="form-control" type="datetime-local" id="newTaskStart" />
+                    <input class="form-control" type="datetime-local" id="newTaskStart"
+                           disabled="@(r.PlannedStart is null || r.PlannedEnd is null)" />
                 </div>
                 <div class="col-md-3">
                     <label class="form-label small br-muted">Planlanan bitis</label>
-                    <input class="form-control" type="datetime-local" id="newTaskEnd" />
+                    <input class="form-control" type="datetime-local" id="newTaskEnd"
+                           disabled="@(r.PlannedStart is null || r.PlannedEnd is null)" />
                 </div>
                 <div class="col-md-6">
                     <label class="form-label small br-muted">Geri alma notu</label>
                     <input class="form-control" id="newTaskRollback" placeholder="Adim geri alinacaksa ne yapilmali?" />
                 </div>
+                @if (r.Tasks.Count > 0)
+                {
+                    <div class="col-12">
+                        <label class="form-label small br-muted">
+                            Oncul gorevler (bu gorev, secilenler kapanmadan baslatilamaz/tamamlanamaz)
+                        </label>
+                        <div class="border rounded p-2" style="max-height:160px;overflow-y:auto;">
+                            @foreach (var candidate in r.Tasks.OrderBy(x => x.Order))
+                            {
+                                <div class="form-check">
+                                    <input class="form-check-input br-new-task-depends" type="checkbox"
+                                           value="@candidate.Id" id="newTaskDep-@candidate.Id" />
+                                    <label class="form-check-label small" for="newTaskDep-@candidate.Id">
+                                        @candidate.Order. @candidate.Title
+                                    </label>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
                 <div class="col-12">
                     <label class="form-label small br-muted">Sorumlu (opsiyonel, birden fazla eklenebilir)</label>
                     <ul class="nav nav-pills mb-2" role="tablist">
@@ -250,6 +281,76 @@
 }
 
 @* ------------------------------------------------------------------ modaller *@
+
+<div class="modal fade" id="editTaskModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Gorevi duzenle</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editTaskId" />
+                <input type="hidden" id="editTaskScriptId" />
+                <div class="row g-2">
+                    <div class="col-md-8">
+                        <label class="form-label small br-muted">Baslik *</label>
+                        <input class="form-control" id="editTaskTitle" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small br-muted">Oncelik</label>
+                        <select class="form-select" id="editTaskPriority">
+                            @foreach (TaskPriority priority in Enum.GetValues<TaskPriority>())
+                            {
+                                <option value="@priority">@DisplayText.Priority(priority)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small br-muted">Sure (dk)</label>
+                        <input class="form-control" type="number" min="0" id="editTaskMinutes" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small br-muted">Aciklama</label>
+                        <textarea class="form-control" rows="2" id="editTaskDescription"></textarea>
+                    </div>
+                    @if (r.PlannedStart is null || r.PlannedEnd is null)
+                    {
+                        <div class="col-12">
+                            <div class="alert alert-warning py-2 px-3 small mb-0">
+                                Gorev tarihi girebilmek icin once runbook'un planlanan tarihini girmelisiniz.
+                            </div>
+                        </div>
+                    }
+                    <div class="col-md-6">
+                        <label class="form-label small br-muted">Planlanan baslangic</label>
+                        <input class="form-control" type="datetime-local" id="editTaskStart"
+                               disabled="@(r.PlannedStart is null || r.PlannedEnd is null)" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small br-muted">Planlanan bitis</label>
+                        <input class="form-control" type="datetime-local" id="editTaskEnd"
+                               disabled="@(r.PlannedStart is null || r.PlannedEnd is null)" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small br-muted">Geri alma notu</label>
+                        <input class="form-control" id="editTaskRollback" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small br-muted">
+                            Oncul gorevler (bu gorev, secilenler kapanmadan baslatilamaz/tamamlanamaz)
+                        </label>
+                        <div class="border rounded p-2" id="editTaskDependencies" style="max-height:180px;overflow-y:auto;"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Vazgec</button>
+                <button type="button" class="btn btn-primary" id="btnSaveTaskEdit">Kaydet</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <div class="modal fade" id="assignModal" tabindex="-1">
     <div class="modal-dialog">
@@ -446,6 +547,22 @@
         canAssign = Model.CanAssignThis,
         canComment = Model.CanCommentThis,
         canExecute = Model.CanExecuteThis,
+        plannedStart = r.PlannedStart,
+        plannedEnd = r.PlannedEnd,
+        tasks = r.Tasks.OrderBy(t => t.Order).Select(t => new
+        {
+            id = t.Id,
+            title = t.Title,
+            order = t.Order,
+            description = t.Description,
+            priority = t.Priority.ToString(),
+            estimatedMinutes = t.EstimatedMinutes,
+            plannedStart = t.PlannedStart,
+            plannedEnd = t.PlannedEnd,
+            rollbackNotes = t.RollbackNotes,
+            scriptId = t.ScriptId,
+            dependsOnTaskIds = t.Predecessors.Select(p => p.TaskId)
+        }),
         antiforgery = Xsrf.GetAndStoreTokens(Context).RequestToken
     }))</script>
     <script src="~/js/runbook.js" asp-append-version="true"></script>

@@ -17,6 +17,7 @@ public class BookRunnerDbContext(DbContextOptions<BookRunnerDbContext> options)
     public DbSet<RoleMapping> RoleMappings => Set<RoleMapping>();
     public DbSet<Runbook> Runbooks => Set<Runbook>();
     public DbSet<RunbookTask> Tasks => Set<RunbookTask>();
+    public DbSet<TaskDependency> TaskDependencies => Set<TaskDependency>();
     public DbSet<TaskAssignment> Assignments => Set<TaskAssignment>();
     public DbSet<TaskComment> Comments => Set<TaskComment>();
     public DbSet<TaskActivity> Activities => Set<TaskActivity>();

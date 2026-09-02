@@ -70,11 +70,6 @@ public sealed class RunbookTaskConfiguration : IEntityTypeConfiguration<RunbookT
             .HasForeignKey(t => t.RunbookId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        builder.HasOne(t => t.DependsOnTask)
-            .WithMany()
-            .HasForeignKey(t => t.DependsOnTaskId)
-            .OnDelete(DeleteBehavior.Restrict);
-
         // Restrict (NO ACTION), SetNull degil: Runbook -> Tasks (cascade) ve
         // Runbook -> Scripts (cascade) ikisi de ayni runbook'tan geldigi icin,
         // Tasks.ScriptId burada SetNull olsaydi SQL Server Tasks tablosuna iki
@@ -92,6 +87,38 @@ public sealed class RunbookTaskConfiguration : IEntityTypeConfiguration<RunbookT
         builder.HasIndex(t => t.Status);
 
         builder.HasQueryFilter(t => !t.IsDeleted && !t.Runbook.IsDeleted);
+    }
+}
+
+/// <summary>
+/// Gorevler arasi oncul/ardil iliskisi (bkz. TaskDependency). Her iki FK de
+/// Tasks tablosuna Restrict ile baglanir; SQL Server ayni tabloya iki farkli
+/// cascade yolundan ulasilmasina izin vermez (bkz. RunbookTaskConfiguration
+/// icindeki Script FK yorumu), bu yuzden gorev silinirken bagli
+/// TaskDependency kayitlari once uygulama tarafinda (TaskService.DeleteAsync)
+/// silinir.
+/// </summary>
+public sealed class TaskDependencyConfiguration : IEntityTypeConfiguration<TaskDependency>
+{
+    public void Configure(EntityTypeBuilder<TaskDependency> builder)
+    {
+        builder.ToTable("TaskDependencies");
+        builder.HasKey(d => d.Id);
+
+        builder.HasOne(d => d.Task)
+            .WithMany(t => t.Predecessors)
+            .HasForeignKey(d => d.TaskId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(d => d.DependsOnTask)
+            .WithMany(t => t.Successors)
+            .HasForeignKey(d => d.DependsOnTaskId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasIndex(d => new { d.TaskId, d.DependsOnTaskId }).IsUnique();
+        builder.HasIndex(d => d.DependsOnTaskId);
+
+        builder.HasQueryFilter(d => !d.Task.IsDeleted && !d.DependsOnTask.IsDeleted && !d.Task.Runbook.IsDeleted);
     }
 }
 

@@ -100,6 +100,34 @@
         return value ? new Date(value).toISOString() : null;
     }
 
+    /** ISO/DateTimeOffset degerini datetime-local input'un bekledigi yerel "yyyy-MM-ddTHH:mm" bicimine cevirir. */
+    function toLocalInputValue(iso) {
+        if (!iso) {
+            return "";
+        }
+
+        const d = new Date(iso);
+        const pad = (n) => String(n).padStart(2, "0");
+        return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) +
+            "T" + pad(d.getHours()) + ":" + pad(d.getMinutes());
+    }
+
+    /** Gorev tarih secicilerine runbook'un planlanan araligini min/max olarak uygular. */
+    function applyPlannedRangeConstraint(startInput, endInput) {
+        if (!startInput || !endInput || !config.plannedStart || !config.plannedEnd) {
+            return;
+        }
+
+        const min = toLocalInputValue(config.plannedStart);
+        const max = toLocalInputValue(config.plannedEnd);
+        startInput.min = min;
+        startInput.max = max;
+        endInput.min = min;
+        endInput.max = max;
+    }
+
+    applyPlannedRangeConstraint(document.getElementById("newTaskStart"), document.getElementById("newTaskEnd"));
+
     // ------------------------------------------------------------ gorev ekleme
 
     const addTaskButton = document.getElementById("btnAddTask");
@@ -112,6 +140,8 @@
             }
 
             const minutes = document.getElementById("newTaskMinutes").value;
+            const dependsOnTaskIds = Array.from(document.querySelectorAll(".br-new-task-depends:checked"))
+                .map((el) => el.value);
 
             try {
                 const created = await post("AddTask", {
@@ -122,6 +152,7 @@
                     estimatedMinutes: minutes ? parseInt(minutes, 10) : null,
                     plannedStart: toIsoOrNull(document.getElementById("newTaskStart").value),
                     plannedEnd: toIsoOrNull(document.getElementById("newTaskEnd").value),
+                    dependsOnTaskIds: dependsOnTaskIds,
                     rollbackNotes: document.getElementById("newTaskRollback").value || null
                 }, { id: config.runbookId });
 
@@ -144,6 +175,95 @@
                 }
 
                 selection.newTask = [];
+                reload();
+            } catch (error) {
+                toast(error.message, "danger");
+            }
+        });
+    }
+
+    // ------------------------------------------------------------ gorev duzenleme
+
+    const editTaskModalElement = document.getElementById("editTaskModal");
+    const editTaskModal = editTaskModalElement ? new bootstrap.Modal(editTaskModalElement) : null;
+
+    /** Duzenlenen gorevin oncul listesini config.tasks'tan cizer (kendisi haric). */
+    function renderEditTaskDependencies(task) {
+        const holder = document.getElementById("editTaskDependencies");
+        if (!holder) {
+            return;
+        }
+
+        const others = (config.tasks || []).filter((item) => item.id !== task.id);
+        if (others.length === 0) {
+            holder.innerHTML = '<div class="br-muted small">Runbook\'ta baska gorev yok.</div>';
+            return;
+        }
+
+        const current = new Set(task.dependsOnTaskIds || []);
+        holder.innerHTML = others.map((item) => {
+            const checked = current.has(item.id) ? " checked" : "";
+            return '<div class="form-check">' +
+                '<input class="form-check-input br-edit-task-depends" type="checkbox" value="' + item.id + '"' +
+                ' id="editTaskDep-' + item.id + '"' + checked + ' />' +
+                '<label class="form-check-label small" for="editTaskDep-' + item.id + '">' +
+                escapeHtml(item.order + ". " + item.title) + "</label></div>";
+        }).join("");
+    }
+
+    document.querySelectorAll(".br-edit-task-btn").forEach((button) => {
+        button.addEventListener("click", () => {
+            const task = (config.tasks || []).find((item) => item.id === button.dataset.taskId);
+            if (!task || !editTaskModal) {
+                return;
+            }
+
+            document.getElementById("editTaskId").value = task.id;
+            document.getElementById("editTaskScriptId").value = task.scriptId || "";
+            document.getElementById("editTaskTitle").value = task.title;
+            document.getElementById("editTaskDescription").value = task.description || "";
+            document.getElementById("editTaskPriority").value = task.priority;
+            document.getElementById("editTaskMinutes").value = task.estimatedMinutes || "";
+            document.getElementById("editTaskRollback").value = task.rollbackNotes || "";
+
+            const startInput = document.getElementById("editTaskStart");
+            const endInput = document.getElementById("editTaskEnd");
+            startInput.value = toLocalInputValue(task.plannedStart);
+            endInput.value = toLocalInputValue(task.plannedEnd);
+            applyPlannedRangeConstraint(startInput, endInput);
+
+            renderEditTaskDependencies(task);
+            editTaskModal.show();
+        });
+    });
+
+    const saveTaskEditButton = document.getElementById("btnSaveTaskEdit");
+    if (saveTaskEditButton) {
+        saveTaskEditButton.addEventListener("click", async () => {
+            const title = document.getElementById("editTaskTitle").value.trim();
+            if (title.length < 2) {
+                toast("Gorev basligi en az 2 karakter olmali.", "warning");
+                return;
+            }
+
+            const minutes = document.getElementById("editTaskMinutes").value;
+            const dependsOnTaskIds = Array.from(document.querySelectorAll(".br-edit-task-depends:checked"))
+                .map((el) => el.value);
+
+            try {
+                await post("UpdateTask", {
+                    title: title,
+                    description: document.getElementById("editTaskDescription").value || null,
+                    priority: document.getElementById("editTaskPriority").value,
+                    estimatedMinutes: minutes ? parseInt(minutes, 10) : null,
+                    plannedStart: toIsoOrNull(document.getElementById("editTaskStart").value),
+                    plannedEnd: toIsoOrNull(document.getElementById("editTaskEnd").value),
+                    dependsOnTaskIds: dependsOnTaskIds,
+                    rollbackNotes: document.getElementById("editTaskRollback").value || null,
+                    scriptId: document.getElementById("editTaskScriptId").value || null
+                }, { taskId: document.getElementById("editTaskId").value });
+
+                editTaskModal.hide();
                 reload();
             } catch (error) {
                 toast(error.message, "danger");
@@ -453,6 +573,7 @@
         newTaskPanel.addEventListener("hidden.bs.collapse", () => {
             selection.newTask = [];
             renderNewTaskAssigneeChips();
+            document.querySelectorAll(".br-new-task-depends:checked").forEach((el) => { el.checked = false; });
         });
     }
 
