@@ -23,8 +23,6 @@ public sealed class SystemCurrentUser : ICurrentUser
 
     public AppRole RealRole => AppRole.Administrator;
 
-    public bool IsImpersonating => false;
-
     public bool IsInRole(AppRole role) => true;
 
     public string? IpAddress => null;

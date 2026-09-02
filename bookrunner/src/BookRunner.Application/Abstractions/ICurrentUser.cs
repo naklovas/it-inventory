@@ -32,14 +32,6 @@ public interface ICurrentUser
     /// </summary>
     AppRole RealRole { get; }
 
-    /// <summary>
-    /// Test modu aktif mi (Role, RealRole'den farkli). Aktifken sahiplik ve
-    /// editorluk kontrolleri de (bkz. IRunbookAccess) devre disi kalir - aksi
-    /// halde bir yonetici kendi actigi runbook'larda sahiplik yoluyla her
-    /// zaman tam yetkili kalir ve "sadece rolum X olsaydi" testi anlamsizlasirdi.
-    /// </summary>
-    bool IsImpersonating { get; }
-
     bool IsInRole(AppRole role);
 
     string? IpAddress { get; }
