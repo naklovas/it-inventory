@@ -11,7 +11,7 @@
         </h1>
         <p class="br-muted mb-0">Devam eden calismalar ve size dusen gorevler.</p>
     </div>
-    @if (Model.CanWrite)
+    @if (Model.CanCreateRunbook)
     {
         <div class="d-flex gap-2">
             <a class="btn btn-primary" asp-controller="Runbooks" asp-action="Create">

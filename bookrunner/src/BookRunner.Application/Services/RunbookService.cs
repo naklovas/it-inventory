@@ -187,7 +187,9 @@ public sealed class RunbookService(
 
     public async Task<RunbookDetailDto> CreateAsync(CreateRunbookRequest request, CancellationToken ct = default)
     {
-        access.Ensure(Permissions.RunbookWrite);
+        // Herkes kendi runbook'unu acabilir; duzenleme/atama yetkisi bundan sonra
+        // sahiplik yoluyla gelir (bkz. IRunbookAccess) - RunbookWrite'a ihtiyac yok.
+        access.Ensure(Permissions.RunbookCreate);
         ValidatePlannedRange(request.PlannedStart, request.PlannedEnd);
 
         var ownerId = request.OwnerUserId ?? currentUser.UserId
@@ -352,7 +354,10 @@ public sealed class RunbookService(
     public async Task<RunbookDetailDto> CreateFromTemplateAsync(
         Guid templateId, CreateFromTemplateRequest request, CancellationToken ct = default)
     {
-        await access.EnsureForRunbookAsync(templateId, Permissions.RunbookWrite, ct);
+        // Sablonu kullanmak "yeni bir runbook acmak"tir; sablonun SAHIBI olmak
+        // gerekmez (sablonlar zaten paylasilmak icin var), sadece runbook
+        // acma yetkisi yeterlidir.
+        access.Ensure(Permissions.RunbookCreate);
         ValidatePlannedRange(request.PlannedStart, request.PlannedEnd);
 
         var template = await LoadDetailAsync(templateId, tracking: false, ct)

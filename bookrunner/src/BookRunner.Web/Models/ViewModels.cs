@@ -12,6 +12,9 @@ public class PageViewModel
     public bool Can(string permission)
         => CurrentUser?.Permissions.Contains(permission, StringComparer.OrdinalIgnoreCase) == true;
 
+    /// <summary>Yeni runbook/sablon acabilir (bos veya sablondan). Herkese acik varsayilan roldur.</summary>
+    public bool CanCreateRunbook => Can(Permissions.RunbookCreate);
+    /// <summary>BASKASININ runbook'unu da duzenleyebilir (yonetici/yazar). Kendi runbook'unu duzenlemek icin gerekmez.</summary>
     public bool CanWrite => Can(Permissions.RunbookWrite);
     public bool CanDeleteTask => Can(Permissions.TaskDelete);
     public bool CanAssign => Can(Permissions.TaskAssign);

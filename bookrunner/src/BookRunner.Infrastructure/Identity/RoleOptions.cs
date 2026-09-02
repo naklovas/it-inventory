@@ -21,12 +21,19 @@ public sealed class RoleOptions
     /// <summary>
     /// <c>RoleMappings</c> icindeki hicbir gruba uymayan kullanicilarin rolu.
     ///
-    /// Iki tipik kurulum:
-    ///   Viewer        - kapali kurulum. Yalnizca eslenen gruplardaki kisiler
+    /// Tipik kurulumlar:
+    ///   Viewer        - kapali kurulum. Yalnizca eslenen takimlardaki kisiler
     ///                   runbook olusturabilir; digerleri sadece okur.
-    ///   RunbookAuthor - acik kurulum. Etki alanindaki herkes runbook acabilir
-    ///                   ve actigi runbook'un sahibi olur. RoleMappings bu
-    ///                   durumda yalnizca yonetici yukseltmesi icin kullanilir.
+    ///   Contributor   - acik kurulum (onerilen varsayilan). Etki alanindaki
+    ///                   herkes kendi runbook'unu acabilir ve sahibi olur;
+    ///                   sahiplik yoluyla o runbook'ta gorev ekleyebilir,
+    ///                   atama yapabilir, editor belirleyebilir - ama
+    ///                   BASKASININ runbook'unu duzenleyemez.
+    ///   RunbookAuthor - daha genis acik kurulum. Contributor'a ek olarak
+    ///                   baskalarinin runbook'unu da duzenleyebilir/atama
+    ///                   yapabilir (RunbookWrite, tum runbook'lar icin gecerli).
+    ///   RoleMappings, bu acik kurulumlarda yalnizca yonetici/yazar
+    ///   yukseltmesi icin kullanilir.
     /// </summary>
-    public AppRole DefaultRole { get; set; } = AppRole.Viewer;
+    public AppRole DefaultRole { get; set; } = AppRole.Contributor;
 }

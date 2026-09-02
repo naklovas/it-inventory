@@ -11,7 +11,10 @@
             Kullanicinin rolu, uyesi oldugu AD gruplarindan degil, personel servisinin
             dondurdugu tek bir takim adindan turetilir. Asagida eslesmeyen bir takimdaki
             herkes <code>Authorization:DefaultRole</code> (appsettings) ile gelen rolu alir -
-            su an bu genellikle "Izleyici" (yalnizca okuma).
+            varsayilani Katilimci: herkes kendi runbook'unu acabilir ve sahibi olarak
+            tam yetkiyle yonetebilir, ama baskasinin runbook'unu duzenleyemez. Buraya
+            eslenen kisiler baskalarinin runbook'unu da duzenleyebilen "Runbook Yazari"
+            veya tam yetkili "Yonetici" olur.
         </p>
     </div>
     <a class="btn btn-outline-secondary btn-sm" asp-action="Audit">

@@ -15,7 +15,7 @@
             Tekrarlayan calismalar icin hazir adim listeleri. Bir sablonu secip yeni runbook uretin.
         </p>
     </div>
-    @if (Model.CanWrite)
+    @if (Model.CanCreateRunbook)
     {
         <a class="btn btn-primary" asp-controller="Runbooks" asp-action="Create" asp-route-isTemplate="true">
             <i class="bi bi-plus-lg me-1"></i>Yeni sablon
@@ -89,7 +89,7 @@ else
                         <a class="btn btn-sm btn-outline-secondary" asp-controller="Runbooks" asp-action="Details" asp-route-id="@template.Id">
                             <i class="bi bi-eye me-1"></i>Incele
                         </a>
-                        @if (Model.CanWrite)
+                        @if (Model.CanCreateRunbook)
                         {
                             <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#use-@template.Id">
                                 <i class="bi bi-magic me-1"></i>Bu sablonu kullan
@@ -99,7 +99,7 @@ else
                 </div>
             </div>
 
-            @if (Model.CanWrite)
+            @if (Model.CanCreateRunbook)
             {
                 <div class="modal fade" id="use-@template.Id" tabindex="-1">
                     <div class="modal-dialog">
