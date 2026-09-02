@@ -182,15 +182,23 @@ public sealed class BookRunnerClaimsTransformation(
 
     /// <summary>
     /// Kullanicinin takimina karsilik gelen en yuksek rolu bulur.
-    /// Takim adi yoksa veya hicbir esleme tutmazsa yapilandirmadaki varsayilan
-    /// rol uygulanir; boylece "etki alanindaki herkes runbook acabilsin" kurulumu
-    /// tek ayarla mumkun olur.
+    ///
+    /// Iki farkli "eslesme yok" durumu vardir ve BILEREK farkli sonuc verir:
+    ///   - Personel servisinden HICBIR takim adi gelmiyorsa (kisi hicbir takimda
+    ///     degil / servis bu kisiyi tanimiyor) kullanici en dusuk yetkide kalir.
+    ///     "Etki alanindaki herkes runbook acabilsin" ilkesi yalnizca TANINAN bir
+    ///     takimin uyesi olan kisiler icin gecerlidir; takimsiz biri icin
+    ///     yapilandirmadaki varsayilan rol dahi UYGULANMAZ.
+    ///   - Takim adi geliyor ama bu takim icin ozel bir esleme YOKSA,
+    ///     yapilandirmadaki varsayilan rol (bkz. Authorization:DefaultRole,
+    ///     tipik olarak Contributor) uygulanir; boylece takimi bilinen herkes
+    ///     en azindan kendi runbook'unu acip yonetebilir.
     /// </summary>
     private static async Task<AppRole> ResolveRoleAsync(BookRunnerDbContext db, string? teamName, AppRole defaultRole)
     {
         if (string.IsNullOrWhiteSpace(teamName))
         {
-            return defaultRole;
+            return AppRole.Viewer;
         }
 
         // SQL Server'in varsayilan (buyuk/kucuk harf duyarsiz) collation'ina guvenilir.
@@ -199,7 +207,8 @@ public sealed class BookRunnerClaimsTransformation(
             .Select(r => r.Role)
             .ToListAsync();
 
-        // Esleme varsa en yuksegi, yoksa varsayilan rol gecerlidir.
+        // Esleme varsa en yuksegi, yoksa (takimi bilinen ama ozel eslemesi
+        // olmayan kullanici icin) varsayilan rol gecerlidir.
         return roles.Count == 0 ? defaultRole : roles.Max();
     }
 

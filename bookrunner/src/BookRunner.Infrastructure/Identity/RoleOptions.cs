@@ -19,12 +19,20 @@ public sealed class RoleOptions
     public const string SectionName = "Authorization";
 
     /// <summary>
-    /// <c>RoleMappings</c> icindeki hicbir gruba uymayan kullanicilarin rolu.
+    /// Personel servisinden gelen TAKIM ADI biliniyor ama <c>RoleMappings</c>
+    /// icinde bu takim icin ozel bir esleme YOKSA uygulanacak rol.
+    ///
+    /// Personel servisi bu kisi icin HICBIR takim adi dondurmuyorsa (kisi
+    /// hicbir takimda degil / servis kisiyi tanimiyor) bu ayar devreye
+    /// GIRMEZ - o kisi her zaman en dusuk yetkide (Viewer) kalir. Yani
+    /// "herkes runbook acabilsin" ilkesi yalnizca TANINAN bir takimin
+    /// uyesi olanlar icin gecerlidir.
     ///
     /// Tipik kurulumlar:
-    ///   Viewer        - kapali kurulum. Yalnizca eslenen takimlardaki kisiler
-    ///                   runbook olusturabilir; digerleri sadece okur.
-    ///   Contributor   - acik kurulum (onerilen varsayilan). Etki alanindaki
+    ///   Viewer        - kapali kurulum. Yalnizca ozel eslemesi olan
+    ///                   takimlardaki kisiler runbook olusturabilir;
+    ///                   takimi bilinen digerleri sadece okur.
+    ///   Contributor   - acik kurulum (onerilen varsayilan). Takimi bilinen
     ///                   herkes kendi runbook'unu acabilir ve sahibi olur;
     ///                   sahiplik yoluyla o runbook'ta gorev ekleyebilir,
     ///                   atama yapabilir, editor belirleyebilir - ama
