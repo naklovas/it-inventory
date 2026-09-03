@@ -7,6 +7,11 @@ using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Windows'ta "sc create" ile Windows Servisi olarak kurulup calistirildiginda servis yasam
+// dongusune (baslat/durdur, Event Log) duzgun entegre olur. "dotnet run" ile normal konsol
+// uygulamasi olarak calistirildiginda (Linux dahil) hicbir etkisi yoktur - guvenle her ortamda kalabilir.
+builder.Services.AddWindowsService(options => options.ServiceName = "MailRelayService");
+
 builder.Services.Configure<SmtpOptions>(builder.Configuration.GetSection("SmtpSettings"));
 builder.Services.Configure<PersonnelDirectoryOptions>(builder.Configuration.GetSection("PersonnelDirectory"));
 builder.Services.Configure<QueueOptions>(builder.Configuration.GetSection("Queue"));

@@ -60,7 +60,7 @@ sessizce null'a duser, gonderimi engellemez).
      TeamsPath, TeamCatalogSyncMinutes, TimeoutSeconds).
    - `Admin:ApiKey` - admin panel/API icin paylasimli anahtar. **Bos birakilirsa tum admin
      uc noktalari 503 doner** (guvenlik icin varsayilan olarak kapali).
-3. **Calistirma:**
+3. **Calistirma (gelistirme/test):**
    ```bash
    cd src/MailRelay.Service
    dotnet run
@@ -70,8 +70,53 @@ sessizce null'a duser, gonderimi engellemez).
    sessionStorage'inda tutulur). "Relay Ayarları" sekmesinden gercek SMTP relay bilgilerini
    girip kaydedin (appsettings.json'daki yer tutucu degerlerin uzerine yazilir).
 5. **Istemci uygulama tanimlama:** Admin panelinde "Uygulamalar" sekmesinden her cagiran
-   uygulama icin bir kayit olusturun; uretilen API anahtarini o uygulamanin konfigurasyonuna
-   (guvenli sekilde) kaydedin - **anahtar yalnizca olusturma aninda gosterilir**.
+   uygulama icin bir kayit olusturun (panel anahtari kendisi uretir); uretilen API
+   anahtarini o uygulamanin konfigurasyonuna (guvenli sekilde) kaydedin. Anahtar sadece
+   olusturma aninda degil, "Uygulamalar" listesinde her zaman goruntulenebilir.
+
+## Windows Servisi olarak yayinlama (production)
+
+Bu servis surekli calisan bir arka plan servisi oldugundan (kuyruk worker'lari, SMTP
+gonderimi) production'da konsol uygulamasi olarak degil, **Windows Servisi** olarak
+kurulmasi onerilir - sunucu yeniden baslasa bile otomatik ayaga kalkar. Proje zaten
+`Microsoft.Extensions.Hosting.WindowsServices` paketiyle bu moda hazir
+(`builder.Services.AddWindowsService(...)` - `dotnet run` ile konsoldan calistirinca hicbir
+etkisi yok, sadece `sc create` ile servis olarak kurulunca devreye girer).
+
+```powershell
+# 1) Yayinla (self-contained onerilir, hedef sunucuda ayrica .NET kurmaya gerek kalmaz)
+dotnet publish -c Release -r win-x64 --self-contained true -o C:\Servisler\MailRelay
+
+# 2) Windows Servisi olarak kaydet (Yonetici PowerShell)
+sc.exe create MailRelayService binPath= "C:\Servisler\MailRelay\MailRelay.Service.exe" start= auto
+sc.exe description MailRelayService "Uygulamalar icin kuyruklu mail gonderme servisi"
+sc.exe start MailRelayService
+
+# Durdurmak/kaldirmak icin:
+sc.exe stop MailRelayService
+sc.exe delete MailRelayService
+```
+
+appsettings.json ayarlari (`ConnectionStrings:MailDb`, `Admin:ApiKey`, `Kestrel:Endpoints`
+vb.) yayinlanan klasordeki `appsettings.json` icinde duzenlenir; servis her yeniden
+baslatilmasinda bu dosyayi okur.
+
+### Portlar otomatik acilir mi?
+
+`Kestrel:Endpoints` altinda tanimladigimiz 3 port (5401/5402/5403), servis (ister konsoldan
+ister Windows Servisi olarak) **baslar baslamaz kendisi dinlemeye alir** - ayrica bir kod/
+komut gerekmez, appsettings.json'da tanimli olmalari yeterli. Ama iki nokta dikkat ister:
+
+- **Windows Firewall:** Kestrel'in bir portu dinlemeye baslamasi, o portu **baska
+  makinelerden gelen** baglantilara otomatik acmaz - Windows Firewall inbound kurali
+  ayrica eklenmelidir (sadece localhost'tan/aynimakineden cagiriliyorsa gerek yoktur):
+  ```powershell
+  New-NetFirewallRule -DisplayName "MailRelay 5401-5403" -Direction Inbound `
+    -LocalPort 5401-5403 -Protocol TCP -Action Allow
+  ```
+- **Port cakismasi:** 5401-5403 baska bir uygulama tarafindan kullaniliyorsa
+  appsettings.json > `Kestrel:Endpoints` altindaki degerleri degistirip servisi yeniden
+  baslatmaniz yeterli - kac port/hangi numaralar oldugu tamamen bu ayardan gelir.
 
 ## API kullanimi (istemci uygulamalar icin)
 
