@@ -48,6 +48,7 @@ public sealed class MailSubmissionService
             Subject = request.Subject,
             Body = request.Body,
             IsBodyHtml = request.IsBodyHtml,
+            FromDisplayNameOverride = string.IsNullOrWhiteSpace(request.FromDisplayName) ? null : request.FromDisplayName.Trim(),
             Priority = Math.Clamp(request.Priority, 1, 5),
             MaxAttempts = _queueOptions.DefaultMaxAttempts,
             CorrelationId = request.CorrelationId,

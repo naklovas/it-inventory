@@ -221,6 +221,7 @@ async function openLogDetail(id) {
             <dt>CC</dt><dd>${escapeHtml(item.ccAddresses || "-")}</dd>
             <dt>BCC</dt><dd>${escapeHtml(item.bccAddresses || "-")}</dd>
             <dt>Konu</dt><dd>${escapeHtml(item.subject)}</dd>
+            <dt>Gönderen adı (override)</dt><dd>${escapeHtml(item.fromDisplayNameOverride || "- (merkezi ayar kullanıldı)")}</dd>
             <dt>Deneme</dt><dd>${item.attempts} / ${item.maxAttempts}</dd>
             <dt>Oluşturulma</dt><dd>${fmtDate(item.createdAtUtc)}</dd>
             <dt>Gönderilme</dt><dd>${fmtDate(item.sentAtUtc)}</dd>

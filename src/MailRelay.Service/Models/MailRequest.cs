@@ -23,6 +23,11 @@ public sealed class MailSendRequest
     // ve MailQueue.RequestedByUsername/RequestedByTeam alanlarina yazilir (raporlamada kullanilir).
     public string? RequestedByUsername { get; set; }
 
+    // Opsiyonel: bu maile ozel gonderen GORUNEN ADI (orn. "IK Sistemi"). Bos birakilirsa
+    // admin panelinden ayarlanan merkezi RelaySettings.FromDisplayName kullanilir. Gonderen
+    // e-posta ADRESI her zaman tek relay hesabindan gelir - istemci tarafindan degistirilemez.
+    public string? FromDisplayName { get; set; }
+
     // 1 (yuksek) - 5 (dusuk). Varsayilan 3.
     public int Priority { get; set; } = 3;
 

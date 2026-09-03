@@ -103,6 +103,11 @@ Yanit (kuyruga alindi, henuz gonderilmedi):
 filtrelenebilir. Alan opsiyoneldir; PersonnelDirectory kapaliysa ya da kullanici
 bulunamazsa gonderim yine de kuyruklanir, sadece takim bilgisi bos kalir.
 
+`fromDisplayName` verilirse **sadece gorunen ad** o mail icin degistirilir (orn. "IK
+Sistemi"); gonderen e-posta ADRESI her zaman admin panelindeki tek relay hesabindan
+gelir - istemci bunu degistiremez. Alan opsiyoneldir, bos birakilirsa merkezi
+`RelaySettings.FromDisplayName` kullanilir.
+
 Ekli dosya gondermek icin `attachments: [{ "fileName": "rapor.pdf", "contentType":
 "application/pdf", "contentBase64": "..." }]` alanini ekleyin.
 

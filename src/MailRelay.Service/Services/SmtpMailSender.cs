@@ -10,9 +10,13 @@ public sealed class SmtpMailSender : ISmtpMailSender
 {
     public async Task SendAsync(RelaySettings settings, MailQueueItem item, IReadOnlyList<MailAttachmentRecord> attachments, CancellationToken ct)
     {
+        // Gonderen e-posta ADRESI her zaman tek relay hesabindan gelir; sadece GORUNEN AD
+        // (istenirse) istemcinin bu mail icin gonderdigi FromDisplayNameOverride ile degistirilebilir.
+        var fromDisplayName = string.IsNullOrWhiteSpace(item.FromDisplayNameOverride) ? settings.FromDisplayName : item.FromDisplayNameOverride;
+
         using var message = new MailMessage
         {
-            From = new MailAddress(settings.FromAddress, settings.FromDisplayName),
+            From = new MailAddress(settings.FromAddress, fromDisplayName),
             Subject = item.Subject,
             Body = item.Body,
             IsBodyHtml = item.IsBodyHtml,

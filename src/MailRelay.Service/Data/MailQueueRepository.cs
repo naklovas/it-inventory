@@ -19,11 +19,11 @@ public sealed class MailQueueRepository
         const string insertSql = """
             INSERT INTO dbo.MailQueue
                 (ClientApplicationId, RequestedByUsername, RequestedByTeam, ToAddresses, CcAddresses, BccAddresses,
-                 Subject, Body, IsBodyHtml, Priority, Status, Attempts, MaxAttempts, NextAttemptAtUtc, CorrelationId, SourcePort)
+                 Subject, Body, IsBodyHtml, FromDisplayNameOverride, Priority, Status, Attempts, MaxAttempts, NextAttemptAtUtc, CorrelationId, SourcePort)
             OUTPUT INSERTED.Id
             VALUES
                 (@ClientApplicationId, @RequestedByUsername, @RequestedByTeam, @ToAddresses, @CcAddresses, @BccAddresses,
-                 @Subject, @Body, @IsBodyHtml, @Priority, @Status, 0, @MaxAttempts, NULL, @CorrelationId, @SourcePort);
+                 @Subject, @Body, @IsBodyHtml, @FromDisplayNameOverride, @Priority, @Status, 0, @MaxAttempts, NULL, @CorrelationId, @SourcePort);
             """;
 
         await using var connection = await _connectionFactory.OpenAsync(ct);
@@ -41,6 +41,7 @@ public sealed class MailQueueRepository
             command.Parameters.AddWithValue("@Subject", item.Subject);
             command.Parameters.AddWithValue("@Body", item.Body);
             command.Parameters.AddWithValue("@IsBodyHtml", item.IsBodyHtml);
+            command.Parameters.AddWithValue("@FromDisplayNameOverride", (object?)item.FromDisplayNameOverride ?? DBNull.Value);
             command.Parameters.AddWithValue("@Priority", item.Priority);
             command.Parameters.AddWithValue("@Status", MailStatus.Queued);
             command.Parameters.AddWithValue("@MaxAttempts", item.MaxAttempts);
@@ -85,7 +86,7 @@ public sealed class MailQueueRepository
                    INSERTED.ToAddresses, INSERTED.CcAddresses, INSERTED.BccAddresses, INSERTED.Subject, INSERTED.Body,
                    INSERTED.IsBodyHtml, INSERTED.Priority, INSERTED.Status, INSERTED.Attempts, INSERTED.MaxAttempts,
                    INSERTED.NextAttemptAtUtc, INSERTED.LastError, INSERTED.CorrelationId, INSERTED.SourcePort,
-                   INSERTED.CreatedAtUtc, INSERTED.SentAtUtc
+                   INSERTED.CreatedAtUtc, INSERTED.SentAtUtc, INSERTED.FromDisplayNameOverride
             WHERE Id = @Id AND Status IN (@Queued, @Retrying);
             """;
 
@@ -186,7 +187,7 @@ public sealed class MailQueueRepository
         const string sql = """
             SELECT Id, ClientApplicationId, RequestedByUsername, RequestedByTeam, ToAddresses, CcAddresses,
                    BccAddresses, Subject, Body, IsBodyHtml, Priority, Status, Attempts, MaxAttempts,
-                   NextAttemptAtUtc, LastError, CorrelationId, SourcePort, CreatedAtUtc, SentAtUtc
+                   NextAttemptAtUtc, LastError, CorrelationId, SourcePort, CreatedAtUtc, SentAtUtc, FromDisplayNameOverride
             FROM dbo.MailQueue
             WHERE Id = @Id;
             """;
@@ -278,7 +279,7 @@ public sealed class MailQueueRepository
         var pageSql = $"""
             SELECT Id, ClientApplicationId, RequestedByUsername, RequestedByTeam, ToAddresses, CcAddresses,
                    BccAddresses, Subject, Body, IsBodyHtml, Priority, Status, Attempts, MaxAttempts,
-                   NextAttemptAtUtc, LastError, CorrelationId, SourcePort, CreatedAtUtc, SentAtUtc
+                   NextAttemptAtUtc, LastError, CorrelationId, SourcePort, CreatedAtUtc, SentAtUtc, FromDisplayNameOverride
             FROM dbo.MailQueue
             {whereClause}
             ORDER BY CreatedAtUtc DESC
@@ -343,5 +344,6 @@ public sealed class MailQueueRepository
         SourcePort = reader.IsDBNull(17) ? null : reader.GetInt32(17),
         CreatedAtUtc = reader.GetDateTime(18),
         SentAtUtc = reader.IsDBNull(19) ? null : reader.GetDateTime(19),
+        FromDisplayNameOverride = reader.IsDBNull(20) ? null : reader.GetString(20),
     };
 }

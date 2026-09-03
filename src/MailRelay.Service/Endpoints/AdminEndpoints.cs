@@ -117,6 +117,7 @@ public static class AdminEndpoints
                 item.Subject,
                 item.Body,
                 item.IsBodyHtml,
+                item.FromDisplayNameOverride,
                 item.Status,
                 item.Attempts,
                 item.MaxAttempts,

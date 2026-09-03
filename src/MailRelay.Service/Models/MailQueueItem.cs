@@ -13,6 +13,11 @@ public sealed class MailQueueItem
     public string Subject { get; set; } = "";
     public string Body { get; set; } = "";
     public bool IsBodyHtml { get; set; }
+
+    // Istemcinin bu mail icin gonderdigi opsiyonel gorunen ad override'i (bkz. MailSendRequest.FromDisplayName).
+    // Null ise gonderim aninda RelaySettings.FromDisplayName kullanilir.
+    public string? FromDisplayNameOverride { get; set; }
+
     public int Priority { get; set; }
     public string Status { get; set; } = MailStatus.Queued;
     public int Attempts { get; set; }

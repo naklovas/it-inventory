@@ -51,6 +51,9 @@ BEGIN
         Subject             NVARCHAR(500)           NOT NULL,
         Body                NVARCHAR(MAX)           NOT NULL,
         IsBodyHtml          BIT                     NOT NULL DEFAULT 1,
+        -- Istemcinin bu maile ozel gonderdigi gorunen ad override'i (bkz. MailSendRequest.FromDisplayName).
+        -- Gonderen e-posta ADRESI her zaman RelaySettings.FromAddress'ten gelir, bu alan sadece gorunen adi degistirir.
+        FromDisplayNameOverride NVARCHAR(200)        NULL,
         Priority            TINYINT                 NOT NULL DEFAULT 3, -- 1=yuksek .. 5=dusuk
         Status              NVARCHAR(20)            NOT NULL DEFAULT 'Queued',
         Attempts            INT                     NOT NULL DEFAULT 0,
@@ -81,6 +84,14 @@ BEGIN
     );
 
     CREATE INDEX IX_MailAttachments_MailQueueId ON dbo.MailAttachments (MailQueueId);
+END
+GO
+
+-- mail_schema.sql daha once calistirilip dbo.MailQueue zaten olusturulmus olabilir; bu durumda
+-- yukaridaki CREATE TABLE atlanir ve yeni eklenen kolon asagidaki idempotent ALTER ile eklenir.
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('dbo.MailQueue') AND name = 'FromDisplayNameOverride')
+BEGIN
+    ALTER TABLE dbo.MailQueue ADD FromDisplayNameOverride NVARCHAR(200) NULL;
 END
 GO
 
