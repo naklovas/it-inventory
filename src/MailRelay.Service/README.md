@@ -103,9 +103,13 @@ kurulmasi onerilir - sunucu yeniden baslasa bile otomatik ayaga kalkar. Proje za
 (`builder.Services.AddWindowsService(...)` - `dotnet run` ile konsoldan calistirinca hicbir
 etkisi yok, sadece `sc create` ile servis olarak kurulunca devreye girer).
 
+Proje **net10.0** hedefler (guncel .NET LTS surumu). Sunucuya `dotnet-hosting-10.0.x`
+(ASP.NET Core Hosting Bundle) kurulduysa asagidaki **framework-dependent** yayin
+yeterlidir - daha kucuk cikti, sunucudaki ortak runtime'i kullanir:
+
 ```powershell
-# 1) Yayinla (self-contained onerilir, hedef sunucuda ayrica .NET kurmaya gerek kalmaz)
-dotnet publish -c Release -r win-x64 --self-contained true -o C:\Servisler\MailRelay
+# 1) Yayinla (framework-dependent - sunucuda .NET 10 Hosting Bundle kurulu olmali)
+dotnet publish -c Release -r win-x64 --self-contained false -o C:\Servisler\MailRelay
 
 # 2) Windows Servisi olarak kaydet (Yonetici PowerShell)
 sc.exe create MailRelayService binPath= "C:\Servisler\MailRelay\MailRelay.Service.exe" start= auto
@@ -116,6 +120,17 @@ sc.exe start MailRelayService
 sc.exe stop MailRelayService
 sc.exe delete MailRelayService
 ```
+
+Hosting Bundle'i kurmak istemediginiz/kuramadiginiz bir sunucu icin alternatif olarak
+**self-contained** yayin da kullanilabilir - .NET runtime'i uygulamanin kendi klasorune
+gomer, sunucudaki ortak kuruluma hic dokunmaz, hicbir onkosul gerektirmez (sadece dosya
+boyutu daha buyuktur):
+
+```powershell
+dotnet publish -c Release -r win-x64 --self-contained true -o C:\Servisler\MailRelay
+```
+
+(2. adimdaki `sc.exe` komutlari her iki yayin turunde de aynidir.)
 
 Gercek/gizli ayarlari (`ConnectionStrings:MailDb`, `Admin:ApiKey` vb.) `appsettings.json`
 yerine yayinlanan klasordeki `appsettings.Production.json`'a yazin (yukaridaki "Onemli"
