@@ -60,6 +60,26 @@ sessizce null'a duser, gonderimi engellemez).
      TeamsPath, TeamCatalogSyncMinutes, TimeoutSeconds).
    - `Admin:ApiKey` - admin panel/API icin paylasimli anahtar. **Bos birakilirsa tum admin
      uc noktalari 503 doner** (guvenlik icin varsayilan olarak kapali).
+
+   **Onemli - sunucudaki gercek degerleri dogrudan bu dosyada degistirmeyin:**
+   repodaki `appsettings.json` sadece genel/varsayilan degerleri tasir; her kod guncellemesi
+   (`git pull` + yeniden `dotnet publish`) bu dosyanin uzerine yazar ve sunucuya girdiginiz
+   gercek connection string/admin key/relay bilgileri kaybolur. Bunun yerine, **yayinlanan
+   klasorde** (sadece o sunucuda, repoya hic girmez) `appsettings.Production.json` adinda
+   ayrica bir dosya olusturun ve sadece degistirmek istediginiz alanlari icine yazin:
+   ```json
+   {
+     "ConnectionStrings": { "MailDb": "Server=...;Database=...;..." },
+     "Admin": { "ApiKey": "<guclu-bir-deger>" }
+   }
+   ```
+   ASP.NET Core, Windows Servisi/production olarak calisirken (`ASPNETCORE_ENVIRONMENT`
+   ayarlanmamissa varsayilan ortam "Production"dir) bu dosyayi appsettings.json'un **uzerine**
+   otomatik olarak katmanlar - kod tarafinda hicbir degisiklik gerekmez. Dosya repoda
+   olmadigindan (`.gitignore`'a eklendi) hicbir `dotnet publish` bunu silmez/degistirmez,
+   siz elle guncellemedikce oldugu gibi kalir. Alternatif olarak ortam degiskeni de
+   kullanilabilir (orn. `setx ConnectionStrings__MailDb "..."`) - ikisi de aynı sekilde
+   appsettings.json'daki degerin onune gecer.
 3. **Calistirma (gelistirme/test):**
    ```bash
    cd src/MailRelay.Service
@@ -97,9 +117,11 @@ sc.exe stop MailRelayService
 sc.exe delete MailRelayService
 ```
 
-appsettings.json ayarlari (`ConnectionStrings:MailDb`, `Admin:ApiKey`, `Kestrel:Endpoints`
-vb.) yayinlanan klasordeki `appsettings.json` icinde duzenlenir; servis her yeniden
-baslatilmasinda bu dosyayi okur.
+Gercek/gizli ayarlari (`ConnectionStrings:MailDb`, `Admin:ApiKey` vb.) `appsettings.json`
+yerine yayinlanan klasordeki `appsettings.Production.json`'a yazin (yukaridaki "Onemli"
+notuna bakin) - boylece bir sonraki `dotnet publish`'te kaybolmaz. Servis her yeniden
+baslatilmasinda ikisini de (once appsettings.json, sonra uzerine appsettings.Production.json)
+okur.
 
 ### Portlar otomatik acilir mi?
 
