@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mail Relay Servisi - Yönetim</title>
+<link rel="stylesheet" href="app.css" />
+</head>
+<body>
+<header>
+  <h1>Mail Relay Servisi &mdash; Yönetim Paneli</h1>
+  <div class="field" style="margin:0; max-width:260px;">
+    <input id="adminKeyInput" type="password" placeholder="Admin API anahtarı" />
+  </div>
+</header>
+
+<nav>
+  <button data-tab="settings" class="active">Relay Ayarları</button>
+  <button data-tab="logs">Mail Logları / Rapor</button>
+  <button data-tab="clients">Uygulamalar (API Anahtarları)</button>
+</nav>
+
+<main>
+  <!-- RELAY AYARLARI -->
+  <section id="tab-settings" class="panel">
+    <h2>SMTP Relay Ayarları</h2>
+    <div class="row">
+      <div class="field checkbox-field"><input type="checkbox" id="s-enabled" /><label for="s-enabled">Gönderim etkin</label></div>
+      <div class="field checkbox-field"><input type="checkbox" id="s-ssl" /><label for="s-ssl">SSL kullan</label></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>Host</label><input id="s-host" placeholder="mail.sirket.local" /></div>
+      <div class="field"><label>Port</label><input id="s-port" type="number" value="25" /></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>Kullanıcı adı (DOMAIN\kullanici)</label><input id="s-username" placeholder="xxx\xxxx" /></div>
+      <div class="field"><label>Parola <span id="s-password-hint" style="color:#6b7280"></span></label><input id="s-password" type="password" placeholder="değiştirmek için doldurun" /></div>
+    </div>
+    <div class="row">
+      <div class="field"><label>Gönderen adresi</label><input id="s-from" placeholder="noreply@sirket.com" /></div>
+      <div class="field"><label>Gönderen görünen ad</label><input id="s-fromname" placeholder="IT Envanter" /></div>
+    </div>
+    <div class="field"><label>Aynı anda en fazla eşzamanlı gönderim</label><input id="s-maxconcurrent" type="number" value="4" style="max-width:120px" /></div>
+    <button class="primary" id="s-save">Kaydet</button>
+    <div class="status-bar" id="s-status"></div>
+    <div class="status-bar" id="s-meta"></div>
+  </section>
+
+  <!-- MAIL LOGLARI -->
+  <section id="tab-logs" class="panel" hidden>
+    <h2>Gönderilen Mail Kayıtları</h2>
+    <div class="row">
+      <div class="field"><label>Serbest metin (konu / alıcı / gövde)</label><input id="l-search" /></div>
+      <div class="field"><label>Kullanıcı adı</label><input id="l-username" /></div>
+      <div class="field">
+        <label>Durum</label>
+        <select id="l-status">
+          <option value="">Tümü</option>
+          <option>Queued</option>
+          <option>Processing</option>
+          <option>Sent</option>
+          <option>Retrying</option>
+          <option>Failed</option>
+        </select>
+      </div>
+    </div>
+    <div class="row">
+      <div class="field"><label>Başlangıç</label><input id="l-from" type="datetime-local" /></div>
+      <div class="field"><label>Bitiş</label><input id="l-to" type="datetime-local" /></div>
+    </div>
+    <button class="primary" id="l-search-btn">Ara</button>
+    <div class="status-bar" id="l-status-bar"></div>
+    <table>
+      <thead>
+        <tr><th>Tarih</th><th>Kullanıcı</th><th>Takım</th><th>Alıcı</th><th>Konu</th><th>Durum</th><th>Deneme</th></tr>
+      </thead>
+      <tbody id="l-rows"></tbody>
+    </table>
+    <div class="pagination">
+      <button class="secondary" id="l-prev">&laquo; Önceki</button>
+      <span id="l-page-info"></span>
+      <button class="secondary" id="l-next">Sonraki &raquo;</button>
+    </div>
+  </section>
+
+  <!-- CLIENT APPLICATIONS -->
+  <section id="tab-clients" class="panel" hidden>
+    <h2>Kayıtlı Uygulamalar</h2>
+    <p style="color:#6b7280">Bu servise mail gönderecek her uygulama için bir API anahtarı üretin ve
+      <code>X-Api-Key</code> header'ı ile <code>POST /api/mail/send</code> çağrısında kullanmasını sağlayın.</p>
+    <div class="row">
+      <div class="field"><label>Yeni uygulama adı</label><input id="c-name" placeholder="Örn: Kullanici Yonetim Portali" /></div>
+    </div>
+    <button class="primary" id="c-create">Oluştur</button>
+    <div class="status-bar" id="c-status"></div>
+    <table>
+      <thead><tr><th>Ad</th><th>API Anahtarı</th><th>Durum</th><th>Oluşturulma</th><th></th></tr></thead>
+      <tbody id="c-rows"></tbody>
+    </table>
+  </section>
+</main>
+
+<div id="modal-root"></div>
+
+<script src="app.js"></script>
+<script>
+// --- Sekme gecisleri -------------------------------------------------------
+const tabs = document.querySelectorAll("nav button");
+tabs.forEach((btn) => btn.addEventListener("click", () => {
+  tabs.forEach((b) => b.classList.remove("active"));
+  btn.classList.add("active");
+  document.querySelectorAll("main > section").forEach((s) => s.hidden = true);
+  document.getElementById(`tab-${btn.dataset.tab}`).hidden = false;
+}));
+
+const adminKeyInput = document.getElementById("adminKeyInput");
+adminKeyInput.value = getAdminKey();
+adminKeyInput.addEventListener("change", () => setAdminKey(adminKeyInput.value.trim()));
+
+// --- Relay ayarlari ----------------------------------------------------
+async function loadSettings() {
+  const el = document.getElementById("s-status");
+  try {
+    const s = await apiFetch("/api/admin/relay-settings");
+    document.getElementById("s-enabled").checked = s.enabled;
+    document.getElementById("s-ssl").checked = s.enableSsl;
+    document.getElementById("s-host").value = s.host || "";
+    document.getElementById("s-port").value = s.port;
+    document.getElementById("s-username").value = s.username || "";
+    document.getElementById("s-from").value = s.fromAddress || "";
+    document.getElementById("s-fromname").value = s.fromDisplayName || "";
+    document.getElementById("s-maxconcurrent").value = s.maxConcurrentSend;
+    document.getElementById("s-password-hint").textContent = s.hasPassword ? "(kayıtlı - boş bırakılırsa korunur)" : "(tanımlı değil)";
+    document.getElementById("s-meta").textContent = `Son güncelleme: ${fmtDate(s.updatedAtUtc)}${s.updatedBy ? " · " + s.updatedBy : ""}`;
+  } catch (err) {
+    showStatus(el, err.message, "error");
+  }
+}
+
+document.getElementById("s-save").addEventListener("click", async () => {
+  const el = document.getElementById("s-status");
+  const payload = {
+    enabled: document.getElementById("s-enabled").checked,
+    enableSsl: document.getElementById("s-ssl").checked,
+    host: document.getElementById("s-host").value.trim(),
+    port: Number(document.getElementById("s-port").value) || 25,
+    username: document.getElementById("s-username").value.trim() || null,
+    password: document.getElementById("s-password").value || null,
+    fromAddress: document.getElementById("s-from").value.trim(),
+    fromDisplayName: document.getElementById("s-fromname").value.trim() || null,
+    maxConcurrentSend: Number(document.getElementById("s-maxconcurrent").value) || 4,
+  };
+  try {
+    await apiFetch("/api/admin/relay-settings", { method: "PUT", body: JSON.stringify(payload) });
+    document.getElementById("s-password").value = "";
+    showStatus(el, "Kaydedildi.", "ok");
+    loadSettings();
+  } catch (err) {
+    showStatus(el, err.message, "error");
+  }
+});
+
+// --- Mail loglari --------------------------------------------------------
+let logPage = 1;
+const logPageSize = 25;
+
+function buildLogQuery() {
+  const params = new URLSearchParams();
+  const search = document.getElementById("l-search").value.trim();
+  const username = document.getElementById("l-username").value.trim();
+  const status = document.getElementById("l-status").value;
+  const from = document.getElementById("l-from").value;
+  const to = document.getElementById("l-to").value;
+  if (search) params.set("search", search);
+  if (username) params.set("username", username);
+  if (status) params.set("status", status);
+  if (from) params.set("from", new Date(from).toISOString());
+  if (to) params.set("to", new Date(to).toISOString());
+  params.set("page", logPage);
+  params.set("pageSize", logPageSize);
+  return params.toString();
+}
+
+async function loadLogs() {
+  const el = document.getElementById("l-status-bar");
+  try {
+    const result = await apiFetch(`/api/admin/mail-logs?${buildLogQuery()}`);
+    const rows = document.getElementById("l-rows");
+    rows.innerHTML = result.items.map((i) => `
+      <tr data-id="${i.id}">
+        <td>${fmtDate(i.createdAtUtc)}</td>
+        <td>${escapeHtml(i.requestedByUsername || "-")}</td>
+        <td>${escapeHtml(i.requestedByTeam || "-")}</td>
+        <td>${escapeHtml(i.toAddresses)}</td>
+        <td>${escapeHtml(i.subject)}</td>
+        <td><span class="badge ${i.status}">${i.status}</span></td>
+        <td>${i.attempts}/${i.maxAttempts ?? ""}</td>
+      </tr>`).join("");
+    rows.querySelectorAll("tr").forEach((tr) => tr.addEventListener("click", () => openLogDetail(tr.dataset.id)));
+
+    const totalPages = Math.max(1, Math.ceil(result.totalCount / logPageSize));
+    document.getElementById("l-page-info").textContent = `Sayfa ${result.page} / ${totalPages} (${result.totalCount} kayıt)`;
+    showStatus(el, "", "");
+  } catch (err) {
+    showStatus(el, err.message, "error");
+  }
+}
+
+async function openLogDetail(id) {
+  try {
+    const item = await apiFetch(`/api/admin/mail-logs/${id}`);
+    const root = document.getElementById("modal-root");
+    root.innerHTML = `
+      <div class="modal-backdrop" id="modal-backdrop">
+        <div class="modal">
+          <h3>Mail #${item.id}</h3>
+          <dl class="kv">
+            <dt>Durum</dt><dd><span class="badge ${item.status}">${item.status}</span></dd>
+            <dt>Kullanıcı / Takım</dt><dd>${escapeHtml(item.requestedByUsername || "-")} / ${escapeHtml(item.requestedByTeam || "-")}</dd>
+            <dt>Alıcı</dt><dd>${escapeHtml(item.toAddresses)}</dd>
+            <dt>CC</dt><dd>${escapeHtml(item.ccAddresses || "-")}</dd>
+            <dt>BCC</dt><dd>${escapeHtml(item.bccAddresses || "-")}</dd>
+            <dt>Konu</dt><dd>${escapeHtml(item.subject)}</dd>
+            <dt>Deneme</dt><dd>${item.attempts} / ${item.maxAttempts}</dd>
+            <dt>Oluşturulma</dt><dd>${fmtDate(item.createdAtUtc)}</dd>
+            <dt>Gönderilme</dt><dd>${fmtDate(item.sentAtUtc)}</dd>
+            <dt>Sonraki deneme</dt><dd>${fmtDate(item.nextAttemptAtUtc)}</dd>
+            <dt>Kaynak port</dt><dd>${item.sourcePort ?? "-"}</dd>
+            <dt>Correlation Id</dt><dd>${escapeHtml(item.correlationId || "-")}</dd>
+            <dt>Son hata</dt><dd style="color:#dc2626">${escapeHtml(item.lastError || "-")}</dd>
+            <dt>Ekler</dt><dd>${item.attachments.length ? item.attachments.map(a => `${escapeHtml(a.fileName)} (${a.sizeBytes} bayt)`).join(", ") : "-"}</dd>
+          </dl>
+          <div><strong>Gövde</strong></div>
+          <pre class="body-preview">${escapeHtml(item.body)}</pre>
+          <button class="secondary" id="modal-close">Kapat</button>
+        </div>
+      </div>`;
+    document.getElementById("modal-close").addEventListener("click", () => root.innerHTML = "");
+    document.getElementById("modal-backdrop").addEventListener("click", (e) => { if (e.target.id === "modal-backdrop") root.innerHTML = ""; });
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+document.getElementById("l-search-btn").addEventListener("click", () => { logPage = 1; loadLogs(); });
+document.getElementById("l-prev").addEventListener("click", () => { if (logPage > 1) { logPage--; loadLogs(); } });
+document.getElementById("l-next").addEventListener("click", () => { logPage++; loadLogs(); });
+
+// --- Client applications ---------------------------------------------------
+async function loadClients() {
+  const el = document.getElementById("c-status");
+  try {
+    const apps = await apiFetch("/api/admin/client-applications");
+    const rows = document.getElementById("c-rows");
+    rows.innerHTML = apps.map((a) => `
+      <tr>
+        <td>${escapeHtml(a.name)}</td>
+        <td><code class="api-key">${escapeHtml(a.apiKey)}</code></td>
+        <td>${a.enabled ? "Aktif" : "Devre dışı"}</td>
+        <td>${fmtDate(a.createdAtUtc)}</td>
+        <td><button class="secondary" data-id="${a.id}" data-enabled="${a.enabled}">${a.enabled ? "Devre dışı bırak" : "Etkinleştir"}</button></td>
+      </tr>`).join("");
+    rows.querySelectorAll("button").forEach((btn) => btn.addEventListener("click", async () => {
+      try {
+        await apiFetch(`/api/admin/client-applications/${btn.dataset.id}/enabled`, {
+          method: "PUT",
+          body: JSON.stringify({ enabled: btn.dataset.enabled !== "true" }),
+        });
+        loadClients();
+      } catch (err) {
+        showStatus(el, err.message, "error");
+      }
+    }));
+  } catch (err) {
+    showStatus(el, err.message, "error");
+  }
+}
+
+document.getElementById("c-create").addEventListener("click", async () => {
+  const el = document.getElementById("c-status");
+  const name = document.getElementById("c-name").value.trim();
+  if (!name) { showStatus(el, "Uygulama adı gerekli.", "error"); return; }
+  try {
+    const created = await apiFetch("/api/admin/client-applications", { method: "POST", body: JSON.stringify({ name }) });
+    document.getElementById("c-name").value = "";
+    showStatus(el, `Oluşturuldu. API anahtarı: ${created.apiKey} (bu anahtarı şimdi güvenli bir yere kaydedin)`, "ok");
+    loadClients();
+  } catch (err) {
+    showStatus(el, err.message, "error");
+  }
+});
+
+// Ilk yukleme
+loadSettings();
+loadLogs();
+loadClients();
+</script>
+</body>
+</html>
