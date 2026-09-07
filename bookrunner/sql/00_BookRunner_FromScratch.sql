@@ -1,29 +1,54 @@
 /* ===========================================================================
-   BookRunner - tablolar, indeksler ve iliskiler
+   BookRunner - SIFIRDAN TEK DOSYA KURULUM
 
-   Bu script BAGIMSIZ ve TEKRAR CALISTIRILABILIRDIR (idempotent):
-     - Her tablo, her indeks ve her iliski (foreign key) KENDI BASINA kontrol
-       edilir ve yalnizca yoksa olusturulur. Zaten varsa dokunulmaz.
-     - Bir iliski herhangi bir nedenle olusturulamazsa (orn. veri tutarsizligi,
-       gecici bir hata) script DURMAZ; uyari basar ve digerlerine devam eder.
-     - Bu yuzden calistirirken bir hata gorseniz bile script'i TEKRAR
-       calistirmak guvenlidir: eksik kalan neyse yalniz onu tamamlar.
+   Bu script TEK BASINA calistirilir; ayrica 01_CreateDatabase.sql veya
+   02_BookRunner_Schema.sql'e ihtiyac duymaz (ikisinin birlestirilmis halidir):
+     1) [BookRunner] veritabanini (yoksa) olusturur.
+     2) READ_COMMITTED_SNAPSHOT'i acmaya calisir (yetki yetmezse yalnizca uyarir).
+     3) [bookrunner] semasini ve TUM tablolari/indeksleri/iliskileri olusturur.
 
-   Onceki surumden fark: EF Core'un urettigi "idempotent" script yalnizca
-   "bu migration calisti mi" diye tek bir bayraga bakiyordu; bir nesne
-   olusturulamasa bile script sonuna kadar akip migration'i "tamamlandi"
-   olarak isaretliyordu. Bu da tam olarak sizin yasadiginiz duruma yol
-   aciyordu: bazi tablolar olustu, biri hata verdi, script "bitti" dedi ama
-   şema eksik kaldi ve bir daha calistirilamadi. Simdi her nesne kendi
-   basina kontrol edildigi icin boyle bir kilitlenme olmaz.
+   Bu script BAGIMSIZ ve TEKRAR CALISTIRILABILIRDIR (idempotent): her nesne
+   kendi basina kontrol edilir, yalnizca yoksa olusturulur; zaten varsa
+   dokunulmaz. Bir hata olusursa script durmaz, uyari basar ve devam eder -
+   bu yuzden bir hata gorseniz bile tekrar calistirmak guvenlidir.
 
-   Onceden veritabanini olusturmadiysaniz once 01_CreateDatabase.sql'i
-   calistirin. Zaten olusturduysaniz dogrudan bu dosyayi calistirin:
+   Calistirma (SSMS'te dogrudan Execute, veya):
+     sqlcmd -S <sunucu> -i 00_BookRunner_FromScratch.sql
 
-     sqlcmd -S <sunucu> -d BookRunner -i 02_BookRunner_Schema.sql
-
-   NetBIOS/hesap/domain ile ilgili hicbir sey icermez; yalnizca sema.
+   NetBIOS/hesap/domain ile ilgili hicbir sey icermez; yalnizca veritabani ve sema.
    =========================================================================== */
+
+IF DB_ID(N'BookRunner') IS NULL
+BEGIN
+    PRINT N'BookRunner veritabani olusturuluyor...';
+    CREATE DATABASE [BookRunner];
+END
+ELSE
+BEGIN
+    PRINT N'BookRunner veritabani zaten var.';
+END
+GO
+
+/* Okuma sorgulari yazma islemlerini beklemesin diye anlik goruntu izolasyonu.
+   Yetki yetmezse kurulum durmaz; yalnizca uyari verilir. */
+BEGIN TRY
+    ALTER DATABASE [BookRunner] SET READ_COMMITTED_SNAPSHOT ON WITH ROLLBACK IMMEDIATE;
+    PRINT N'READ_COMMITTED_SNAPSHOT acildi.';
+END TRY
+BEGIN CATCH
+    PRINT N'UYARI: READ_COMMITTED_SNAPSHOT acilamadi -> ' + ERROR_MESSAGE();
+END CATCH
+GO
+
+USE [BookRunner];
+GO
+
+/* ---------------------------------------------------------------------------
+   Asagisi 02_BookRunner_Schema.sql ile AYNIDIR (sema: tablolar, indeksler,
+   iliskiler). Iki dosyayi ayri ayri guncel tutmamak icin, sema degisikliklerini
+   her zaman 02_BookRunner_Schema.sql uzerinde yapip bu dosyayi ondan yeniden
+   uretin.
+   --------------------------------------------------------------------------- */
 
 SET NOCOUNT ON;
 GO
