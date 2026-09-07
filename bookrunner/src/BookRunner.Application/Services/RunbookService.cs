@@ -359,10 +359,7 @@ public sealed class RunbookService(
             Tags = source.Tags
         };
 
-        foreach (var task in source.Tasks.OrderBy(t => t.Order))
-        {
-            template.Tasks.Add(CopyTask(task, copyAssignments: false));
-        }
+        CopyTasksWithDependencies(template, source.Tasks, copyAssignments: false);
 
         db.Runbooks.Add(template);
         await db.SaveChangesAsync(ct);
@@ -407,10 +404,7 @@ public sealed class RunbookService(
             Tags = template.Tags
         };
 
-        foreach (var task in template.Tasks.OrderBy(t => t.Order))
-        {
-            runbook.Tasks.Add(CopyTask(task, request.CopyAssignments));
-        }
+        CopyTasksWithDependencies(runbook, template.Tasks, request.CopyAssignments);
 
         db.Runbooks.Add(runbook);
         await db.SaveChangesAsync(ct);
@@ -651,6 +645,39 @@ public sealed class RunbookService(
     }
 
     /// <summary>Sablon/runbook kopyalarken gorev alanlarini tasir.</summary>
+    /// <summary>
+    /// Kaynak gorevleri hedef runbook'a kopyalar VE aralarindaki oncul/ardil
+    /// baglarini yeni gorev kimlikleriyle yeniden kurar (bkz. CopyTask - o sadece
+    /// tek bir gorevi kopyalar, bagimliliklardan habersizdir). Eski Id -> yeni Id
+    /// eslemesi cikarilip, yalnizca AYNI kopyalama kumesi icindeki bagimliliklar
+    /// tasinir; kaynak disina (ornegin farkli bir runbook'taki gorevlere) bakan
+    /// bir bagimlilik olamayacagi icin bu yeterlidir.
+    /// </summary>
+    private void CopyTasksWithDependencies(Runbook target, ICollection<RunbookTask> sourceTasks, bool copyAssignments)
+    {
+        var idMap = new Dictionary<Guid, Guid>();
+        var pairs = new List<(RunbookTask Source, RunbookTask Copy)>();
+
+        foreach (var source in sourceTasks.OrderBy(t => t.Order))
+        {
+            var copy = CopyTask(source, copyAssignments);
+            target.Tasks.Add(copy);
+            idMap[source.Id] = copy.Id;
+            pairs.Add((source, copy));
+        }
+
+        foreach (var (source, copy) in pairs)
+        {
+            foreach (var dependency in source.Predecessors)
+            {
+                if (idMap.TryGetValue(dependency.DependsOnTaskId, out var newDependsOnId))
+                {
+                    db.TaskDependencies.Add(new TaskDependency { TaskId = copy.Id, DependsOnTaskId = newDependsOnId });
+                }
+            }
+        }
+    }
+
     private static RunbookTask CopyTask(RunbookTask source, bool copyAssignments)
     {
         var copy = new RunbookTask

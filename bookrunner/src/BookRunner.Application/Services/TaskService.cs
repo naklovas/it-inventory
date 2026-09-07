@@ -248,6 +248,17 @@ public sealed class TaskService(
             task.Runbook.ActualStart ??= now;
         }
 
+        // Simetrik durum: TryAutoCompleteRunbookAsync son gorev kapaninca runbook'u
+        // otomatik "Tamamlandi" yapiyordu. Bir yonetici o gorevi (veya baska bir
+        // kapali gorevi) tekrar acik bir duruma geri cekerse, runbook'un "Tamamlandi"
+        // gibi gorunmeye devam etmesi yaniltici olur - alt adimlarin gercek durumunu
+        // yansitmasi icin otomatik olarak "Devam Ediyor"a donduruluyor.
+        if (!request.Status.IsClosed() && task.Runbook.Status == RunbookStatus.Completed)
+        {
+            task.Runbook.Status = RunbookStatus.InProgress;
+            task.Runbook.ActualEnd = null;
+        }
+
         await db.SaveChangesAsync(ct);
 
         if (request.Status is RunbookTaskStatus.Completed or RunbookTaskStatus.Failed && currentUser.UserId is { } actorId)
