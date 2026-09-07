@@ -214,8 +214,18 @@
                         <dt class="col-5 br-muted">Olusturan</dt><dd class="col-7">@t.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</dd>
                         <dt class="col-5 br-muted">Gerceklesen baslangic</dt><dd class="col-7">@(t.ActualStart?.ToLocalTime().ToString("dd.MM.yyyy HH:mm") ?? "-")</dd>
                         <dt class="col-5 br-muted">Gerceklesen bitis</dt><dd class="col-7">@(t.ActualEnd?.ToLocalTime().ToString("dd.MM.yyyy HH:mm") ?? "-")</dd>
+                        @if (t.ActualMinutes.HasValue)
+                        {
+                            <dt class="col-5 br-muted">Gerceklesen sure</dt><dd class="col-7">@t.ActualMinutes dk</dd>
+                        }
                         <dt class="col-5 br-muted">Oncelik</dt><dd class="col-7">@t.PriorityText</dd>
                     </dl>
+                    @if (!string.IsNullOrWhiteSpace(t.CompletionNote))
+                    {
+                        <div class="alert alert-success py-2 px-3 small mt-2 mb-0">
+                            <strong>Tamamlama notu:</strong> @t.CompletionNote
+                        </div>
+                    }
                 </div>
             </div>
         </div>

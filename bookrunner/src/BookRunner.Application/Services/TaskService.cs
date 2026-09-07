@@ -209,6 +209,21 @@ public sealed class TaskService(
                 break;
         }
 
+        // Tamamlanma modalindan gelen gercek sure/not: yalnizca Tamamlandi'ya
+        // ozgudur, arayuz da bu alanlari yalnizca o gecişte gosterir.
+        if (request.Status == RunbookTaskStatus.Completed)
+        {
+            if (request.ActualMinutes.HasValue)
+            {
+                task.ActualMinutes = request.ActualMinutes;
+            }
+
+            if (!string.IsNullOrWhiteSpace(request.Note))
+            {
+                task.CompletionNote = request.Note.Trim();
+            }
+        }
+
         var activityType = request.Status switch
         {
             RunbookTaskStatus.InProgress => TaskActivityType.Started,

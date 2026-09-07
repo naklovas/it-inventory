@@ -183,7 +183,9 @@ public sealed class RunbooksController(
             PlannedEnd = runbook.PlannedEnd?.LocalDateTime,
             ServiceManagerWorkItemId = runbook.ServiceManagerWorkItemId,
             TagsText = string.Join(", ", runbook.Tags),
-            RowVersion = runbook.RowVersion
+            RowVersion = runbook.RowVersion,
+            ActualMinutes = runbook.ActualMinutes,
+            CompletionNote = runbook.CompletionNote
         };
         await PopulateSeyirNamesAsync(form, ct);
         return View(await FillAsync(form, ct));
@@ -210,6 +212,8 @@ public sealed class RunbooksController(
             PlannedEnd = ToOffset(form.PlannedEnd),
             ServiceManagerWorkItemId = form.ServiceManagerWorkItemId,
             Tags = form.Tags,
+            ActualMinutes = form.ActualMinutes,
+            CompletionNote = form.CompletionNote,
             RowVersion = form.RowVersion
         }, ct), "Runbook guncellenemedi");
 
@@ -233,6 +237,47 @@ public sealed class RunbooksController(
         }
 
         return RedirectToAction(nameof(Index));
+    }
+
+    /// <summary>
+    /// Runbook'u "Tamamlandi" olarak isaretler. Details ekranindaki "Tamamla"
+    /// modalindan cagrilir; gercek sure ve gelecege yonelik not bu adimda
+    /// istenir. Diger alanlar degismeden korunur (once mevcut kayit tazeden
+    /// cekilir, sonra sadece Status/ActualMinutes/CompletionNote degistirilir).
+    /// </summary>
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> CompleteRunbook(Guid id, int? actualMinutes, string? completionNote, CancellationToken ct)
+    {
+        var runbook = await Api.GetRunbookAsync(id, ct);
+        if (runbook is null)
+        {
+            return NotFound();
+        }
+
+        var ok = await TryAsync(() => Api.UpdateRunbookAsync(id, new UpdateRunbookRequest
+        {
+            Title = runbook.Title,
+            Description = runbook.Description,
+            Status = RunbookStatus.Completed,
+            TemplateCategory = runbook.TemplateCategory,
+            SeyirName = runbook.SeyirName,
+            PlannedStart = runbook.PlannedStart,
+            PlannedEnd = runbook.PlannedEnd,
+            OwnerUserId = runbook.Owner?.Id,
+            ServiceManagerWorkItemId = runbook.ServiceManagerWorkItemId,
+            Tags = runbook.Tags,
+            ActualMinutes = actualMinutes,
+            CompletionNote = completionNote,
+            RowVersion = runbook.RowVersion
+        }, ct), "Runbook tamamlanamadi");
+
+        if (ok)
+        {
+            TempData["Success"] = $"{runbook.Code} tamamlandi olarak isaretlendi.";
+        }
+
+        return RedirectToAction(nameof(Details), new { id });
     }
 
     /// <summary>Mevcut runbook'u sablona cevirir.</summary>
@@ -341,11 +386,15 @@ public sealed class RunbooksController(
     public Task<IActionResult> UpdateTask(Guid taskId, [FromBody] UpdateTaskRequest request, CancellationToken ct)
         => JsonResultAsync(() => Api.UpdateTaskAsync(taskId, request, ct));
 
-    /// <summary>Gorev durumunu degistirir.</summary>
+    /// <summary>
+    /// Gorev durumunu degistirir. "Tamamlandi" tamamlama modalindan gelen
+    /// gercek sure/not de bu ucla birlikte gonderilir.
+    /// </summary>
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public Task<IActionResult> ChangeTaskStatus(Guid taskId, RunbookTaskStatus status, string? note, CancellationToken ct)
-        => JsonResultAsync(() => Api.ChangeTaskStatusAsync(taskId, new ChangeTaskStatusRequest { Status = status, Note = note }, ct));
+    public Task<IActionResult> ChangeTaskStatus(Guid taskId, RunbookTaskStatus status, string? note, int? actualMinutes, CancellationToken ct)
+        => JsonResultAsync(() => Api.ChangeTaskStatusAsync(taskId,
+            new ChangeTaskStatusRequest { Status = status, Note = note, ActualMinutes = actualMinutes }, ct));
 
     /// <summary>Gorevleri surukle-birak sonrasi siralar.</summary>
     [HttpPost]

@@ -92,6 +92,13 @@ public sealed record RunbookDetailDto
     public DateTimeOffset? PlannedEnd { get; init; }
     public DateTimeOffset? ActualStart { get; init; }
     public DateTimeOffset? ActualEnd { get; init; }
+
+    /// <summary>Tamamlandi olarak isaretlenirken elle girilen gercek sure (dakika).</summary>
+    public int? ActualMinutes { get; init; }
+
+    /// <summary>Tamamlandi olarak isaretlenirken girilen, gelecege yonelik not.</summary>
+    public string? CompletionNote { get; init; }
+
     public PersonSummary? Owner { get; init; }
     public string? ServiceManagerWorkItemId { get; init; }
     public IReadOnlyList<string> Tags { get; init; } = Array.Empty<string>();
@@ -182,6 +189,18 @@ public sealed record UpdateRunbookRequest
     public string? ServiceManagerWorkItemId { get; init; }
 
     public IReadOnlyList<string>? Tags { get; init; }
+
+    /// <summary>
+    /// Tamamlandi olarak isaretlenirken elle girilen gercek sure (dakika).
+    /// Genel duzenleme formu bu alani gostermez; mevcut degeri korumak icin
+    /// gizli alan olarak tasir (bkz. RunbookFormViewModel).
+    /// </summary>
+    [Range(0, 100000)]
+    public int? ActualMinutes { get; init; }
+
+    /// <summary>Tamamlandi olarak isaretlenirken girilen, gelecege yonelik not.</summary>
+    [StringLength(2000)]
+    public string? CompletionNote { get; init; }
 
     /// <summary>Ayni kaydi baskasi degistirdiyse istegi reddetmek icin gonderilir.</summary>
     public string? RowVersion { get; init; }

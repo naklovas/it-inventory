@@ -111,6 +111,8 @@ public static class Mapping
         PlannedEnd = task.PlannedEnd,
         ActualStart = task.ActualStart,
         ActualEnd = task.ActualEnd,
+        ActualMinutes = task.ActualMinutes,
+        CompletionNote = task.CompletionNote,
         Predecessors = task.Predecessors
             .OrderBy(d => d.DependsOnTask.Order)
             .Select(d => new TaskDependencyRefDto
@@ -173,6 +175,8 @@ public static class Mapping
         PlannedEnd = runbook.PlannedEnd,
         ActualStart = runbook.ActualStart,
         ActualEnd = runbook.ActualEnd,
+        ActualMinutes = runbook.ActualMinutes,
+        CompletionNote = runbook.CompletionNote,
         Owner = runbook.Owner?.ToSummary(),
         ServiceManagerWorkItemId = runbook.ServiceManagerWorkItemId,
         Tags = SplitTags(runbook.Tags),

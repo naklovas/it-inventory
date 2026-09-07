@@ -37,6 +37,16 @@ public class RunbookTask : AuditableEntity, ISoftDeletable
     public DateTimeOffset? ActualStart { get; set; }
     public DateTimeOffset? ActualEnd { get; set; }
 
+    /// <summary>Tamamlandi olarak isaretlenirken elle girilen gercek sure (dakika).
+    /// ActualStart/ActualEnd farkindan bagimsizdir - gorev uzun sure "Devam Ediyor"
+    /// durumunda kalmis olabilir, gercek harcanan efor burada ayrica belirtilir.</summary>
+    public int? ActualMinutes { get; set; }
+
+    /// <summary>Tamamlandi olarak isaretlenirken girilen, gelecege yonelik not
+    /// (orn. "bir dahaki sefere X'e dikkat edilmeli"). Tarihcedeki durum degisikligi
+    /// notundan farkli olarak burada kalici ve gorev karti uzerinde dogrudan gorunur.</summary>
+    public string? CompletionNote { get; set; }
+
     /// <summary>Bu gorevin oncelleri: bu gorev baslamadan/tamamlanmadan once
     /// kapanmis (Tamamlandi/Atlandi) olmasi gereken gorevler. Bir gorevin
     /// birden fazla onculu olabilir.</summary>

@@ -43,6 +43,15 @@ public class Runbook : AuditableEntity, ISoftDeletable
     public DateTimeOffset? ActualStart { get; set; }
     public DateTimeOffset? ActualEnd { get; set; }
 
+    /// <summary>Tamamlandi olarak isaretlenirken elle girilen gercek sure (dakika).
+    /// ActualStart/ActualEnd farkindan bagimsizdir; runbook uzun sure acik kalmis
+    /// olabilir, gercek harcanan efor burada ayrica belirtilir.</summary>
+    public int? ActualMinutes { get; set; }
+
+    /// <summary>Tamamlandi olarak isaretlenirken girilen, gelecege yonelik not
+    /// (orn. "bir dahaki sefere X'e dikkat edilmeli").</summary>
+    public string? CompletionNote { get; set; }
+
     /// <summary>Runbook sahibi (AD kullanicisi).</summary>
     public Guid OwnerUserId { get; set; }
     public AppUser Owner { get; set; } = null!;

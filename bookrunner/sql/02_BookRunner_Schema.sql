@@ -230,6 +230,8 @@ BEGIN
         [OwnerUserId] uniqueidentifier NOT NULL,
         [ServiceManagerWorkItemId] nvarchar(64) NULL,
         [Tags] nvarchar(1000) NULL,
+        [ActualMinutes] int NULL,
+        [CompletionNote] nvarchar(2000) NULL,
         [RowVersion] rowversion NULL,
         [IsDeleted] bit NOT NULL,
         [DeletedAt] datetimeoffset NULL,
@@ -249,6 +251,21 @@ GO
 IF COL_LENGTH(N'bookrunner.Runbooks', 'SeyirName') IS NULL
 BEGIN
     ALTER TABLE [bookrunner].[Runbooks] ADD [SeyirName] nvarchar(150) NULL;
+END
+GO
+
+-- Mevcut kurulumlarda Runbooks tablosu tamamlanma alanlari olmadan
+-- olusturulmus olabilir; "Tamamlandi" isaretlenirken girilen gercek sure ve
+-- gelecege yonelik not icin eklenir.
+IF COL_LENGTH(N'bookrunner.Runbooks', 'ActualMinutes') IS NULL
+BEGIN
+    ALTER TABLE [bookrunner].[Runbooks] ADD [ActualMinutes] int NULL;
+END
+GO
+
+IF COL_LENGTH(N'bookrunner.Runbooks', 'CompletionNote') IS NULL
+BEGIN
+    ALTER TABLE [bookrunner].[Runbooks] ADD [CompletionNote] nvarchar(2000) NULL;
 END
 GO
 
@@ -309,6 +326,8 @@ BEGIN
         [PlannedEnd] datetimeoffset NULL,
         [ActualStart] datetimeoffset NULL,
         [ActualEnd] datetimeoffset NULL,
+        [ActualMinutes] int NULL,
+        [CompletionNote] nvarchar(2000) NULL,
         [ScriptId] uniqueidentifier NULL,
         [RollbackNotes] nvarchar(4000) NULL,
         [IsDeleted] bit NOT NULL,
@@ -321,6 +340,21 @@ BEGIN
         CONSTRAINT [PK_Tasks] PRIMARY KEY ([Id])
     );
     PRINT N'Tablo olusturuldu: Tasks';
+END
+GO
+
+-- Mevcut kurulumlarda Tasks tablosu tamamlanma alanlari olmadan olusturulmus
+-- olabilir; "Tamamlandi" isaretlenirken girilen gercek sure ve gelecege
+-- yonelik not icin eklenir.
+IF COL_LENGTH(N'bookrunner.Tasks', 'ActualMinutes') IS NULL
+BEGIN
+    ALTER TABLE [bookrunner].[Tasks] ADD [ActualMinutes] int NULL;
+END
+GO
+
+IF COL_LENGTH(N'bookrunner.Tasks', 'CompletionNote') IS NULL
+BEGIN
+    ALTER TABLE [bookrunner].[Tasks] ADD [CompletionNote] nvarchar(2000) NULL;
 END
 GO
 
@@ -1479,6 +1513,15 @@ BEGIN
     BEGIN
         INSERT INTO [bookrunner].[__EFMigrationsHistory] ([MigrationId], [ProductVersion])
         VALUES (N'20260902132733_AddTaskDependencies', N'9.0.19');
+    END
+
+    IF NOT EXISTS (
+        SELECT 1 FROM [bookrunner].[__EFMigrationsHistory]
+        WHERE [MigrationId] = N'20260907062117_AddCompletionDetails'
+    )
+    BEGIN
+        INSERT INTO [bookrunner].[__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+        VALUES (N'20260907062117_AddCompletionDetails', N'9.0.19');
     END
 
     PRINT N'';

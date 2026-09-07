@@ -22,6 +22,12 @@ public sealed record RunbookTaskDto
     public DateTimeOffset? ActualStart { get; init; }
     public DateTimeOffset? ActualEnd { get; init; }
 
+    /// <summary>Tamamlandi olarak isaretlenirken elle girilen gercek sure (dakika).</summary>
+    public int? ActualMinutes { get; init; }
+
+    /// <summary>Tamamlandi olarak isaretlenirken girilen, gelecege yonelik not.</summary>
+    public string? CompletionNote { get; init; }
+
     /// <summary>Bu gorevin oncelleri (bu gorev baslamadan/tamamlanmadan once kapanmasi gerekenler).</summary>
     public IReadOnlyList<TaskDependencyRefDto> Predecessors { get; init; } = Array.Empty<TaskDependencyRefDto>();
 
@@ -174,6 +180,14 @@ public sealed record ChangeTaskStatusRequest
 
     [StringLength(2000)]
     public string? Note { get; init; }
+
+    /// <summary>
+    /// Tamamlandi olarak isaretlenirken elle girilen gercek sure (dakika).
+    /// Yalnizca Status=Completed icin anlamlidir; arayuz "Tamamlandi" tamlama
+    /// modalinden gonderir.
+    /// </summary>
+    [Range(0, 100000)]
+    public int? ActualMinutes { get; init; }
 }
 
 /// <summary>Gorevleri yeniden siralama istegi (surukle-birak).</summary>

@@ -76,6 +76,10 @@
                 {
                     <span><i class="bi bi-play-circle"></i> Baslangic: @Fmt(r.ActualStart)</span>
                 }
+                @if (r.ActualMinutes.HasValue)
+                {
+                    <span><i class="bi bi-stopwatch"></i> Gerceklesen sure: @r.ActualMinutes dk</span>
+                }
                 @if (!string.IsNullOrWhiteSpace(r.ServiceManagerWorkItemId))
                 {
                     <span><i class="bi bi-link-45deg"></i> SCSM: <strong class="text-body">@r.ServiceManagerWorkItemId</strong></span>
@@ -85,6 +89,13 @@
                     <span class="badge text-bg-light border">@tag</span>
                 }
             </div>
+
+            @if (!string.IsNullOrWhiteSpace(r.CompletionNote))
+            {
+                <div class="alert alert-success py-2 px-3 small mt-2 mb-0">
+                    <strong>Tamamlama notu:</strong> @r.CompletionNote
+                </div>
+            }
         </div>
 
         <div class="text-end">
@@ -106,6 +117,12 @@
             <a class="btn btn-sm btn-outline-secondary" asp-action="Edit" asp-route-id="@r.Id">
                 <i class="bi bi-pencil me-1"></i>Duzenle
             </a>
+        }
+        @if (Model.CanEditThis && r.Status is not (RunbookStatus.Completed or RunbookStatus.Cancelled or RunbookStatus.Archived))
+        {
+            <button class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#completeRunbookModal">
+                <i class="bi bi-check2-circle me-1"></i>Tamamla
+            </button>
         }
         @if (Model.CanExport)
         {
@@ -281,6 +298,31 @@
 }
 
 @* ------------------------------------------------------------------ modaller *@
+
+<div class="modal fade" id="completeTaskModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-check2-circle me-1"></i>Gorevi tamamla</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="completeTaskId" />
+                <label class="form-label small br-muted">Gerceklesen sure (dakika)</label>
+                <input class="form-control mb-2" type="number" min="0" id="completeTaskMinutes" placeholder="orn. 45" />
+                <label class="form-label small br-muted">Not (gelecek icin, opsiyonel)</label>
+                <textarea class="form-control" rows="3" id="completeTaskNote"
+                          placeholder="Bir dahaki sefere dikkat edilmesi gereken bir sey var mi?"></textarea>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Vazgec</button>
+                <button type="button" class="btn btn-success" id="btnConfirmCompleteTask">
+                    <i class="bi bi-check2-circle me-1"></i>Tamamla
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <div class="modal fade" id="editTaskModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
@@ -480,6 +522,37 @@
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+}
+
+@if (Model.CanEditThis && r.Status is not (RunbookStatus.Completed or RunbookStatus.Cancelled or RunbookStatus.Archived))
+{
+    <div class="modal fade" id="completeRunbookModal" tabindex="-1">
+        <div class="modal-dialog">
+            <form class="modal-content" method="post" asp-action="CompleteRunbook" asp-route-id="@r.Id">
+                @Html.AntiForgeryToken()
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-check2-circle me-1"></i>Runbook'u tamamla</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="small br-muted">
+                        @r.Code, "Tamamlandi" olarak isaretlenecek. Istersen gercek sureyi ve
+                        gelecek icin bir not birakabilirsin.
+                    </p>
+                    <label class="form-label small br-muted">Gerceklesen sure (dakika)</label>
+                    <input class="form-control mb-2" type="number" min="0" name="actualMinutes"
+                           placeholder="orn. 90" />
+                    <label class="form-label small br-muted">Not (gelecek icin, opsiyonel)</label>
+                    <textarea class="form-control" rows="3" name="completionNote"
+                              placeholder="Bir dahaki sefere dikkat edilmesi gereken bir sey var mi?"></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Vazgec</button>
+                    <button class="btn btn-success"><i class="bi bi-check2-circle me-1"></i>Tamamla</button>
+                </div>
+            </form>
         </div>
     </div>
 }

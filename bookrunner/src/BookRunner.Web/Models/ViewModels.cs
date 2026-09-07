@@ -122,6 +122,14 @@ public sealed class RunbookFormViewModel : PageViewModel
     public string? TagsText { get; set; }
     public string? RowVersion { get; set; }
 
+    /// <summary>
+    /// Tamamlanma aninda girilen gercek sure/not. Genel duzenleme formunda
+    /// gorunmez (bkz. Runbooks/Details.cshtml "Tamamla" modali) - burada
+    /// yalnizca mevcut degeri korumak icin gizli alan olarak tasinir.
+    /// </summary>
+    public int? ActualMinutes { get; set; }
+    public string? CompletionNote { get; set; }
+
     /// <summary>Seyir alaninda otomatik tamamlama icin mevcut seyir adlari.</summary>
     public IReadOnlyList<string> SeyirNames { get; set; } = Array.Empty<string>();
 

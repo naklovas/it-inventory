@@ -203,6 +203,37 @@
         });
     }
 
+    // ------------------------------------------------------------ gorev tamamlama
+
+    const completeTaskModalElement = document.getElementById("completeTaskModal");
+    const completeTaskModal = completeTaskModalElement ? new bootstrap.Modal(completeTaskModalElement) : null;
+
+    const confirmCompleteTaskButton = document.getElementById("btnConfirmCompleteTask");
+    if (confirmCompleteTaskButton) {
+        confirmCompleteTaskButton.addEventListener("click", async () => {
+            const minutes = document.getElementById("completeTaskMinutes").value;
+            const note = document.getElementById("completeTaskNote").value.trim();
+
+            // URLSearchParams her degeri String()'e cevirir - "undefined" gibi
+            // gecersiz bir metin gondermemek icin bos alanlar sozlukten tamamen cikarilir.
+            const query = { taskId: document.getElementById("completeTaskId").value, status: "Completed" };
+            if (note) {
+                query.note = note;
+            }
+            if (minutes) {
+                query.actualMinutes = parseInt(minutes, 10);
+            }
+
+            try {
+                await post("ChangeTaskStatus", undefined, query);
+                completeTaskModal.hide();
+                reload();
+            } catch (error) {
+                showActionError(error);
+            }
+        });
+    }
+
     // ------------------------------------------------------------ gorev duzenleme
 
     const editTaskModalElement = document.getElementById("editTaskModal");
@@ -297,6 +328,16 @@
     document.addEventListener("click", async (event) => {
         const statusButton = event.target.closest(".br-status-btn");
         if (statusButton) {
+            // "Tamamlandi" gercek sure/not istedigi icin once bir modal acilir;
+            // diger durum degisiklikleri (Devam ediyor, Bloke, vb.) hemen gonderilir.
+            if (statusButton.dataset.status === "Completed" && completeTaskModal) {
+                document.getElementById("completeTaskId").value = statusButton.dataset.taskId;
+                document.getElementById("completeTaskMinutes").value = "";
+                document.getElementById("completeTaskNote").value = "";
+                completeTaskModal.show();
+                return;
+            }
+
             try {
                 await post("ChangeTaskStatus", undefined, {
                     taskId: statusButton.dataset.taskId,
