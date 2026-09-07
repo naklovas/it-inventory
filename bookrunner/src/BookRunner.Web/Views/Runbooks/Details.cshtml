@@ -186,6 +186,28 @@
     }
 </div>
 
+@if (Model.CanEditThis)
+{
+    <div class="br-card p-2 mb-2 d-none align-items-center gap-2 flex-wrap" id="bulkTaskToolbar">
+        <span class="small br-muted"><span id="bulkTaskCount">0</span> gorev secili</span>
+        <button class="btn btn-sm btn-outline-danger" id="btnBulkDelete">
+            <i class="bi bi-trash me-1"></i>Sil
+        </button>
+        <button class="btn btn-sm btn-outline-secondary" id="btnBulkAssign">
+            <i class="bi bi-person-plus me-1"></i>Ata
+        </button>
+        <button class="btn btn-sm btn-outline-primary" id="btnBulkHandover">
+            <i class="bi bi-arrow-left-right me-1"></i>Devret
+        </button>
+        <div class="d-flex align-items-center gap-1">
+            <input class="form-control form-control-color" type="color" id="bulkColorInput" value="#4F86F7"
+                   style="width:2.5rem;height:calc(1.5em + .5rem + 2px);" />
+            <button class="btn btn-sm btn-outline-dark" id="btnBulkColor">Renk uygula</button>
+        </div>
+        <button class="btn btn-sm btn-link" id="btnBulkClear">Secimi temizle</button>
+    </div>
+}
+
 <div id="taskList" data-sortable="@Model.CanEditThis.ToString().ToLowerInvariant()">
     @foreach (var task in r.Tasks)
     {
@@ -672,7 +694,8 @@
             scriptId = t.ScriptId,
             isOutageStep = t.IsOutageStep,
             plannedOutageMinutes = t.PlannedOutageMinutes,
-            dependsOnTaskIds = t.Predecessors.Select(p => p.TaskId)
+            dependsOnTaskIds = t.Predecessors.Select(p => p.TaskId),
+            assignmentIds = t.Assignments.Where(a => a.IsActive).Select(a => a.Id)
         }),
         antiforgery = Xsrf.GetAndStoreTokens(Context).RequestToken
     }))</script>

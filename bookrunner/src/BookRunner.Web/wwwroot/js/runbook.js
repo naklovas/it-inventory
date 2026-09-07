@@ -607,6 +607,9 @@
     /** Secilen kisi/grup; atama, devir ve yeni gorev formunda paylasilir. */
     const selection = { assign: null, handover: null, newTask: [], collaborator: null };
 
+    /** Toplu atama/devir icin secili gorev kimlikleri; bos ise ata/devir modallari tekli gorev modunda calisir. */
+    let bulkTaskIds = [];
+
     /** Yeni gorev formundaki secili sorumlu "cip"lerini cizer. */
     function renderNewTaskAssigneeChips() {
         const container = document.getElementById("newTaskAssigneeChips");
@@ -750,6 +753,7 @@
 
     document.querySelectorAll(".br-assign-btn").forEach((button) => {
         button.addEventListener("click", () => {
+            bulkTaskIds = [];
             selection.assign = null;
             document.getElementById("assignTaskId").value = button.dataset.taskId;
             document.getElementById("assignUserSearch").value = "";
@@ -765,16 +769,26 @@
             return;
         }
 
-        const taskId = document.getElementById("assignTaskId").value;
+        const payload = {
+            assigneeType: target.kind === "user" ? "User" : "Group",
+            userId: target.kind === "user" ? target.id : null,
+            groupId: target.kind === "group" ? target.id : null,
+            note: document.getElementById("assignNote").value || null,
+            notify: document.getElementById("assignNotify").checked
+        };
 
         try {
-            await post("Assign", {
-                assigneeType: target.kind === "user" ? "User" : "Group",
-                userId: target.kind === "user" ? target.id : null,
-                groupId: target.kind === "group" ? target.id : null,
-                note: document.getElementById("assignNote").value || null,
-                notify: document.getElementById("assignNotify").checked
-            }, { taskId: taskId });
+            if (bulkTaskIds.length > 0) {
+                const results = await Promise.allSettled(
+                    bulkTaskIds.map((id) => post("Assign", payload, { taskId: id })));
+                const failed = results.filter((r) => r.status === "rejected").length;
+                if (failed > 0) {
+                    toast(failed + " goreve atama yapilamadi.", "warning");
+                }
+                bulkTaskIds = [];
+            } else {
+                await post("Assign", payload, { taskId: document.getElementById("assignTaskId").value });
+            }
 
             assignModal.hide();
             reload();
@@ -790,6 +804,7 @@
 
     document.querySelectorAll(".br-handover-btn").forEach((button) => {
         button.addEventListener("click", () => {
+            bulkTaskIds = [];
             selection.handover = null;
             document.getElementById("handoverTaskId").value = button.dataset.taskId;
             document.getElementById("handoverAssignmentId").value = button.dataset.assignmentId;
@@ -813,20 +828,183 @@
             return;
         }
 
+        const targetPayload = {
+            targetType: target.kind === "user" ? "User" : "Group",
+            targetUserId: target.kind === "user" ? target.id : null,
+            targetGroupId: target.kind === "group" ? target.id : null,
+            note: note
+        };
+
         try {
-            await post("Handover", {
-                fromAssignmentId: document.getElementById("handoverAssignmentId").value,
-                targetType: target.kind === "user" ? "User" : "Group",
-                targetUserId: target.kind === "user" ? target.id : null,
-                targetGroupId: target.kind === "group" ? target.id : null,
-                note: note
-            }, { taskId: document.getElementById("handoverTaskId").value });
+            if (bulkTaskIds.length > 0) {
+                const calls = [];
+                bulkTaskIds.forEach((id) => {
+                    const task = (config.tasks || []).find((item) => item.id === id);
+                    (task && task.assignmentIds ? task.assignmentIds : []).forEach((assignmentId) => {
+                        calls.push(post("Handover",
+                            Object.assign({ fromAssignmentId: assignmentId }, targetPayload),
+                            { taskId: id }));
+                    });
+                });
+
+                if (calls.length === 0) {
+                    toast("Secili gorevlerin aktif atamasi yok, devredilecek bir sey bulunamadi.", "warning");
+                    bulkTaskIds = [];
+                    return;
+                }
+
+                const results = await Promise.allSettled(calls);
+                const failed = results.filter((r) => r.status === "rejected").length;
+                if (failed > 0) {
+                    toast(failed + " devir islemi basarisiz oldu.", "warning");
+                }
+                bulkTaskIds = [];
+            } else {
+                await post("Handover",
+                    Object.assign({ fromAssignmentId: document.getElementById("handoverAssignmentId").value }, targetPayload),
+                    { taskId: document.getElementById("handoverTaskId").value });
+            }
 
             handoverModal.hide();
             reload();
         } catch (error) {
             showActionError(error);
         }
+    }
+
+    // -------------------------------------------------------------- toplu islem
+
+    function selectedBulkTaskIds() {
+        return Array.from(document.querySelectorAll(".br-task-select:checked")).map((el) => el.dataset.taskId);
+    }
+
+    function updateBulkToolbar() {
+        const toolbar = document.getElementById("bulkTaskToolbar");
+        if (!toolbar) {
+            return;
+        }
+
+        const ids = selectedBulkTaskIds();
+        const countEl = document.getElementById("bulkTaskCount");
+        if (countEl) {
+            countEl.textContent = String(ids.length);
+        }
+
+        toolbar.classList.toggle("d-none", ids.length === 0);
+        toolbar.classList.toggle("d-flex", ids.length > 0);
+    }
+
+    if (taskList) {
+        taskList.addEventListener("change", (event) => {
+            if (event.target.classList.contains("br-task-select")) {
+                updateBulkToolbar();
+            }
+        });
+    }
+
+    const btnBulkClear = document.getElementById("btnBulkClear");
+    if (btnBulkClear) {
+        btnBulkClear.addEventListener("click", () => {
+            document.querySelectorAll(".br-task-select:checked").forEach((el) => { el.checked = false; });
+            updateBulkToolbar();
+        });
+    }
+
+    const btnBulkDelete = document.getElementById("btnBulkDelete");
+    if (btnBulkDelete) {
+        btnBulkDelete.addEventListener("click", async () => {
+            const ids = selectedBulkTaskIds();
+            if (!ids.length || !confirm(ids.length + " gorev silinecek. Emin misiniz?")) {
+                return;
+            }
+
+            const results = await Promise.allSettled(ids.map((id) => post("DeleteTask", undefined, { taskId: id })));
+            const failed = results.filter((r) => r.status === "rejected").length;
+            if (failed > 0) {
+                toast(failed + " gorev silinemedi.", "warning");
+            }
+            reload();
+        });
+    }
+
+    const btnBulkColor = document.getElementById("btnBulkColor");
+    if (btnBulkColor) {
+        btnBulkColor.addEventListener("click", async () => {
+            const ids = selectedBulkTaskIds();
+            if (!ids.length) {
+                return;
+            }
+
+            const color = document.getElementById("bulkColorInput").value;
+
+            // UpdateTask butun alanlari degistirir; bu yuzden her gorevin mevcut
+            // verisi config.tasks'tan okunup yalnizca renk degistirilerek geri gonderilir.
+            const results = await Promise.allSettled(ids.map((id) => {
+                const task = (config.tasks || []).find((item) => item.id === id);
+                if (!task) {
+                    return Promise.resolve();
+                }
+
+                return post("UpdateTask", {
+                    title: task.title,
+                    description: task.description || null,
+                    colorHex: color,
+                    priority: task.priority,
+                    estimatedMinutes: task.estimatedMinutes,
+                    plannedStart: task.plannedStart,
+                    plannedEnd: task.plannedEnd,
+                    dependsOnTaskIds: task.dependsOnTaskIds || [],
+                    rollbackNotes: task.rollbackNotes || null,
+                    scriptId: task.scriptId || null,
+                    isOutageStep: task.isOutageStep,
+                    plannedOutageMinutes: task.plannedOutageMinutes
+                }, { taskId: id });
+            }));
+
+            const failed = results.filter((r) => r.status === "rejected").length;
+            if (failed > 0) {
+                toast(failed + " gorevin rengi degistirilemedi.", "warning");
+            }
+            reload();
+        });
+    }
+
+    const btnBulkAssign = document.getElementById("btnBulkAssign");
+    if (btnBulkAssign && assignModal) {
+        btnBulkAssign.addEventListener("click", () => {
+            const ids = selectedBulkTaskIds();
+            if (!ids.length) {
+                return;
+            }
+
+            bulkTaskIds = ids;
+            selection.assign = null;
+            document.getElementById("assignTaskId").value = "";
+            document.getElementById("assignUserSearch").value = "";
+            document.getElementById("assignGroupSearch").value = "";
+            document.getElementById("assignNote").value = "";
+            assignModal.show();
+        });
+    }
+
+    const btnBulkHandover = document.getElementById("btnBulkHandover");
+    if (btnBulkHandover && handoverModal) {
+        btnBulkHandover.addEventListener("click", () => {
+            const ids = selectedBulkTaskIds();
+            if (!ids.length) {
+                return;
+            }
+
+            bulkTaskIds = ids;
+            selection.handover = null;
+            document.getElementById("handoverTaskId").value = "";
+            document.getElementById("handoverAssignmentId").value = "";
+            document.getElementById("handoverFromText").textContent =
+                ids.length + " gorevin tum aktif atamalari devredilecek.";
+            document.getElementById("handoverUserSearch").value = "";
+            document.getElementById("handoverGroupSearch").value = "";
+            handoverModal.show();
+        });
     }
 
     // -------------------------------------------------------------- editorler

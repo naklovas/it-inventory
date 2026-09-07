@@ -16,6 +16,8 @@
             @if (Model.CanEdit)
             {
                 <i class="bi bi-grip-vertical br-drag-handle mt-1" title="Suruklerek siralayin"></i>
+                <input type="checkbox" class="form-check-input br-task-select mt-1" data-task-id="@t.Id"
+                       title="Toplu islem icin sec" />
             }
 
             <span class="br-task-order" style="background:@t.ColorHex">@t.Order</span>
