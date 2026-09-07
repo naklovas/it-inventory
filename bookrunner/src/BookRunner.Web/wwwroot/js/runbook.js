@@ -149,6 +149,66 @@
 
     applyPlannedRangeConstraint(document.getElementById("newTaskStart"), document.getElementById("newTaskEnd"));
 
+    /** Secili oncul kimliklerinden en gec bitenin PlannedEnd degerini (ISO) dondurur. */
+    function latestPredecessorEnd(selectedIds) {
+        if (!selectedIds.length) {
+            return null;
+        }
+
+        const ends = (config.tasks || [])
+            .filter((t) => selectedIds.includes(t.id) && t.plannedEnd)
+            .map((t) => new Date(t.plannedEnd).getTime());
+
+        return ends.length ? new Date(Math.max(...ends)).toISOString() : null;
+    }
+
+    /** Sure (dk) alanini planlanan baslangic/bitis farkindan hesaplar (kullanici sonradan degistirebilir). */
+    function applyDurationFromRange(startInput, endInput, minutesInput) {
+        if (!startInput || !endInput || !minutesInput || !startInput.value || !endInput.value) {
+            return;
+        }
+
+        const start = new Date(startInput.value).getTime();
+        const end = new Date(endInput.value).getTime();
+        if (end > start) {
+            minutesInput.value = Math.round((end - start) / 60000);
+        }
+    }
+
+    /**
+     * Oncul secim kutusu (yeni gorev paneli / gorev duzenle modali) ile
+     * planlanan baslangic-bitis-sure alanlari arasindaki otomatik doldurmayi
+     * kurar. Oncul kutusu "change" olayini dinler (delege) ki duzenle
+     * modalindeki checkbox'lar her acilista yeniden cizilse de calismaya
+     * devam etsin.
+     */
+    function wireTaskDateAutoFill(dependenciesContainerId, startInputId, endInputId, minutesInputId) {
+        const startInput = document.getElementById(startInputId);
+        const endInput = document.getElementById(endInputId);
+        const minutesInput = document.getElementById(minutesInputId);
+
+        const dependenciesContainer = document.getElementById(dependenciesContainerId);
+        if (dependenciesContainer) {
+            dependenciesContainer.addEventListener("change", () => {
+                const selectedIds = Array.from(dependenciesContainer.querySelectorAll("input:checked")).map((el) => el.value);
+                const latestEnd = latestPredecessorEnd(selectedIds);
+                if (latestEnd && startInput && !startInput.disabled) {
+                    startInput.value = toLocalInputValue(latestEnd);
+                }
+                applyDurationFromRange(startInput, endInput, minutesInput);
+            });
+        }
+
+        [startInput, endInput].forEach((input) => {
+            if (input) {
+                input.addEventListener("change", () => applyDurationFromRange(startInput, endInput, minutesInput));
+            }
+        });
+    }
+
+    wireTaskDateAutoFill("newTaskDependencies", "newTaskStart", "newTaskEnd", "newTaskMinutes");
+    wireTaskDateAutoFill("editTaskDependencies", "editTaskStart", "editTaskEnd", "editTaskMinutes");
+
     // ------------------------------------------------------------ gorev ekleme
 
     const addTaskButton = document.getElementById("btnAddTask");
@@ -335,6 +395,13 @@
                 document.getElementById("completeTaskMinutes").value = "";
                 document.getElementById("completeTaskNote").value = "";
                 completeTaskModal.show();
+                return;
+            }
+
+            // "Baslamadi"ya sifirlama gerceklesen tarih/sure/notu siler - geri
+            // alinamaz, bu yuzden ayrica onay istenir.
+            if (statusButton.dataset.status === "NotStarted" &&
+                !confirm("Gorev baslangic durumuna sifirlanacak; gerceklesen tarih/sure ve tamamlama notu silinecek. Emin misiniz?")) {
                 return;
             }
 

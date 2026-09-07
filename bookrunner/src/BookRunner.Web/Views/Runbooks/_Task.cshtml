@@ -142,6 +142,14 @@
                         }
                     }
                 }
+                @if (Model.CanResetToNotStarted && t.Status != RunbookTaskStatus.NotStarted)
+                {
+                    <button class="btn btn-sm btn-outline-warning br-status-btn"
+                            data-task-id="@t.Id" data-status="@RunbookTaskStatus.NotStarted"
+                            title="Yalnizca yonetici: gorevi ilk haline sifirlar (gerceklesen tarihler/not silinir)">
+                        <i class="bi bi-arrow-counterclockwise"></i> Baslamadi
+                    </button>
+                }
 
                 @if (t.Assignments.Count > 0 && Model.CanExecute)
                 {

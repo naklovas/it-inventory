@@ -17,6 +17,10 @@ namespace BookRunner.Web.Models;
 /// <param name="CanExecute">Durum degistirme ve devretme yetkisi.</param>
 /// <param name="CanComment">Yorum yazma yetkisi.</param>
 /// <param name="CanRunScript">Goreve bagli CSX script'ini calistirma yetkisi.</param>
+/// <param name="CanResetToNotStarted">
+/// Gorevi "Baslamadi" durumuna sifirlama yetkisi (yalnizca yonetici rolu,
+/// test modundaki etkin role gore - bkz. TaskService.ChangeStatusAsync).
+/// </param>
 public sealed record TaskCardModel(
     RunbookTaskDto Task,
     bool CanEdit,
@@ -24,7 +28,8 @@ public sealed record TaskCardModel(
     bool CanAssign,
     bool CanExecute,
     bool CanComment,
-    bool CanRunScript)
+    bool CanRunScript,
+    bool CanResetToNotStarted)
 {
     /// <summary>Runbook detay sayfasinin yetkilerinden kart modeli uretir.</summary>
     public static TaskCardModel From(RunbookTaskDto task, RunbookDetailViewModel page) => new(
@@ -34,5 +39,6 @@ public sealed record TaskCardModel(
         CanAssign: page.CanAssignThis,
         CanExecute: page.CanExecuteThis,
         CanComment: page.CanCommentThis,
-        CanRunScript: page.CanRunScript);
+        CanRunScript: page.CanRunScript,
+        CanResetToNotStarted: page.CanManageAdmin);
 }

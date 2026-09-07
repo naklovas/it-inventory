@@ -175,6 +175,14 @@ public sealed class TaskService(
             return await GetAsync(taskId, ct);
         }
 
+        // Gorevi baslangic haline sifirlamak (gerceklesen sure/not, ActualStart/End
+        // dahil her sey silinir) yalnizca yonetici rolunde - istisnai/duzeltici bir
+        // islemdir, arayuzde de yalnizca yoneticiye gosterilir.
+        if (request.Status == RunbookTaskStatus.NotStarted && !Permissions.Has(currentUser.Role, Permissions.AdminManage))
+        {
+            throw new ForbiddenException("Gorevi baslangic durumuna dondurme yetkisi yalnizca yoneticidedir.");
+        }
+
         if (request.Status is RunbookTaskStatus.InProgress or RunbookTaskStatus.Completed)
         {
             // Siki kural: ADIL, TUM oncelleri kapanmadan (Tamamlandi/Atlandi)
@@ -206,6 +214,14 @@ public sealed class TaskService(
             case RunbookTaskStatus.Skipped:
                 task.ActualStart ??= now;
                 task.ActualEnd = now;
+                break;
+            case RunbookTaskStatus.NotStarted:
+                // Gorevi ilk haline dondurur: gerceklesen tarihler ve tamamlama
+                // bilgileri de silinir, yoksa bir sonraki gecişte yanlis bilgi kalir.
+                task.ActualStart = null;
+                task.ActualEnd = null;
+                task.ActualMinutes = null;
+                task.CompletionNote = null;
                 break;
         }
 

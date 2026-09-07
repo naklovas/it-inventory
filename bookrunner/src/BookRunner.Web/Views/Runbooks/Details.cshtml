@@ -250,7 +250,7 @@
                         <label class="form-label small br-muted">
                             Oncul gorevler (bu gorev, secilenler kapanmadan baslatilamaz/tamamlanamaz)
                         </label>
-                        <div class="border rounded p-2" style="max-height:160px;overflow-y:auto;">
+                        <div class="border rounded p-2" id="newTaskDependencies" style="max-height:160px;overflow-y:auto;">
                             @foreach (var candidate in r.Tasks.OrderBy(x => x.Order))
                             {
                                 <div class="form-check">
