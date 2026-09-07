@@ -68,7 +68,9 @@ public sealed class TaskService(
             EstimatedMinutes = request.EstimatedMinutes,
             PlannedStart = request.PlannedStart,
             PlannedEnd = request.PlannedEnd,
-            RollbackNotes = request.RollbackNotes
+            RollbackNotes = request.RollbackNotes,
+            IsOutageStep = request.IsOutageStep,
+            PlannedOutageMinutes = request.IsOutageStep ? request.PlannedOutageMinutes : null
         };
 
         var dependsOnIds = request.DependsOnTaskIds.Distinct().ToList();
@@ -133,6 +135,12 @@ public sealed class TaskService(
         task.PlannedEnd = request.PlannedEnd;
         task.RollbackNotes = request.RollbackNotes;
         task.ScriptId = request.ScriptId;
+        task.IsOutageStep = request.IsOutageStep;
+        task.PlannedOutageMinutes = request.IsOutageStep ? request.PlannedOutageMinutes : null;
+        if (!request.IsOutageStep)
+        {
+            task.ActualOutageMinutes = null;
+        }
 
         if (!string.IsNullOrWhiteSpace(request.ColorHex))
         {
@@ -221,6 +229,7 @@ public sealed class TaskService(
                 task.ActualStart = null;
                 task.ActualEnd = null;
                 task.ActualMinutes = null;
+                task.ActualOutageMinutes = null;
                 task.CompletionNote = null;
                 break;
         }
@@ -232,6 +241,11 @@ public sealed class TaskService(
             if (request.ActualMinutes.HasValue)
             {
                 task.ActualMinutes = request.ActualMinutes;
+            }
+
+            if (task.IsOutageStep && request.ActualOutageMinutes.HasValue)
+            {
+                task.ActualOutageMinutes = request.ActualOutageMinutes;
             }
 
             if (!string.IsNullOrWhiteSpace(request.Note))

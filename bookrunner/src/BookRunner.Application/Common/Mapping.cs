@@ -113,6 +113,9 @@ public static class Mapping
         ActualEnd = task.ActualEnd,
         ActualMinutes = task.ActualMinutes,
         CompletionNote = task.CompletionNote,
+        IsOutageStep = task.IsOutageStep,
+        PlannedOutageMinutes = task.PlannedOutageMinutes,
+        ActualOutageMinutes = task.ActualOutageMinutes,
         Predecessors = task.Predecessors
             .OrderBy(d => d.DependsOnTask.Order)
             .Select(d => new TaskDependencyRefDto

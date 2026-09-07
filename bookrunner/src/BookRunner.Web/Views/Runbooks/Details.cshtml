@@ -80,6 +80,18 @@
                 {
                     <span><i class="bi bi-stopwatch"></i> Gerceklesen sure: @r.ActualMinutes dk</span>
                 }
+                @{
+                    var outageTasks = r.Tasks.Where(t => t.IsOutageStep).ToList();
+                }
+                @if (outageTasks.Count > 0)
+                {
+                    var plannedOutage = outageTasks.Sum(t => t.PlannedOutageMinutes ?? 0);
+                    var actualOutage = outageTasks.Sum(t => t.ActualOutageMinutes ?? 0);
+                    <span class="text-warning-emphasis" title="Kesintili adim sayisi: @outageTasks.Count">
+                        <i class="bi bi-lightning-charge-fill"></i>
+                        Kesinti - planlanan: @plannedOutage dk, gerceklesen: @actualOutage dk
+                    </span>
+                }
                 @if (!string.IsNullOrWhiteSpace(r.ServiceManagerWorkItemId))
                 {
                     <span><i class="bi bi-link-45deg"></i> SCSM: <strong class="text-body">@r.ServiceManagerWorkItemId</strong></span>
@@ -244,6 +256,16 @@
                     <label class="form-label small br-muted">Geri alma notu</label>
                     <input class="form-control" id="newTaskRollback" placeholder="Adim geri alinacaksa ne yapilmali?" />
                 </div>
+                <div class="col-md-4">
+                    <div class="form-check mt-4">
+                        <input class="form-check-input" type="checkbox" id="newTaskOutage" />
+                        <label class="form-check-label small" for="newTaskOutage">Kesintili adim</label>
+                    </div>
+                </div>
+                <div class="col-md-4" id="newTaskOutageMinutesWrap" hidden>
+                    <label class="form-label small br-muted">Planlanan kesinti (dk)</label>
+                    <input class="form-control" type="number" min="0" id="newTaskOutageMinutes" />
+                </div>
                 @if (r.Tasks.Count > 0)
                 {
                     <div class="col-12">
@@ -310,6 +332,10 @@
                 <input type="hidden" id="completeTaskId" />
                 <label class="form-label small br-muted">Gerceklesen sure (dakika)</label>
                 <input class="form-control mb-2" type="number" min="0" id="completeTaskMinutes" placeholder="orn. 45" />
+                <div id="completeTaskOutageWrap" hidden>
+                    <label class="form-label small br-muted">Gerceklesen kesinti (dakika)</label>
+                    <input class="form-control mb-2" type="number" min="0" id="completeTaskOutageMinutes" placeholder="orn. 15" />
+                </div>
                 <label class="form-label small br-muted">Not (gelecek icin, opsiyonel)</label>
                 <textarea class="form-control" rows="3" id="completeTaskNote"
                           placeholder="Bir dahaki sefere dikkat edilmesi gereken bir sey var mi?"></textarea>
@@ -377,6 +403,16 @@
                     <div class="col-12">
                         <label class="form-label small br-muted">Geri alma notu</label>
                         <input class="form-control" id="editTaskRollback" />
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-check mt-4">
+                            <input class="form-check-input" type="checkbox" id="editTaskOutage" />
+                            <label class="form-check-label small" for="editTaskOutage">Kesintili adim</label>
+                        </div>
+                    </div>
+                    <div class="col-md-4" id="editTaskOutageMinutesWrap" hidden>
+                        <label class="form-label small br-muted">Planlanan kesinti (dk)</label>
+                        <input class="form-control" type="number" min="0" id="editTaskOutageMinutes" />
                     </div>
                     <div class="col-12">
                         <label class="form-label small br-muted">
@@ -634,6 +670,8 @@
             plannedEnd = t.PlannedEnd,
             rollbackNotes = t.RollbackNotes,
             scriptId = t.ScriptId,
+            isOutageStep = t.IsOutageStep,
+            plannedOutageMinutes = t.PlannedOutageMinutes,
             dependsOnTaskIds = t.Predecessors.Select(p => p.TaskId)
         }),
         antiforgery = Xsrf.GetAndStoreTokens(Context).RequestToken

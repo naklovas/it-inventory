@@ -209,6 +209,20 @@
     wireTaskDateAutoFill("newTaskDependencies", "newTaskStart", "newTaskEnd", "newTaskMinutes");
     wireTaskDateAutoFill("editTaskDependencies", "editTaskStart", "editTaskEnd", "editTaskMinutes");
 
+    /** "Kesintili adim" checkbox'i isaretlenince planlanan kesinti alanini gosterir/gizler. */
+    function wireOutageToggle(checkboxId, wrapId) {
+        const checkbox = document.getElementById(checkboxId);
+        const wrap = document.getElementById(wrapId);
+        if (!checkbox || !wrap) {
+            return;
+        }
+
+        checkbox.addEventListener("change", () => { wrap.hidden = !checkbox.checked; });
+    }
+
+    wireOutageToggle("newTaskOutage", "newTaskOutageMinutesWrap");
+    wireOutageToggle("editTaskOutage", "editTaskOutageMinutesWrap");
+
     // ------------------------------------------------------------ gorev ekleme
 
     const addTaskButton = document.getElementById("btnAddTask");
@@ -221,6 +235,8 @@
             }
 
             const minutes = document.getElementById("newTaskMinutes").value;
+            const isOutage = document.getElementById("newTaskOutage").checked;
+            const outageMinutes = document.getElementById("newTaskOutageMinutes").value;
             const dependsOnTaskIds = Array.from(document.querySelectorAll(".br-new-task-depends:checked"))
                 .map((el) => el.value);
 
@@ -234,7 +250,9 @@
                     plannedStart: toIsoOrNull(document.getElementById("newTaskStart").value),
                     plannedEnd: toIsoOrNull(document.getElementById("newTaskEnd").value),
                     dependsOnTaskIds: dependsOnTaskIds,
-                    rollbackNotes: document.getElementById("newTaskRollback").value || null
+                    rollbackNotes: document.getElementById("newTaskRollback").value || null,
+                    isOutageStep: isOutage,
+                    plannedOutageMinutes: isOutage && outageMinutes ? parseInt(outageMinutes, 10) : null
                 }, { id: config.runbookId });
 
                 if (selection.newTask.length > 0) {
@@ -272,6 +290,7 @@
     if (confirmCompleteTaskButton) {
         confirmCompleteTaskButton.addEventListener("click", async () => {
             const minutes = document.getElementById("completeTaskMinutes").value;
+            const outageMinutes = document.getElementById("completeTaskOutageMinutes").value;
             const note = document.getElementById("completeTaskNote").value.trim();
 
             // URLSearchParams her degeri String()'e cevirir - "undefined" gibi
@@ -282,6 +301,9 @@
             }
             if (minutes) {
                 query.actualMinutes = parseInt(minutes, 10);
+            }
+            if (outageMinutes) {
+                query.actualOutageMinutes = parseInt(outageMinutes, 10);
             }
 
             try {
@@ -338,6 +360,12 @@
             document.getElementById("editTaskMinutes").value = task.estimatedMinutes || "";
             document.getElementById("editTaskRollback").value = task.rollbackNotes || "";
 
+            const outageCheckbox = document.getElementById("editTaskOutage");
+            const outageWrap = document.getElementById("editTaskOutageMinutesWrap");
+            outageCheckbox.checked = !!task.isOutageStep;
+            outageWrap.hidden = !task.isOutageStep;
+            document.getElementById("editTaskOutageMinutes").value = task.plannedOutageMinutes || "";
+
             const startInput = document.getElementById("editTaskStart");
             const endInput = document.getElementById("editTaskEnd");
             startInput.value = toLocalInputValue(task.plannedStart);
@@ -359,6 +387,8 @@
             }
 
             const minutes = document.getElementById("editTaskMinutes").value;
+            const isOutage = document.getElementById("editTaskOutage").checked;
+            const outageMinutes = document.getElementById("editTaskOutageMinutes").value;
             const dependsOnTaskIds = Array.from(document.querySelectorAll(".br-edit-task-depends:checked"))
                 .map((el) => el.value);
 
@@ -372,7 +402,9 @@
                     plannedEnd: toIsoOrNull(document.getElementById("editTaskEnd").value),
                     dependsOnTaskIds: dependsOnTaskIds,
                     rollbackNotes: document.getElementById("editTaskRollback").value || null,
-                    scriptId: document.getElementById("editTaskScriptId").value || null
+                    scriptId: document.getElementById("editTaskScriptId").value || null,
+                    isOutageStep: isOutage,
+                    plannedOutageMinutes: isOutage && outageMinutes ? parseInt(outageMinutes, 10) : null
                 }, { taskId: document.getElementById("editTaskId").value });
 
                 editTaskModal.hide();
@@ -391,9 +423,12 @@
             // "Tamamlandi" gercek sure/not istedigi icin once bir modal acilir;
             // diger durum degisiklikleri (Devam ediyor, Bloke, vb.) hemen gonderilir.
             if (statusButton.dataset.status === "Completed" && completeTaskModal) {
+                const task = (config.tasks || []).find((item) => item.id === statusButton.dataset.taskId);
                 document.getElementById("completeTaskId").value = statusButton.dataset.taskId;
                 document.getElementById("completeTaskMinutes").value = "";
                 document.getElementById("completeTaskNote").value = "";
+                document.getElementById("completeTaskOutageMinutes").value = "";
+                document.getElementById("completeTaskOutageWrap").hidden = !(task && task.isOutageStep);
                 completeTaskModal.show();
                 return;
             }
@@ -703,6 +738,8 @@
             selection.newTask = [];
             renderNewTaskAssigneeChips();
             document.querySelectorAll(".br-new-task-depends:checked").forEach((el) => { el.checked = false; });
+            document.getElementById("newTaskOutage").checked = false;
+            document.getElementById("newTaskOutageMinutesWrap").hidden = true;
         });
     }
 

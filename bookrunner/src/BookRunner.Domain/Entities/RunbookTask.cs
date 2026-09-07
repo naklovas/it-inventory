@@ -42,6 +42,16 @@ public class RunbookTask : AuditableEntity, ISoftDeletable
     /// durumunda kalmis olabilir, gercek harcanan efor burada ayrica belirtilir.</summary>
     public int? ActualMinutes { get; set; }
 
+    /// <summary>true ise bu adim sistemsel bir kesinti icerir; runbook toplaminda
+    /// planlanan/gerceklesen kesinti suresi bu adimlardan hesaplanir.</summary>
+    public bool IsOutageStep { get; set; }
+
+    /// <summary>Bu adim icin planlanan kesinti suresi (dakika).</summary>
+    public int? PlannedOutageMinutes { get; set; }
+
+    /// <summary>Bu adim icin gerceklesen kesinti suresi (dakika).</summary>
+    public int? ActualOutageMinutes { get; set; }
+
     /// <summary>Tamamlandi olarak isaretlenirken girilen, gelecege yonelik not
     /// (orn. "bir dahaki sefere X'e dikkat edilmeli"). Tarihcedeki durum degisikligi
     /// notundan farkli olarak burada kalici ve gorev karti uzerinde dogrudan gorunur.</summary>

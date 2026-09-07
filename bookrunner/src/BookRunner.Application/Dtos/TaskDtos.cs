@@ -28,6 +28,15 @@ public sealed record RunbookTaskDto
     /// <summary>Tamamlandi olarak isaretlenirken girilen, gelecege yonelik not.</summary>
     public string? CompletionNote { get; init; }
 
+    /// <summary>Bu adim sistemsel bir kesinti icerir mi.</summary>
+    public bool IsOutageStep { get; init; }
+
+    /// <summary>Bu adim icin planlanan kesinti suresi (dakika).</summary>
+    public int? PlannedOutageMinutes { get; init; }
+
+    /// <summary>Bu adim icin gerceklesen kesinti suresi (dakika).</summary>
+    public int? ActualOutageMinutes { get; init; }
+
     /// <summary>Bu gorevin oncelleri (bu gorev baslamadan/tamamlanmadan once kapanmasi gerekenler).</summary>
     public IReadOnlyList<TaskDependencyRefDto> Predecessors { get; init; } = Array.Empty<TaskDependencyRefDto>();
 
@@ -139,6 +148,12 @@ public sealed record CreateTaskRequest
     [StringLength(4000)]
     public string? RollbackNotes { get; init; }
 
+    /// <summary>true ise bu adim sistemsel bir kesinti icerir.</summary>
+    public bool IsOutageStep { get; init; }
+
+    [Range(0, 100000)]
+    public int? PlannedOutageMinutes { get; init; }
+
     /// <summary>Bos birakilirsa gorev listenin sonuna eklenir.</summary>
     public int? Order { get; init; }
 }
@@ -170,6 +185,12 @@ public sealed record UpdateTaskRequest
     [StringLength(4000)]
     public string? RollbackNotes { get; init; }
 
+    /// <summary>true ise bu adim sistemsel bir kesinti icerir.</summary>
+    public bool IsOutageStep { get; init; }
+
+    [Range(0, 100000)]
+    public int? PlannedOutageMinutes { get; init; }
+
     public Guid? ScriptId { get; init; }
 }
 
@@ -188,6 +209,13 @@ public sealed record ChangeTaskStatusRequest
     /// </summary>
     [Range(0, 100000)]
     public int? ActualMinutes { get; init; }
+
+    /// <summary>
+    /// Tamamlandi olarak isaretlenirken elle girilen gercek kesinti suresi
+    /// (dakika). Yalnizca IsOutageStep=true olan gorevler icin anlamlidir.
+    /// </summary>
+    [Range(0, 100000)]
+    public int? ActualOutageMinutes { get; init; }
 }
 
 /// <summary>Gorevleri yeniden siralama istegi (surukle-birak).</summary>

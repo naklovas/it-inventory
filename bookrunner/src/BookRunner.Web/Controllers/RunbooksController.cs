@@ -392,9 +392,15 @@ public sealed class RunbooksController(
     /// </summary>
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public Task<IActionResult> ChangeTaskStatus(Guid taskId, RunbookTaskStatus status, string? note, int? actualMinutes, CancellationToken ct)
-        => JsonResultAsync(() => Api.ChangeTaskStatusAsync(taskId,
-            new ChangeTaskStatusRequest { Status = status, Note = note, ActualMinutes = actualMinutes }, ct));
+    public Task<IActionResult> ChangeTaskStatus(
+        Guid taskId, RunbookTaskStatus status, string? note, int? actualMinutes, int? actualOutageMinutes, CancellationToken ct)
+        => JsonResultAsync(() => Api.ChangeTaskStatusAsync(taskId, new ChangeTaskStatusRequest
+        {
+            Status = status,
+            Note = note,
+            ActualMinutes = actualMinutes,
+            ActualOutageMinutes = actualOutageMinutes
+        }, ct));
 
     /// <summary>Gorevleri surukle-birak sonrasi siralar.</summary>
     [HttpPost]

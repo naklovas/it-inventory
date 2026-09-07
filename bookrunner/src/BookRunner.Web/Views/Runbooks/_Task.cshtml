@@ -42,6 +42,15 @@
                         <span class="small br-muted"><i class="bi bi-stopwatch"></i> @t.EstimatedMinutes dk</span>
                     }
 
+                    @if (t.IsOutageStep)
+                    {
+                        <span class="small text-warning-emphasis"
+                              title="Kesintili adim - planlanan: @(t.PlannedOutageMinutes?.ToString() ?? "-") dk, gerceklesen: @(t.ActualOutageMinutes?.ToString() ?? "-") dk">
+                            <i class="bi bi-lightning-charge-fill"></i> Kesinti
+                            @(t.PlannedOutageMinutes.HasValue ? $"{t.PlannedOutageMinutes} dk" : "")
+                        </span>
+                    }
+
                     @if (t.Predecessors.Count > 0)
                     {
                         <span class="small @(t.HasOpenPredecessors ? "text-warning" : "br-muted")"

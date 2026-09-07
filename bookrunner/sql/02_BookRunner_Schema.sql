@@ -328,6 +328,9 @@ BEGIN
         [ActualEnd] datetimeoffset NULL,
         [ActualMinutes] int NULL,
         [CompletionNote] nvarchar(2000) NULL,
+        [IsOutageStep] bit NOT NULL,
+        [PlannedOutageMinutes] int NULL,
+        [ActualOutageMinutes] int NULL,
         [ScriptId] uniqueidentifier NULL,
         [RollbackNotes] nvarchar(4000) NULL,
         [IsDeleted] bit NOT NULL,
@@ -355,6 +358,27 @@ GO
 IF COL_LENGTH(N'bookrunner.Tasks', 'CompletionNote') IS NULL
 BEGIN
     ALTER TABLE [bookrunner].[Tasks] ADD [CompletionNote] nvarchar(2000) NULL;
+END
+GO
+
+-- Mevcut kurulumlarda Tasks tablosu kesinti takibi alanlari olmadan
+-- olusturulmus olabilir; "Kesintili adim" isaretlemesi ve planlanan/
+-- gerceklesen kesinti sureleri icin eklenir.
+IF COL_LENGTH(N'bookrunner.Tasks', 'IsOutageStep') IS NULL
+BEGIN
+    ALTER TABLE [bookrunner].[Tasks] ADD [IsOutageStep] bit NOT NULL CONSTRAINT [DF_Tasks_IsOutageStep] DEFAULT (0);
+END
+GO
+
+IF COL_LENGTH(N'bookrunner.Tasks', 'PlannedOutageMinutes') IS NULL
+BEGIN
+    ALTER TABLE [bookrunner].[Tasks] ADD [PlannedOutageMinutes] int NULL;
+END
+GO
+
+IF COL_LENGTH(N'bookrunner.Tasks', 'ActualOutageMinutes') IS NULL
+BEGIN
+    ALTER TABLE [bookrunner].[Tasks] ADD [ActualOutageMinutes] int NULL;
 END
 GO
 
@@ -1522,6 +1546,15 @@ BEGIN
     BEGIN
         INSERT INTO [bookrunner].[__EFMigrationsHistory] ([MigrationId], [ProductVersion])
         VALUES (N'20260907062117_AddCompletionDetails', N'9.0.19');
+    END
+
+    IF NOT EXISTS (
+        SELECT 1 FROM [bookrunner].[__EFMigrationsHistory]
+        WHERE [MigrationId] = N'20260907065558_AddTaskOutageTracking'
+    )
+    BEGIN
+        INSERT INTO [bookrunner].[__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+        VALUES (N'20260907065558_AddTaskOutageTracking', N'9.0.19');
     END
 
     PRINT N'';
