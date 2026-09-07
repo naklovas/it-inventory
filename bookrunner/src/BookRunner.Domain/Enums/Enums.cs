@@ -19,7 +19,10 @@ public enum RunbookTaskStatus
     Blocked = 2,
     Completed = 3,
     Failed = 4,
-    Skipped = 5
+    Skipped = 5,
+    /// <summary>"N/A - Gerekmiyor": yalnizca geri donus adimlarinda kullanilir -
+    /// geri donusun baslangic noktasina gore bazi adimlara ihtiyac olmayabilir.</summary>
+    NotApplicable = 6
 }
 
 /// <summary>Gorevin oncelik seviyesi.</summary>

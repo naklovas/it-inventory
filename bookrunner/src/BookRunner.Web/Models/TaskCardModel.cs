@@ -21,6 +21,11 @@ namespace BookRunner.Web.Models;
 /// Gorevi "Baslamadi" durumuna sifirlama yetkisi (yalnizca yonetici rolu,
 /// test modundaki etkin role gore - bkz. TaskService.ChangeStatusAsync).
 /// </param>
+/// <param name="RollbackActive">
+/// Runbook'un geri donus plani aktive edildi mi. Aktive edilmeden geri
+/// donus adimlarinin durum butonlari gosterilmez - tarihleri henuz
+/// hesaplanmamistir (bkz. Runbook.IsRollbackActive).
+/// </param>
 public sealed record TaskCardModel(
     RunbookTaskDto Task,
     bool CanEdit,
@@ -29,7 +34,8 @@ public sealed record TaskCardModel(
     bool CanExecute,
     bool CanComment,
     bool CanRunScript,
-    bool CanResetToNotStarted)
+    bool CanResetToNotStarted,
+    bool RollbackActive)
 {
     /// <summary>Runbook detay sayfasinin yetkilerinden kart modeli uretir.</summary>
     public static TaskCardModel From(RunbookTaskDto task, RunbookDetailViewModel page) => new(
@@ -40,5 +46,6 @@ public sealed record TaskCardModel(
         CanExecute: page.CanExecuteThis,
         CanComment: page.CanCommentThis,
         CanRunScript: page.CanRunScript,
-        CanResetToNotStarted: page.CanManageAdmin);
+        CanResetToNotStarted: page.CanManageAdmin,
+        RollbackActive: page.Runbook.IsRollbackActive);
 }

@@ -232,6 +232,7 @@ BEGIN
         [Tags] nvarchar(1000) NULL,
         [ActualMinutes] int NULL,
         [CompletionNote] nvarchar(2000) NULL,
+        [IsRollbackActive] bit NOT NULL,
         [RowVersion] rowversion NULL,
         [IsDeleted] bit NOT NULL,
         [DeletedAt] datetimeoffset NULL,
@@ -266,6 +267,14 @@ GO
 IF COL_LENGTH(N'bookrunner.Runbooks', 'CompletionNote') IS NULL
 BEGIN
     ALTER TABLE [bookrunner].[Runbooks] ADD [CompletionNote] nvarchar(2000) NULL;
+END
+GO
+
+-- Mevcut kurulumlarda Runbooks tablosu geri donus plani bayragi olmadan
+-- olusturulmus olabilir.
+IF COL_LENGTH(N'bookrunner.Runbooks', 'IsRollbackActive') IS NULL
+BEGIN
+    ALTER TABLE [bookrunner].[Runbooks] ADD [IsRollbackActive] bit NOT NULL CONSTRAINT [DF_Runbooks_IsRollbackActive] DEFAULT (0);
 END
 GO
 
@@ -331,6 +340,7 @@ BEGIN
         [IsOutageStep] bit NOT NULL,
         [PlannedOutageMinutes] int NULL,
         [ActualOutageMinutes] int NULL,
+        [IsRollbackStep] bit NOT NULL,
         [ScriptId] uniqueidentifier NULL,
         [RollbackNotes] nvarchar(4000) NULL,
         [IsDeleted] bit NOT NULL,
@@ -379,6 +389,14 @@ GO
 IF COL_LENGTH(N'bookrunner.Tasks', 'ActualOutageMinutes') IS NULL
 BEGIN
     ALTER TABLE [bookrunner].[Tasks] ADD [ActualOutageMinutes] int NULL;
+END
+GO
+
+-- Mevcut kurulumlarda Tasks tablosu geri donus plani bayragi olmadan
+-- olusturulmus olabilir (bkz. RunbookTask.IsRollbackStep).
+IF COL_LENGTH(N'bookrunner.Tasks', 'IsRollbackStep') IS NULL
+BEGIN
+    ALTER TABLE [bookrunner].[Tasks] ADD [IsRollbackStep] bit NOT NULL CONSTRAINT [DF_Tasks_IsRollbackStep] DEFAULT (0);
 END
 GO
 
@@ -1555,6 +1573,15 @@ BEGIN
     BEGIN
         INSERT INTO [bookrunner].[__EFMigrationsHistory] ([MigrationId], [ProductVersion])
         VALUES (N'20260907065558_AddTaskOutageTracking', N'9.0.19');
+    END
+
+    IF NOT EXISTS (
+        SELECT 1 FROM [bookrunner].[__EFMigrationsHistory]
+        WHERE [MigrationId] = N'20260907071944_AddRollbackPlan'
+    )
+    BEGIN
+        INSERT INTO [bookrunner].[__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+        VALUES (N'20260907071944_AddRollbackPlan', N'9.0.19');
     END
 
     PRINT N'';

@@ -97,6 +97,13 @@ public interface ITaskService
 
     Task DeleteAsync(Guid taskId, CancellationToken ct = default);
 
+    /// <summary>
+    /// Geri donus planini aktive eder: ana akistaki kapanmamis gorevler
+    /// otomatik "Atlandi" olur, geri donus adimlarinin tarihleri o andan
+    /// itibaren sirayla hesaplanir. Yalnizca bir kez calisir.
+    /// </summary>
+    Task StartRollbackAsync(Guid runbookId, CancellationToken ct = default);
+
     /// <summary>Goreve tiklaninca acilan akordiyon tarihcesi.</summary>
     Task<IReadOnlyList<TaskActivityDto>> GetHistoryAsync(Guid taskId, CancellationToken ct = default);
 }

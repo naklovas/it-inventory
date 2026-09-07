@@ -73,6 +73,9 @@ public sealed class BookRunnerApiClient(HttpClient httpClient, ILogger<BookRunne
     public Task ReorderTasksAsync(Guid runbookId, ReorderTasksRequest request, CancellationToken ct = default)
         => PostAsync<ReorderTasksRequest, object>($"api/runbooks/{runbookId}/tasks/reorder", request, ct);
 
+    public Task StartRollbackAsync(Guid runbookId, CancellationToken ct = default)
+        => PostAsync<object?, object>($"api/runbooks/{runbookId}/start-rollback", null, ct);
+
     public Task DeleteTaskAsync(Guid taskId, CancellationToken ct = default)
         => SendAsync(HttpMethod.Delete, $"api/tasks/{taskId}", ct);
 

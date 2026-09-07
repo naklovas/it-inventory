@@ -52,6 +52,17 @@ public class RunbookTask : AuditableEntity, ISoftDeletable
     /// <summary>Bu adim icin gerceklesen kesinti suresi (dakika).</summary>
     public int? ActualOutageMinutes { get; set; }
 
+    /// <summary>
+    /// true ise bu adim ana akisin degil GERI DONUS PLANININ bir parcasidir.
+    /// Ana gorev listesinde gizli kalir; runbook'ta bir gorev "Basarisiz"
+    /// oldugunda "Geri Donus Adimlarini Baslat" ile aktive edilir (bkz.
+    /// Runbook.IsRollbackActive, TaskService.StartRollbackAsync). Aktive
+    /// edilene kadar PlannedStart/PlannedEnd bos kalir - ne zaman
+    /// tetiklenecegi bilinmedigi icin yalnizca EstimatedMinutes ile
+    /// tahmini girilir, tarihler aktivasyon aninda otomatik hesaplanir.
+    /// </summary>
+    public bool IsRollbackStep { get; set; }
+
     /// <summary>Tamamlandi olarak isaretlenirken girilen, gelecege yonelik not
     /// (orn. "bir dahaki sefere X'e dikkat edilmeli"). Tarihcedeki durum degisikligi
     /// notundan farkli olarak burada kalici ve gorev karti uzerinde dogrudan gorunur.</summary>

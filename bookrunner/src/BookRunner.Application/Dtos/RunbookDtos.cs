@@ -99,6 +99,9 @@ public sealed record RunbookDetailDto
     /// <summary>Tamamlandi olarak isaretlenirken girilen, gelecege yonelik not.</summary>
     public string? CompletionNote { get; init; }
 
+    /// <summary>Geri donus plani aktive edildi mi (bkz. Runbook.IsRollbackActive).</summary>
+    public bool IsRollbackActive { get; init; }
+
     public PersonSummary? Owner { get; init; }
     public string? ServiceManagerWorkItemId { get; init; }
     public IReadOnlyList<string> Tags { get; init; } = Array.Empty<string>();

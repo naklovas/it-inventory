@@ -689,7 +689,10 @@ public sealed class RunbookService(
             Status = RunbookTaskStatus.NotStarted,
             Priority = source.Priority,
             EstimatedMinutes = source.EstimatedMinutes,
-            RollbackNotes = source.RollbackNotes
+            RollbackNotes = source.RollbackNotes,
+            IsOutageStep = source.IsOutageStep,
+            PlannedOutageMinutes = source.PlannedOutageMinutes,
+            IsRollbackStep = source.IsRollbackStep
         };
 
         if (copyAssignments)

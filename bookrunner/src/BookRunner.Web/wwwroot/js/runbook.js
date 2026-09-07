@@ -281,6 +281,52 @@
         });
     }
 
+    // ------------------------------------------------------------- geri donus plani
+
+    const addRollbackStepButton = document.getElementById("btnAddRollbackStep");
+    if (addRollbackStepButton) {
+        addRollbackStepButton.addEventListener("click", async () => {
+            const title = document.getElementById("rollbackStepTitle").value.trim();
+            if (title.length < 2) {
+                toast("Adim basligi en az 2 karakter olmali.", "warning");
+                return;
+            }
+
+            const minutes = document.getElementById("rollbackStepMinutes").value;
+
+            try {
+                await post("AddTask", {
+                    title: title,
+                    description: document.getElementById("rollbackStepDescription").value || null,
+                    priority: document.getElementById("rollbackStepPriority").value,
+                    estimatedMinutes: minutes ? parseInt(minutes, 10) : null,
+                    isRollbackStep: true
+                }, { id: config.runbookId });
+
+                reload();
+            } catch (error) {
+                showActionError(error);
+            }
+        });
+    }
+
+    const startRollbackButton = document.getElementById("btnStartRollback");
+    if (startRollbackButton) {
+        startRollbackButton.addEventListener("click", async () => {
+            if (!confirm("Geri donus plani baslatilacak: ana akistaki kapanmamis adimlar 'Atlandi' " +
+                "olarak isaretlenecek ve geri donus adimlarinin tarihleri hesaplanacak. Bu islem geri alinamaz. Emin misiniz?")) {
+                return;
+            }
+
+            try {
+                await post("StartRollback", undefined, { id: config.runbookId });
+                reload();
+            } catch (error) {
+                showActionError(error);
+            }
+        });
+    }
+
     // ------------------------------------------------------------ gorev tamamlama
 
     const completeTaskModalElement = document.getElementById("completeTaskModal");
@@ -328,7 +374,10 @@
             return;
         }
 
-        const others = (config.tasks || []).filter((item) => item.id !== task.id);
+        // Ana akis ve geri donus adimlari birbirinden ayri bagimlilik graflarina
+        // sahiptir; oncul secenekleri yalnizca ayni gruptan gelir.
+        const others = (config.tasks || [])
+            .filter((item) => item.id !== task.id && !!item.isRollbackStep === !!task.isRollbackStep);
         if (others.length === 0) {
             holder.innerHTML = '<div class="br-muted small">Runbook\'ta baska gorev yok.</div>';
             return;
@@ -392,6 +441,12 @@
             const dependsOnTaskIds = Array.from(document.querySelectorAll(".br-edit-task-depends:checked"))
                 .map((el) => el.value);
 
+            // UpdateTask butun alanlari degistirir; bu form geri donus bayragini
+            // gostermez, o yuzden mevcut degeri config.tasks'tan korunarak gonderilir
+            // (aksi halde bir geri donus adimi duzenlenince bayragi sessizce silinir).
+            const editingTask = (config.tasks || []).find((item) => item.id === document.getElementById("editTaskId").value);
+            const isRollbackStep = !!(editingTask && editingTask.isRollbackStep);
+
             try {
                 await post("UpdateTask", {
                     title: title,
@@ -404,7 +459,8 @@
                     rollbackNotes: document.getElementById("editTaskRollback").value || null,
                     scriptId: document.getElementById("editTaskScriptId").value || null,
                     isOutageStep: isOutage,
-                    plannedOutageMinutes: isOutage && outageMinutes ? parseInt(outageMinutes, 10) : null
+                    plannedOutageMinutes: isOutage && outageMinutes ? parseInt(outageMinutes, 10) : null,
+                    isRollbackStep: isRollbackStep
                 }, { taskId: document.getElementById("editTaskId").value });
 
                 editTaskModal.hide();
@@ -957,7 +1013,8 @@
                     rollbackNotes: task.rollbackNotes || null,
                     scriptId: task.scriptId || null,
                     isOutageStep: task.isOutageStep,
-                    plannedOutageMinutes: task.plannedOutageMinutes
+                    plannedOutageMinutes: task.plannedOutageMinutes,
+                    isRollbackStep: task.isRollbackStep
                 }, { taskId: id });
             }));
 
@@ -1036,17 +1093,27 @@
 
     // ----------------------------------------------------- surukle-birak sirala
 
-    if (taskList && taskList.dataset.sortable === "true") {
+    /**
+     * Bir gorev listesi kabini (ana akis veya geri donus plani, ayri ayri)
+     * icin surukle-birak siralamayi kurar. Ikisi ayni Order alanini paylassa
+     * da her biri yalnizca KENDI grubundaki gorevleri gonderir (bkz.
+     * TaskService.ReorderAsync grup kontrolu).
+     */
+    function wireSortableTaskList(container) {
+        if (!container || container.dataset.sortable !== "true") {
+            return;
+        }
+
         let dragged = null;
 
-        taskList.addEventListener("dragstart", (event) => {
+        container.addEventListener("dragstart", (event) => {
             dragged = event.target.closest(".br-task");
             if (dragged) {
                 dragged.classList.add("dragging");
             }
         });
 
-        taskList.addEventListener("dragend", async () => {
+        container.addEventListener("dragend", async () => {
             if (!dragged) {
                 return;
             }
@@ -1054,7 +1121,7 @@
             dragged.classList.remove("dragging");
             dragged = null;
 
-            const ids = Array.from(taskList.querySelectorAll(".br-task")).map((el) => el.dataset.taskId);
+            const ids = Array.from(container.querySelectorAll(".br-task")).map((el) => el.dataset.taskId);
 
             try {
                 await post("ReorderTasks", { taskIdsInOrder: ids }, { id: config.runbookId });
@@ -1065,7 +1132,7 @@
             }
         });
 
-        taskList.addEventListener("dragover", (event) => {
+        container.addEventListener("dragover", (event) => {
             event.preventDefault();
             if (!dragged) {
                 return;
@@ -1078,9 +1145,12 @@
 
             const rect = target.getBoundingClientRect();
             const after = (event.clientY - rect.top) > rect.height / 2;
-            taskList.insertBefore(dragged, after ? target.nextSibling : target);
+            container.insertBefore(dragged, after ? target.nextSibling : target);
         });
     }
+
+    wireSortableTaskList(taskList);
+    wireSortableTaskList(document.getElementById("rollbackTaskList"));
 
     // ------------------------------------------------------- canli guncelleme
 

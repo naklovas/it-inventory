@@ -412,6 +412,16 @@ public sealed class RunbooksController(
             return null;
         });
 
+    /// <summary>Geri donus planini aktive eder.</summary>
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public Task<IActionResult> StartRollback(Guid id, CancellationToken ct)
+        => JsonResultAsync<object?>(async () =>
+        {
+            await Api.StartRollbackAsync(id, ct);
+            return null;
+        });
+
     [HttpPost]
     [ValidateAntiForgeryToken]
     public Task<IActionResult> DeleteTask(Guid taskId, CancellationToken ct)

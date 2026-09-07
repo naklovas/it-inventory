@@ -116,6 +116,7 @@ public static class Mapping
         IsOutageStep = task.IsOutageStep,
         PlannedOutageMinutes = task.PlannedOutageMinutes,
         ActualOutageMinutes = task.ActualOutageMinutes,
+        IsRollbackStep = task.IsRollbackStep,
         Predecessors = task.Predecessors
             .OrderBy(d => d.DependsOnTask.Order)
             .Select(d => new TaskDependencyRefDto
@@ -180,6 +181,7 @@ public static class Mapping
         ActualEnd = runbook.ActualEnd,
         ActualMinutes = runbook.ActualMinutes,
         CompletionNote = runbook.CompletionNote,
+        IsRollbackActive = runbook.IsRollbackActive,
         Owner = runbook.Owner?.ToSummary(),
         ServiceManagerWorkItemId = runbook.ServiceManagerWorkItemId,
         Tags = SplitTags(runbook.Tags),
@@ -263,5 +265,5 @@ public static class Mapping
 
     /// <summary>Sablonun aciklamasi icin gorev durumunun bar dolgu orani.</summary>
     public static bool IsClosed(this RunbookTaskStatus status)
-        => status is RunbookTaskStatus.Completed or RunbookTaskStatus.Skipped;
+        => status is RunbookTaskStatus.Completed or RunbookTaskStatus.Skipped or RunbookTaskStatus.NotApplicable;
 }

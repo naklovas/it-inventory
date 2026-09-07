@@ -44,7 +44,12 @@ public sealed class TaskService(
 
         ValidateTaskPlannedRange(runbook, request.PlannedStart, request.PlannedEnd);
 
-        var maxOrder = await db.Tasks.Where(t => t.RunbookId == runbookId).MaxAsync(t => (int?)t.Order, ct) ?? 0;
+        // Ana akis ve geri donus adimlari ayri listeler olarak numaralanir
+        // (bkz. RunbookTask.IsRollbackStep) - biri digerinin sira numarasindan
+        // etkilenmez.
+        var maxOrder = await db.Tasks
+            .Where(t => t.RunbookId == runbookId && t.IsRollbackStep == request.IsRollbackStep)
+            .MaxAsync(t => (int?)t.Order, ct) ?? 0;
         var order = request.Order is > 0 ? request.Order.Value : maxOrder + 1;
 
         if (request.Order is > 0)
@@ -70,7 +75,8 @@ public sealed class TaskService(
             PlannedEnd = request.PlannedEnd,
             RollbackNotes = request.RollbackNotes,
             IsOutageStep = request.IsOutageStep,
-            PlannedOutageMinutes = request.IsOutageStep ? request.PlannedOutageMinutes : null
+            PlannedOutageMinutes = request.IsOutageStep ? request.PlannedOutageMinutes : null,
+            IsRollbackStep = request.IsRollbackStep
         };
 
         var dependsOnIds = request.DependsOnTaskIds.Distinct().ToList();
@@ -141,6 +147,7 @@ public sealed class TaskService(
         {
             task.ActualOutageMinutes = null;
         }
+        task.IsRollbackStep = request.IsRollbackStep;
 
         if (!string.IsNullOrWhiteSpace(request.ColorHex))
         {
@@ -220,6 +227,7 @@ public sealed class TaskService(
             case RunbookTaskStatus.Completed:
             case RunbookTaskStatus.Failed:
             case RunbookTaskStatus.Skipped:
+            case RunbookTaskStatus.NotApplicable:
                 task.ActualStart ??= now;
                 task.ActualEnd = now;
                 break;
@@ -300,7 +308,7 @@ public sealed class TaskService(
         // olur - ilk gorev baslayinca otomatik "Devam Ediyor" olmasiyla simetrik.
         // Bloke/basarisiz gorev varsa otomatik kapatilmaz; bu, bir operatorun
         // bilerek karar vermesini gerektirir.
-        if (request.Status is RunbookTaskStatus.Completed or RunbookTaskStatus.Skipped)
+        if (request.Status is RunbookTaskStatus.Completed or RunbookTaskStatus.Skipped or RunbookTaskStatus.NotApplicable)
         {
             await TryAutoCompleteRunbookAsync(task.RunbookId, ct);
         }
@@ -328,6 +336,75 @@ public sealed class TaskService(
         return await GetAsync(task.Id, ct);
     }
 
+    public async Task StartRollbackAsync(Guid runbookId, CancellationToken ct = default)
+    {
+        // Gorev yurutme yetkisiyle ayni seviye: runbook sahibi de (sahiplik
+        // yoluyla) tetikleyebilir.
+        await access.EnsureForRunbookAsync(runbookId, Permissions.TaskExecute, ct);
+
+        var runbook = await db.Runbooks.FirstOrDefaultAsync(r => r.Id == runbookId, ct)
+            ?? throw new NotFoundException("Runbook", runbookId);
+
+        if (runbook.IsRollbackActive)
+        {
+            throw new BusinessRuleException("Geri donus plani zaten baslatilmis.");
+        }
+
+        var tasks = await db.Tasks.Where(t => t.RunbookId == runbookId).ToListAsync(ct);
+        var rollbackSteps = tasks.Where(t => t.IsRollbackStep).OrderBy(t => t.Order).ToList();
+        if (rollbackSteps.Count == 0)
+        {
+            throw new BusinessRuleException("Bu runbook icin tanimlanmis bir geri donus adimi yok.");
+        }
+
+        var mainTasks = tasks.Where(t => !t.IsRollbackStep).ToList();
+        if (!mainTasks.Any(t => t.Status == RunbookTaskStatus.Failed))
+        {
+            throw new BusinessRuleException(
+                "Geri donus plani yalnizca ana akista en az bir gorev 'Basarisiz' oldugunda baslatilabilir.");
+        }
+
+        var now = DateTimeOffset.UtcNow;
+
+        // Ana akistaki kapanmamis (Bekliyor/Devam Eden/Bloke) gorevler otomatik
+        // "Atlandi" olur - runbook artik geri donus planini izliyor. Bildirim
+        // gonderilmez (bkz. TaskActivity - toplu ve sistemsel bir gecis, mail
+        // trafigini artirmamak icin sessizdir); yalnizca tarihceye yazilir.
+        foreach (var task in mainTasks.Where(t => !t.Status.IsClosed()))
+        {
+            var oldStatus = task.Status;
+            task.Status = RunbookTaskStatus.Skipped;
+            task.ActualStart ??= now;
+            task.ActualEnd = now;
+            AddActivity(task.Id, TaskActivityType.StatusChanged,
+                $"Durum {DisplayText.Status(oldStatus)} -> {DisplayText.Status(RunbookTaskStatus.Skipped)} (geri donus plani baslatildi)",
+                DisplayText.Status(oldStatus), DisplayText.Status(RunbookTaskStatus.Skipped));
+        }
+
+        // Geri donus adimlarinin ne zaman tetiklenecegi onceden bilinemedigi
+        // icin tarihleri simdi, sirayla (bir onceki adimin bitisine gore)
+        // hesaplanir - yalnizca tahmini sureleriyle onceden girilmislerdi.
+        var cursor = now;
+        foreach (var step in rollbackSteps)
+        {
+            step.PlannedStart = cursor;
+            cursor = step.EstimatedMinutes.HasValue ? cursor.AddMinutes(step.EstimatedMinutes.Value) : cursor;
+            step.PlannedEnd = cursor;
+        }
+
+        runbook.IsRollbackActive = true;
+        if (runbook.PlannedEnd is null || cursor > runbook.PlannedEnd.Value)
+        {
+            runbook.PlannedEnd = cursor;
+        }
+
+        await db.SaveChangesAsync(ct);
+
+        await audit.LogAsync(AuditAction.Update, nameof(Runbook), runbookId.ToString(),
+            "Geri donus plani baslatildi.", runbookId, ct: ct);
+        await realtime.RunbookChangedAsync(runbookId, "rollback-started", ct);
+    }
+
     public async Task ReorderAsync(Guid runbookId, ReorderTasksRequest request, CancellationToken ct = default)
     {
         await access.EnsureForRunbookAsync(runbookId, Permissions.TaskWrite, ct);
@@ -335,9 +412,21 @@ public sealed class TaskService(
         var tasks = await db.Tasks.Where(t => t.RunbookId == runbookId).ToListAsync(ct);
         var byId = tasks.ToDictionary(t => t.Id);
 
-        if (request.TaskIdsInOrder.Count != tasks.Count || request.TaskIdsInOrder.Any(id => !byId.ContainsKey(id)))
+        if (request.TaskIdsInOrder.Any(id => !byId.ContainsKey(id)))
         {
-            throw new BusinessRuleException("Siralama listesi runbook'taki gorevlerle birebir eslesmiyor.");
+            throw new BusinessRuleException("Siralama listesindeki bir gorev bu runbook'ta bulunamadi.");
+        }
+
+        // Ana akis ve geri donus adimlari ayri listeler olarak siralanir
+        // (bkz. RunbookTask.IsRollbackStep); surukle-birak yalnizca goruntulenen
+        // listenin kendi icindeki gorevleri gonderir, digerine dokunmaz.
+        var isRollbackGroup = request.TaskIdsInOrder.Count > 0 && byId[request.TaskIdsInOrder[0]].IsRollbackStep;
+        var groupCount = tasks.Count(t => t.IsRollbackStep == isRollbackGroup);
+
+        if (request.TaskIdsInOrder.Count != groupCount ||
+            request.TaskIdsInOrder.Any(id => byId[id].IsRollbackStep != isRollbackGroup))
+        {
+            throw new BusinessRuleException("Siralama listesi gorev grubuyla birebir eslesmiyor.");
         }
 
         for (var index = 0; index < request.TaskIdsInOrder.Count; index++)
@@ -629,7 +718,16 @@ public sealed class TaskService(
             return;
         }
 
-        var taskStatuses = await db.Tasks.Where(t => t.RunbookId == runbookId).Select(t => t.Status).ToListAsync(ct);
+        // Geri donus plani aktive edilmemisse (henuz tetiklenmemis veya hic
+        // gerekmemis), onceden yazilmis ama hala "Baslamadi" durumundaki geri
+        // donus adimlari ana akisin normal sekilde tamamlanmasini yanlislikla
+        // ENGELLEMEMELIDIR - yalnizca ana akis gorevleri dikkate alinir.
+        // Aktive edildiyse ana akis zaten Atlandi ile kapatilmistir; artik
+        // yalnizca geri donus adimlarinin kapanmasi yeterlidir.
+        var taskStatuses = await db.Tasks
+            .Where(t => t.RunbookId == runbookId && t.IsRollbackStep == runbook.IsRollbackActive)
+            .Select(t => t.Status)
+            .ToListAsync(ct);
         if (taskStatuses.Count == 0 || taskStatuses.Any(status => !status.IsClosed()))
         {
             return;

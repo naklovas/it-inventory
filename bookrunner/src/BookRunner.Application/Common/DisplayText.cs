@@ -24,6 +24,7 @@ public static class DisplayText
         RunbookTaskStatus.Completed => "Tamamlandi",
         RunbookTaskStatus.Failed => "Basarisiz",
         RunbookTaskStatus.Skipped => "Atlandi",
+        RunbookTaskStatus.NotApplicable => "N/A - Gerekmiyor",
         _ => status.ToString()
     };
 

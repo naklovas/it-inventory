@@ -37,6 +37,9 @@ public sealed record RunbookTaskDto
     /// <summary>Bu adim icin gerceklesen kesinti suresi (dakika).</summary>
     public int? ActualOutageMinutes { get; init; }
 
+    /// <summary>true ise bu adim ana akisin degil geri donus planinin bir parcasidir.</summary>
+    public bool IsRollbackStep { get; init; }
+
     /// <summary>Bu gorevin oncelleri (bu gorev baslamadan/tamamlanmadan once kapanmasi gerekenler).</summary>
     public IReadOnlyList<TaskDependencyRefDto> Predecessors { get; init; } = Array.Empty<TaskDependencyRefDto>();
 
@@ -154,6 +157,9 @@ public sealed record CreateTaskRequest
     [Range(0, 100000)]
     public int? PlannedOutageMinutes { get; init; }
 
+    /// <summary>true ise bu adim ana akisin degil geri donus planinin bir parcasidir.</summary>
+    public bool IsRollbackStep { get; init; }
+
     /// <summary>Bos birakilirsa gorev listenin sonuna eklenir.</summary>
     public int? Order { get; init; }
 }
@@ -190,6 +196,9 @@ public sealed record UpdateTaskRequest
 
     [Range(0, 100000)]
     public int? PlannedOutageMinutes { get; init; }
+
+    /// <summary>true ise bu adim ana akisin degil geri donus planinin bir parcasidir.</summary>
+    public bool IsRollbackStep { get; init; }
 
     public Guid? ScriptId { get; init; }
 }

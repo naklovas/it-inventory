@@ -55,6 +55,19 @@ public sealed class TasksController(ITaskService tasks) : ControllerBase
         Guid taskId, [FromBody] ChangeTaskStatusRequest request, CancellationToken ct)
         => Ok(await tasks.ChangeStatusAsync(taskId, request, ct));
 
+    /// <summary>
+    /// Geri donus planini aktive eder: ana akistaki kapanmamis gorevler
+    /// otomatik "Atlandi" olur, geri donus adimlarinin tarihleri hesaplanir.
+    /// </summary>
+    [HttpPost("runbooks/{runbookId:guid}/start-rollback")]
+    [Authorize(Policy = Permissions.RunbookRead)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> StartRollback(Guid runbookId, CancellationToken ct)
+    {
+        await tasks.StartRollbackAsync(runbookId, ct);
+        return NoContent();
+    }
+
     /// <summary>Gorevleri surukle-birak sonrasi yeniden siralar.</summary>
     [HttpPost("runbooks/{runbookId:guid}/tasks/reorder")]
     [Authorize(Policy = Permissions.RunbookRead)]

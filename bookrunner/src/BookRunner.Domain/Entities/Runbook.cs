@@ -52,6 +52,15 @@ public class Runbook : AuditableEntity, ISoftDeletable
     /// (orn. "bir dahaki sefere X'e dikkat edilmeli").</summary>
     public string? CompletionNote { get; set; }
 
+    /// <summary>
+    /// true ise geri donus plani aktive edilmis: ana akistaki kapanmamis
+    /// adimlar otomatik "Atlandi" yapilmis ve geri donus adimlarinin
+    /// tarihleri hesaplanmistir (bkz. RunbookTask.IsRollbackStep,
+    /// TaskService.StartRollbackAsync). Yalnizca bir kez, geri donduruleme
+    /// bicimde aktive edilir.
+    /// </summary>
+    public bool IsRollbackActive { get; set; }
+
     /// <summary>Runbook sahibi (AD kullanicisi).</summary>
     public Guid OwnerUserId { get; set; }
     public AppUser Owner { get; set; } = null!;
