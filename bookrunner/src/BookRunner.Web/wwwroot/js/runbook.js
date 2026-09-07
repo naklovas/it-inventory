@@ -327,6 +327,57 @@
         });
     }
 
+    // -------------------------------------------------------------- senaryo plani
+
+    const addScenarioStepButton = document.getElementById("btnAddScenarioStep");
+    if (addScenarioStepButton) {
+        addScenarioStepButton.addEventListener("click", async () => {
+            const scenarioGroup = document.getElementById("scenarioStepGroup").value.trim();
+            const title = document.getElementById("scenarioStepTitle").value.trim();
+            if (scenarioGroup.length < 1) {
+                toast("Senaryo adi girilmeli.", "warning");
+                return;
+            }
+            if (title.length < 2) {
+                toast("Adim basligi en az 2 karakter olmali.", "warning");
+                return;
+            }
+
+            const minutes = document.getElementById("scenarioStepMinutes").value;
+
+            try {
+                await post("AddTask", {
+                    title: title,
+                    description: document.getElementById("scenarioStepDescription").value || null,
+                    priority: document.getElementById("scenarioStepPriority").value,
+                    estimatedMinutes: minutes ? parseInt(minutes, 10) : null,
+                    scenarioGroup: scenarioGroup
+                }, { id: config.runbookId });
+
+                reload();
+            } catch (error) {
+                showActionError(error);
+            }
+        });
+    }
+
+    document.querySelectorAll(".br-switch-scenario-btn").forEach((button) => {
+        button.addEventListener("click", async () => {
+            const scenarioGroup = button.dataset.scenarioGroup;
+            if (!confirm(`"${scenarioGroup}" senaryosuna gecilecek: ana akistaki kapanmamis adimlar 'Atlandi' ` +
+                "olarak isaretlenecek ve senaryo adimlarinin tarihleri hesaplanacak. Bu islem geri alinamaz. Emin misiniz?")) {
+                return;
+            }
+
+            try {
+                await post("SwitchScenario", undefined, { id: config.runbookId, scenarioGroup: scenarioGroup });
+                reload();
+            } catch (error) {
+                showActionError(error);
+            }
+        });
+    });
+
     // ------------------------------------------------------------ gorev tamamlama
 
     const completeTaskModalElement = document.getElementById("completeTaskModal");
@@ -374,10 +425,12 @@
             return;
         }
 
-        // Ana akis ve geri donus adimlari birbirinden ayri bagimlilik graflarina
-        // sahiptir; oncul secenekleri yalnizca ayni gruptan gelir.
+        // Ana akis, geri donus adimlari ve her senaryo grubu birbirinden ayri
+        // bagimlilik graflarina sahiptir; oncul secenekleri yalnizca ayni gruptan gelir.
         const others = (config.tasks || [])
-            .filter((item) => item.id !== task.id && !!item.isRollbackStep === !!task.isRollbackStep);
+            .filter((item) => item.id !== task.id
+                && !!item.isRollbackStep === !!task.isRollbackStep
+                && (item.scenarioGroup || null) === (task.scenarioGroup || null));
         if (others.length === 0) {
             holder.innerHTML = '<div class="br-muted small">Runbook\'ta baska gorev yok.</div>';
             return;
@@ -441,11 +494,12 @@
             const dependsOnTaskIds = Array.from(document.querySelectorAll(".br-edit-task-depends:checked"))
                 .map((el) => el.value);
 
-            // UpdateTask butun alanlari degistirir; bu form geri donus bayragini
-            // gostermez, o yuzden mevcut degeri config.tasks'tan korunarak gonderilir
-            // (aksi halde bir geri donus adimi duzenlenince bayragi sessizce silinir).
+            // UpdateTask butun alanlari degistirir; bu form geri donus bayragini/
+            // senaryo grubunu gostermez, o yuzden mevcut degerleri config.tasks'tan
+            // korunarak gonderilir (aksi halde duzenlenince sessizce silinir).
             const editingTask = (config.tasks || []).find((item) => item.id === document.getElementById("editTaskId").value);
             const isRollbackStep = !!(editingTask && editingTask.isRollbackStep);
+            const scenarioGroup = editingTask ? editingTask.scenarioGroup || null : null;
 
             try {
                 await post("UpdateTask", {
@@ -460,7 +514,8 @@
                     scriptId: document.getElementById("editTaskScriptId").value || null,
                     isOutageStep: isOutage,
                     plannedOutageMinutes: isOutage && outageMinutes ? parseInt(outageMinutes, 10) : null,
-                    isRollbackStep: isRollbackStep
+                    isRollbackStep: isRollbackStep,
+                    scenarioGroup: scenarioGroup
                 }, { taskId: document.getElementById("editTaskId").value });
 
                 editTaskModal.hide();
@@ -1014,7 +1069,8 @@
                     scriptId: task.scriptId || null,
                     isOutageStep: task.isOutageStep,
                     plannedOutageMinutes: task.plannedOutageMinutes,
-                    isRollbackStep: task.isRollbackStep
+                    isRollbackStep: task.isRollbackStep,
+                    scenarioGroup: task.scenarioGroup || null
                 }, { taskId: id });
             }));
 
@@ -1151,6 +1207,7 @@
 
     wireSortableTaskList(taskList);
     wireSortableTaskList(document.getElementById("rollbackTaskList"));
+    document.querySelectorAll(".br-scenario-task-list").forEach(wireSortableTaskList);
 
     // ------------------------------------------------------- canli guncelleme
 

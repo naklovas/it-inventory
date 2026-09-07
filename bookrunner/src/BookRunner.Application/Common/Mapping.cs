@@ -117,6 +117,7 @@ public static class Mapping
         PlannedOutageMinutes = task.PlannedOutageMinutes,
         ActualOutageMinutes = task.ActualOutageMinutes,
         IsRollbackStep = task.IsRollbackStep,
+        ScenarioGroup = task.ScenarioGroup,
         Predecessors = task.Predecessors
             .OrderBy(d => d.DependsOnTask.Order)
             .Select(d => new TaskDependencyRefDto
@@ -182,6 +183,12 @@ public static class Mapping
         ActualMinutes = runbook.ActualMinutes,
         CompletionNote = runbook.CompletionNote,
         IsRollbackActive = runbook.IsRollbackActive,
+        ActiveScenarioGroup = runbook.ActiveScenarioGroup,
+        ScenarioGroups = tasks
+            .Where(t => !string.IsNullOrEmpty(t.ScenarioGroup))
+            .Select(t => t.ScenarioGroup!)
+            .Distinct()
+            .ToList(),
         Owner = runbook.Owner?.ToSummary(),
         ServiceManagerWorkItemId = runbook.ServiceManagerWorkItemId,
         Tags = SplitTags(runbook.Tags),

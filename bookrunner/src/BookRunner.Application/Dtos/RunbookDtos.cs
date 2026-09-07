@@ -102,6 +102,14 @@ public sealed record RunbookDetailDto
     /// <summary>Geri donus plani aktive edildi mi (bkz. Runbook.IsRollbackActive).</summary>
     public bool IsRollbackActive { get; init; }
 
+    /// <summary>Bos ise ana akis izleniyor; dolu ise calisma o isimdeki alternatif
+    /// senaryoya gecmis demektir (bkz. Runbook.ActiveScenarioGroup).</summary>
+    public string? ActiveScenarioGroup { get; init; }
+
+    /// <summary>Bu runbook'ta tanimli senaryo gruplarinin isimleri (siralamada
+    /// ilk gorulme sirasina gore), orn. ["Senaryo-A", "Senaryo-B"].</summary>
+    public IReadOnlyList<string> ScenarioGroups { get; init; } = Array.Empty<string>();
+
     public PersonSummary? Owner { get; init; }
     public string? ServiceManagerWorkItemId { get; init; }
     public IReadOnlyList<string> Tags { get; init; } = Array.Empty<string>();

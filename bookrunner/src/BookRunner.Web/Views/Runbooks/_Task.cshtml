@@ -40,6 +40,14 @@
                         </span>
                     }
 
+                    @if (!string.IsNullOrEmpty(t.ScenarioGroup))
+                    {
+                        <span class="badge text-bg-info-subtle border border-info-subtle text-info-emphasis"
+                              title="Senaryo adimi">
+                            <i class="bi bi-signpost-split"></i> @t.ScenarioGroup
+                        </span>
+                    }
+
                     @if (t.Priority >= TaskPriority.High)
                     {
                         <span class="small br-priority-@t.Priority.ToString().ToLowerInvariant()">
@@ -155,8 +163,16 @@
                     durumu degistirilemez.
                 </div>
             }
+            @if (!string.IsNullOrEmpty(t.ScenarioGroup) && !Model.ScenarioActive)
+            {
+                <div class="alert alert-secondary py-2 px-3 small mb-3">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Bu bir "@t.ScenarioGroup" senaryosu adimidir; "@t.ScenarioGroup Senaryosuna Gec" ile
+                    aktive edilene kadar durumu degistirilemez.
+                </div>
+            }
             <div class="d-flex flex-wrap gap-2 mb-3">
-                @if (Model.CanExecute && (!t.IsRollbackStep || Model.RollbackActive))
+                @if (Model.CanExecute && (!t.IsRollbackStep || Model.RollbackActive) && Model.ScenarioActive)
                 {
                     var statusOptions = t.IsRollbackStep
                         ? new[] { RunbookTaskStatus.InProgress, RunbookTaskStatus.Completed, RunbookTaskStatus.Blocked, RunbookTaskStatus.Failed, RunbookTaskStatus.Skipped, RunbookTaskStatus.NotApplicable }

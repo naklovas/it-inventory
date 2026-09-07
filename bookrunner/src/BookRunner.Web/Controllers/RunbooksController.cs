@@ -422,6 +422,16 @@ public sealed class RunbooksController(
             return null;
         });
 
+    /// <summary>Secilen senaryoya gecer.</summary>
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public Task<IActionResult> SwitchScenario(Guid id, string scenarioGroup, CancellationToken ct)
+        => JsonResultAsync<object?>(async () =>
+        {
+            await Api.SwitchScenarioAsync(id, new SwitchScenarioRequest { ScenarioGroup = scenarioGroup }, ct);
+            return null;
+        });
+
     [HttpPost]
     [ValidateAntiForgeryToken]
     public Task<IActionResult> DeleteTask(Guid taskId, CancellationToken ct)

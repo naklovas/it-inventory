@@ -104,6 +104,14 @@ public interface ITaskService
     /// </summary>
     Task StartRollbackAsync(Guid runbookId, CancellationToken ct = default);
 
+    /// <summary>
+    /// "X Senaryosuna Gec" ile alternatif senaryo dalina geciler: ana akistaki
+    /// kapanmamis adimlar otomatik "Atlandi" olur, secilen senaryo grubunun
+    /// adimlarinin tarihleri o andan itibaren sirayla hesaplanir. Runbook basina
+    /// yalnizca bir kez, geri donduruleme bicimde calisir.
+    /// </summary>
+    Task SwitchScenarioAsync(Guid runbookId, SwitchScenarioRequest request, CancellationToken ct = default);
+
     /// <summary>Goreve tiklaninca acilan akordiyon tarihcesi.</summary>
     Task<IReadOnlyList<TaskActivityDto>> GetHistoryAsync(Guid taskId, CancellationToken ct = default);
 }

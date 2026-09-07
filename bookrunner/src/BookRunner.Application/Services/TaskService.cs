@@ -44,11 +44,15 @@ public sealed class TaskService(
 
         ValidateTaskPlannedRange(runbook, request.PlannedStart, request.PlannedEnd);
 
-        // Ana akis ve geri donus adimlari ayri listeler olarak numaralanir
-        // (bkz. RunbookTask.IsRollbackStep) - biri digerinin sira numarasindan
-        // etkilenmez.
+        var scenarioGroup = string.IsNullOrWhiteSpace(request.ScenarioGroup) ? null : request.ScenarioGroup.Trim();
+
+        // Ana akis, geri donus adimlari ve her senaryo grubu ayri listeler olarak
+        // numaralanir (bkz. RunbookTask.IsRollbackStep, RunbookTask.ScenarioGroup) -
+        // biri digerinin sira numarasindan etkilenmez.
         var maxOrder = await db.Tasks
-            .Where(t => t.RunbookId == runbookId && t.IsRollbackStep == request.IsRollbackStep)
+            .Where(t => t.RunbookId == runbookId
+                && t.IsRollbackStep == request.IsRollbackStep
+                && t.ScenarioGroup == scenarioGroup)
             .MaxAsync(t => (int?)t.Order, ct) ?? 0;
         var order = request.Order is > 0 ? request.Order.Value : maxOrder + 1;
 
@@ -76,7 +80,8 @@ public sealed class TaskService(
             RollbackNotes = request.RollbackNotes,
             IsOutageStep = request.IsOutageStep,
             PlannedOutageMinutes = request.IsOutageStep ? request.PlannedOutageMinutes : null,
-            IsRollbackStep = request.IsRollbackStep
+            IsRollbackStep = request.IsRollbackStep,
+            ScenarioGroup = scenarioGroup
         };
 
         var dependsOnIds = request.DependsOnTaskIds.Distinct().ToList();
@@ -148,6 +153,7 @@ public sealed class TaskService(
             task.ActualOutageMinutes = null;
         }
         task.IsRollbackStep = request.IsRollbackStep;
+        task.ScenarioGroup = string.IsNullOrWhiteSpace(request.ScenarioGroup) ? null : request.ScenarioGroup.Trim();
 
         if (!string.IsNullOrWhiteSpace(request.ColorHex))
         {
@@ -357,20 +363,24 @@ public sealed class TaskService(
             throw new BusinessRuleException("Bu runbook icin tanimlanmis bir geri donus adimi yok.");
         }
 
-        var mainTasks = tasks.Where(t => !t.IsRollbackStep).ToList();
-        if (!mainTasks.Any(t => t.Status == RunbookTaskStatus.Failed))
+        // Yalnizca su an izlenen tek grup dikkate alinir: ana akis (henuz senaryo
+        // secilmemisse) veya aktive edilmis senaryonun kendi adimlari. Baska,
+        // hic secilmemis senaryo gruplarinin onceden yazilmis adimlari bu
+        // kontrole ve toplu "Atlandi" islemine dahil edilmez.
+        var activeTrackTasks = tasks.Where(t => !t.IsRollbackStep && t.ScenarioGroup == runbook.ActiveScenarioGroup).ToList();
+        if (!activeTrackTasks.Any(t => t.Status == RunbookTaskStatus.Failed))
         {
             throw new BusinessRuleException(
-                "Geri donus plani yalnizca ana akista en az bir gorev 'Basarisiz' oldugunda baslatilabilir.");
+                "Geri donus plani yalnizca akista en az bir gorev 'Basarisiz' oldugunda baslatilabilir.");
         }
 
         var now = DateTimeOffset.UtcNow;
 
-        // Ana akistaki kapanmamis (Bekliyor/Devam Eden/Bloke) gorevler otomatik
+        // Aktif akistaki kapanmamis (Bekliyor/Devam Eden/Bloke) gorevler otomatik
         // "Atlandi" olur - runbook artik geri donus planini izliyor. Bildirim
         // gonderilmez (bkz. TaskActivity - toplu ve sistemsel bir gecis, mail
         // trafigini artirmamak icin sessizdir); yalnizca tarihceye yazilir.
-        foreach (var task in mainTasks.Where(t => !t.Status.IsClosed()))
+        foreach (var task in activeTrackTasks.Where(t => !t.Status.IsClosed()))
         {
             var oldStatus = task.Status;
             task.Status = RunbookTaskStatus.Skipped;
@@ -405,6 +415,83 @@ public sealed class TaskService(
         await realtime.RunbookChangedAsync(runbookId, "rollback-started", ct);
     }
 
+    public async Task SwitchScenarioAsync(Guid runbookId, SwitchScenarioRequest request, CancellationToken ct = default)
+    {
+        // Gorev yurutme yetkisiyle ayni seviye: runbook sahibi de (sahiplik
+        // yoluyla) tetikleyebilir.
+        await access.EnsureForRunbookAsync(runbookId, Permissions.TaskExecute, ct);
+
+        var runbook = await db.Runbooks.FirstOrDefaultAsync(r => r.Id == runbookId, ct)
+            ?? throw new NotFoundException("Runbook", runbookId);
+
+        if (runbook.IsRollbackActive)
+        {
+            throw new BusinessRuleException("Geri donus plani aktifken senaryo degistirilemez.");
+        }
+
+        if (!string.IsNullOrEmpty(runbook.ActiveScenarioGroup))
+        {
+            throw new BusinessRuleException(
+                $"Bu calisma zaten '{runbook.ActiveScenarioGroup}' senaryosu uzerinden yuruyor.");
+        }
+
+        var scenarioGroup = request.ScenarioGroup.Trim();
+
+        var tasks = await db.Tasks.Where(t => t.RunbookId == runbookId).ToListAsync(ct);
+        var scenarioSteps = tasks
+            .Where(t => !t.IsRollbackStep && t.ScenarioGroup == scenarioGroup)
+            .OrderBy(t => t.Order)
+            .ToList();
+        if (scenarioSteps.Count == 0)
+        {
+            throw new BusinessRuleException($"'{scenarioGroup}' adinda tanimli bir senaryo bulunamadi.");
+        }
+
+        // Senaryo secilmeden once izlenen ana akis (ScenarioGroup bos) - gecis
+        // yalnizca ana akistan yapilabilir, bir senaryodan digerine degil.
+        var mainTasks = tasks.Where(t => !t.IsRollbackStep && t.ScenarioGroup == null).ToList();
+
+        var now = DateTimeOffset.UtcNow;
+
+        // Ana akistaki kapanmamis (Bekliyor/Devam Eden/Bloke) gorevler otomatik
+        // "Atlandi" olur - runbook artik secilen senaryoyu izliyor. Bildirim
+        // gonderilmez (bkz. TaskActivity - toplu ve sistemsel bir gecis, mail
+        // trafigini artirmamak icin sessizdir); yalnizca tarihceye yazilir.
+        foreach (var task in mainTasks.Where(t => !t.Status.IsClosed()))
+        {
+            var oldStatus = task.Status;
+            task.Status = RunbookTaskStatus.Skipped;
+            task.ActualStart ??= now;
+            task.ActualEnd = now;
+            AddActivity(task.Id, TaskActivityType.StatusChanged,
+                $"Durum {DisplayText.Status(oldStatus)} -> {DisplayText.Status(RunbookTaskStatus.Skipped)} ('{scenarioGroup}' senaryosuna gecildi)",
+                DisplayText.Status(oldStatus), DisplayText.Status(RunbookTaskStatus.Skipped));
+        }
+
+        // Senaryo adiminin ne zaman tetiklenecegi onceden bilinemedigi icin
+        // tarihleri simdi, sirayla (bir onceki adimin bitisine gore) hesaplanir -
+        // yalnizca tahmini sureleriyle onceden girilmislerdi.
+        var cursor = now;
+        foreach (var step in scenarioSteps)
+        {
+            step.PlannedStart = cursor;
+            cursor = step.EstimatedMinutes.HasValue ? cursor.AddMinutes(step.EstimatedMinutes.Value) : cursor;
+            step.PlannedEnd = cursor;
+        }
+
+        runbook.ActiveScenarioGroup = scenarioGroup;
+        if (runbook.PlannedEnd is null || cursor > runbook.PlannedEnd.Value)
+        {
+            runbook.PlannedEnd = cursor;
+        }
+
+        await db.SaveChangesAsync(ct);
+
+        await audit.LogAsync(AuditAction.Update, nameof(Runbook), runbookId.ToString(),
+            $"'{scenarioGroup}' senaryosuna gecildi.", runbookId, ct: ct);
+        await realtime.RunbookChangedAsync(runbookId, "scenario-switched", ct);
+    }
+
     public async Task ReorderAsync(Guid runbookId, ReorderTasksRequest request, CancellationToken ct = default)
     {
         await access.EnsureForRunbookAsync(runbookId, Permissions.TaskWrite, ct);
@@ -417,14 +504,17 @@ public sealed class TaskService(
             throw new BusinessRuleException("Siralama listesindeki bir gorev bu runbook'ta bulunamadi.");
         }
 
-        // Ana akis ve geri donus adimlari ayri listeler olarak siralanir
-        // (bkz. RunbookTask.IsRollbackStep); surukle-birak yalnizca goruntulenen
-        // listenin kendi icindeki gorevleri gonderir, digerine dokunmaz.
-        var isRollbackGroup = request.TaskIdsInOrder.Count > 0 && byId[request.TaskIdsInOrder[0]].IsRollbackStep;
-        var groupCount = tasks.Count(t => t.IsRollbackStep == isRollbackGroup);
+        // Ana akis, geri donus adimlari ve her senaryo grubu ayri listeler olarak
+        // siralanir (bkz. RunbookTask.IsRollbackStep, RunbookTask.ScenarioGroup);
+        // surukle-birak yalnizca goruntulenen listenin kendi icindeki gorevleri
+        // gonderir, digerlerine dokunmaz.
+        var firstTask = request.TaskIdsInOrder.Count > 0 ? byId[request.TaskIdsInOrder[0]] : null;
+        var isRollbackGroup = firstTask?.IsRollbackStep ?? false;
+        var scenarioGroup = firstTask?.ScenarioGroup;
+        var groupCount = tasks.Count(t => t.IsRollbackStep == isRollbackGroup && t.ScenarioGroup == scenarioGroup);
 
         if (request.TaskIdsInOrder.Count != groupCount ||
-            request.TaskIdsInOrder.Any(id => byId[id].IsRollbackStep != isRollbackGroup))
+            request.TaskIdsInOrder.Any(id => byId[id].IsRollbackStep != isRollbackGroup || byId[id].ScenarioGroup != scenarioGroup))
         {
             throw new BusinessRuleException("Siralama listesi gorev grubuyla birebir eslesmiyor.");
         }
@@ -718,16 +808,22 @@ public sealed class TaskService(
             return;
         }
 
-        // Geri donus plani aktive edilmemisse (henuz tetiklenmemis veya hic
-        // gerekmemis), onceden yazilmis ama hala "Baslamadi" durumundaki geri
-        // donus adimlari ana akisin normal sekilde tamamlanmasini yanlislikla
-        // ENGELLEMEMELIDIR - yalnizca ana akis gorevleri dikkate alinir.
-        // Aktive edildiyse ana akis zaten Atlandi ile kapatilmistir; artik
-        // yalnizca geri donus adimlarinin kapanmasi yeterlidir.
-        var taskStatuses = await db.Tasks
-            .Where(t => t.RunbookId == runbookId && t.IsRollbackStep == runbook.IsRollbackActive)
-            .Select(t => t.Status)
-            .ToListAsync(ct);
+        // Onceden yazilmis ama hic aktive edilmemis geri donus/senaryo adimlari
+        // (hala "Baslamadi" durumunda) akisin normal sekilde tamamlanmasini
+        // yanlislikla ENGELLEMEMELIDIR - yalnizca su an aktif olan tek grup
+        // dikkate alinir: geri donus aktifse SADECE geri donus adimlari (hangi
+        // senaryodan tetiklendigi onemsizdir - geri donus listesi senaryolardan
+        // bagimsizdir); degilse ana akis (ActiveScenarioGroup bos) veya aktive
+        // edilmis senaryonun kendi adimlari.
+        var taskStatuses = runbook.IsRollbackActive
+            ? await db.Tasks
+                .Where(t => t.RunbookId == runbookId && t.IsRollbackStep)
+                .Select(t => t.Status)
+                .ToListAsync(ct)
+            : await db.Tasks
+                .Where(t => t.RunbookId == runbookId && !t.IsRollbackStep && t.ScenarioGroup == runbook.ActiveScenarioGroup)
+                .Select(t => t.Status)
+                .ToListAsync(ct);
         if (taskStatuses.Count == 0 || taskStatuses.Any(status => !status.IsClosed()))
         {
             return;

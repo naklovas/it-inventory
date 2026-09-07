@@ -63,6 +63,16 @@ public class RunbookTask : AuditableEntity, ISoftDeletable
     /// </summary>
     public bool IsRollbackStep { get; set; }
 
+    /// <summary>
+    /// Bos ise bu adim ANA AKISIN parcasidir. Dolu ise (orn. "Senaryo-A") bu adim
+    /// o isimdeki ALTERNATIF SENARYONUN parcasidir: ana gorev listesinde gizli
+    /// kalir, yalnizca o senaryoya gecildiginde gorunur/aktif olur (bkz.
+    /// Runbook.ActiveScenarioGroup, TaskService.SwitchScenarioAsync). Senaryo
+    /// adimlari da kendi Order/reorder/otomatik-tamamlanma kapsamina sahiptir -
+    /// ayni isimdeki tum adimlar tek bir alternatif kol olusturur.
+    /// </summary>
+    public string? ScenarioGroup { get; set; }
+
     /// <summary>Tamamlandi olarak isaretlenirken girilen, gelecege yonelik not
     /// (orn. "bir dahaki sefere X'e dikkat edilmeli"). Tarihcedeki durum degisikligi
     /// notundan farkli olarak burada kalici ve gorev karti uzerinde dogrudan gorunur.</summary>

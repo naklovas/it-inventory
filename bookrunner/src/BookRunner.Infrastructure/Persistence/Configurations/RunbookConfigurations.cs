@@ -22,6 +22,7 @@ public sealed class RunbookConfiguration : IEntityTypeConfiguration<Runbook>
         builder.Property(r => r.ServiceManagerWorkItemId).HasMaxLength(64);
         builder.Property(r => r.Tags).HasMaxLength(1000);
         builder.Property(r => r.CompletionNote).HasMaxLength(2000);
+        builder.Property(r => r.ActiveScenarioGroup).HasMaxLength(100);
         builder.Property(r => r.CreatedBy).HasMaxLength(256).IsRequired();
         builder.Property(r => r.UpdatedBy).HasMaxLength(256);
         builder.Property(r => r.DeletedBy).HasMaxLength(256);
@@ -63,6 +64,7 @@ public sealed class RunbookTaskConfiguration : IEntityTypeConfiguration<RunbookT
         builder.Property(t => t.Priority).HasConversion<int>();
         builder.Property(t => t.RollbackNotes).HasMaxLength(4000);
         builder.Property(t => t.CompletionNote).HasMaxLength(2000);
+        builder.Property(t => t.ScenarioGroup).HasMaxLength(100);
         builder.Property(t => t.CreatedBy).HasMaxLength(256).IsRequired();
         builder.Property(t => t.UpdatedBy).HasMaxLength(256);
         builder.Property(t => t.DeletedBy).HasMaxLength(256);

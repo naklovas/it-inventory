@@ -26,6 +26,13 @@ namespace BookRunner.Web.Models;
 /// donus adimlarinin durum butonlari gosterilmez - tarihleri henuz
 /// hesaplanmamistir (bkz. Runbook.IsRollbackActive).
 /// </param>
+/// <param name="ScenarioActive">
+/// Bu gorev bir senaryo adimiysa (Task.ScenarioGroup dolu), o senaryo su an
+/// aktive edilmis mi. Ana akis gorevleri (ScenarioGroup bos) icin her zaman
+/// true'dur. Aktive edilmeden senaryo adimlarinin durum butonlari
+/// gosterilmez - tarihleri henuz hesaplanmamistir (bkz.
+/// Runbook.ActiveScenarioGroup).
+/// </param>
 public sealed record TaskCardModel(
     RunbookTaskDto Task,
     bool CanEdit,
@@ -35,7 +42,8 @@ public sealed record TaskCardModel(
     bool CanComment,
     bool CanRunScript,
     bool CanResetToNotStarted,
-    bool RollbackActive)
+    bool RollbackActive,
+    bool ScenarioActive)
 {
     /// <summary>Runbook detay sayfasinin yetkilerinden kart modeli uretir.</summary>
     public static TaskCardModel From(RunbookTaskDto task, RunbookDetailViewModel page) => new(
@@ -47,5 +55,6 @@ public sealed record TaskCardModel(
         CanComment: page.CanCommentThis,
         CanRunScript: page.CanRunScript,
         CanResetToNotStarted: page.CanManageAdmin,
-        RollbackActive: page.Runbook.IsRollbackActive);
+        RollbackActive: page.Runbook.IsRollbackActive,
+        ScenarioActive: task.ScenarioGroup == null || task.ScenarioGroup == page.Runbook.ActiveScenarioGroup);
 }

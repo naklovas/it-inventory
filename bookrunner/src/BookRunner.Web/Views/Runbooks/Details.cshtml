@@ -4,9 +4,15 @@
     var r = Model.Runbook;
     ViewData["Title"] = r.Title;
     var isTemplate = r.IsTemplate;
-    var mainTasks = r.Tasks.Where(t => !t.IsRollbackStep).OrderBy(t => t.Order).ToList();
+    var mainTasks = r.Tasks.Where(t => !t.IsRollbackStep && string.IsNullOrEmpty(t.ScenarioGroup)).OrderBy(t => t.Order).ToList();
     var rollbackSteps = r.Tasks.Where(t => t.IsRollbackStep).OrderBy(t => t.Order).ToList();
     var canStartRollback = rollbackSteps.Count > 0 && mainTasks.Any(t => t.Status == RunbookTaskStatus.Failed);
+    // Her senaryo grubu (orn. "Senaryo-A") ayri, gizli bir liste olarak tutulur;
+    // henuz secilmemisse "X Senaryosuna Gec" ile aktive edilir (bkz.
+    // Runbook.ActiveScenarioGroup, TaskService.SwitchScenarioAsync).
+    var scenarioGroups = r.ScenarioGroups;
+    var canSwitchScenario = !r.IsRollbackActive && string.IsNullOrEmpty(r.ActiveScenarioGroup)
+        && r.Status is not (RunbookStatus.Completed or RunbookStatus.Cancelled or RunbookStatus.Archived);
 }
 
 <div class="br-card p-3 p-lg-4 mb-3">
@@ -430,6 +436,109 @@
     }
 }
 
+@* ------------------------------------------------------------------ senaryo planlari *@
+
+@if (scenarioGroups.Count > 0 || Model.CanEditThis)
+{
+    <div class="d-flex justify-content-between align-items-center mb-2 mt-4">
+        <h2 class="h5 mb-0"><i class="bi bi-signpost-split me-1"></i>Senaryo Planlari</h2>
+        @if (Model.CanEditThis)
+        {
+            <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="collapse" data-bs-target="#newScenarioStepPanel">
+                <i class="bi bi-plus-lg me-1"></i>Senaryo adimi ekle
+            </button>
+        }
+    </div>
+
+    @if (!string.IsNullOrEmpty(r.ActiveScenarioGroup))
+    {
+        <div class="alert alert-info py-2 px-3 small mb-2">
+            <i class="bi bi-signpost-split me-1"></i>
+            Calisma "@r.ActiveScenarioGroup" senaryosuna gecti; ana akistaki kapanmamis adimlar otomatik Atlandi yapildi.
+        </div>
+    }
+
+    @foreach (var groupName in scenarioGroups)
+    {
+        var groupSteps = r.Tasks.Where(t => !t.IsRollbackStep && t.ScenarioGroup == groupName).OrderBy(t => t.Order).ToList();
+        var isActiveGroup = r.ActiveScenarioGroup == groupName;
+        <div class="br-card p-3 mb-3">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h3 class="h6 mb-0">@groupName @if (isActiveGroup) { <span class="badge text-bg-info ms-1">Aktif</span> }</h3>
+                @if (Model.CanExecuteThis && canSwitchScenario)
+                {
+                    <button class="btn btn-outline-primary btn-sm br-switch-scenario-btn" data-scenario-group="@groupName">
+                        <i class="bi bi-signpost-split me-1"></i>@groupName Senaryosuna Gec
+                    </button>
+                }
+            </div>
+            <div class="br-scenario-task-list" data-scenario-group="@groupName" data-sortable="@Model.CanEditThis.ToString().ToLowerInvariant()">
+                @foreach (var step in groupSteps)
+                {
+                    <partial name="_Task" model="@(TaskCardModel.From(step, Model))" />
+                }
+            </div>
+        </div>
+    }
+
+    @if (scenarioGroups.Count == 0)
+    {
+        <div class="br-card p-4 text-center mb-3">
+            <p class="br-muted mb-0 small">Henuz senaryo adimi tanimlanmamis.</p>
+        </div>
+    }
+
+    @if (Model.CanEditThis)
+    {
+        <div class="collapse" id="newScenarioStepPanel">
+            <div class="br-card p-3 mb-3">
+                <h3 class="h6 mb-3">Yeni senaryo adimi</h3>
+                <p class="small br-muted">
+                    Tarih girilmez; senaryoya gecildiginde tahmini surelere gore otomatik hesaplanir.
+                </p>
+                <div class="row g-2">
+                    <div class="col-md-4">
+                        <label class="form-label small br-muted">Senaryo adi *</label>
+                        <input class="form-control" id="scenarioStepGroup" placeholder="orn. Senaryo-A" list="scenarioGroupOptions" />
+                        <datalist id="scenarioGroupOptions">
+                            @foreach (var groupName in scenarioGroups)
+                            {
+                                <option value="@groupName"></option>
+                            }
+                        </datalist>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label small br-muted">Baslik *</label>
+                        <input class="form-control" id="scenarioStepTitle" placeholder="orn. Alternatif servise gec" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small br-muted">Oncelik</label>
+                        <select class="form-select" id="scenarioStepPriority">
+                            @foreach (TaskPriority priority in Enum.GetValues<TaskPriority>())
+                            {
+                                <option value="@priority" selected="@(priority == TaskPriority.Normal)">@DisplayText.Priority(priority)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small br-muted">Tahmini sure (dk)</label>
+                        <input class="form-control" type="number" min="0" id="scenarioStepMinutes" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small br-muted">Aciklama</label>
+                        <textarea class="form-control" rows="2" id="scenarioStepDescription"
+                                  placeholder="Bu adimda ne yapilacak?"></textarea>
+                    </div>
+                </div>
+                <div class="mt-3 d-flex gap-2">
+                    <button class="btn btn-primary btn-sm" id="btnAddScenarioStep"><i class="bi bi-check-lg me-1"></i>Ekle</button>
+                    <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="collapse" data-bs-target="#newScenarioStepPanel">Vazgec</button>
+                </div>
+            </div>
+        </div>
+    }
+}
+
 @* ------------------------------------------------------------------ modaller *@
 
 <div class="modal fade" id="completeTaskModal" tabindex="-1">
@@ -784,6 +893,7 @@
             isOutageStep = t.IsOutageStep,
             plannedOutageMinutes = t.PlannedOutageMinutes,
             isRollbackStep = t.IsRollbackStep,
+            scenarioGroup = t.ScenarioGroup,
             dependsOnTaskIds = t.Predecessors.Select(p => p.TaskId),
             assignmentIds = t.Assignments.Where(a => a.IsActive).Select(a => a.Id)
         }),

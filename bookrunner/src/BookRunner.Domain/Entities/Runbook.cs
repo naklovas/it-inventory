@@ -61,6 +61,16 @@ public class Runbook : AuditableEntity, ISoftDeletable
     /// </summary>
     public bool IsRollbackActive { get; set; }
 
+    /// <summary>
+    /// Bos ise calisma ANA AKISI izliyor. Dolu ise (orn. "Senaryo-A") calisma o
+    /// isimdeki alternatif senaryoya geçmis demektir: gecis aninda ana akistaki
+    /// kapanmamis adimlar otomatik "Atlandi" yapilmis, o senaryonun adimlarinin
+    /// tarihleri hesaplanmistir (bkz. RunbookTask.ScenarioGroup,
+    /// TaskService.SwitchScenarioAsync). Yalnizca bir kez, geri donduruleme
+    /// bicimde degistirilir.
+    /// </summary>
+    public string? ActiveScenarioGroup { get; set; }
+
     /// <summary>Runbook sahibi (AD kullanicisi).</summary>
     public Guid OwnerUserId { get; set; }
     public AppUser Owner { get; set; } = null!;

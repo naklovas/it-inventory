@@ -40,6 +40,10 @@ public sealed record RunbookTaskDto
     /// <summary>true ise bu adim ana akisin degil geri donus planinin bir parcasidir.</summary>
     public bool IsRollbackStep { get; init; }
 
+    /// <summary>Bos ise ana akis; dolu ise (orn. "Senaryo-A") bu adim o isimdeki
+    /// alternatif senaryonun parcasidir.</summary>
+    public string? ScenarioGroup { get; init; }
+
     /// <summary>Bu gorevin oncelleri (bu gorev baslamadan/tamamlanmadan once kapanmasi gerekenler).</summary>
     public IReadOnlyList<TaskDependencyRefDto> Predecessors { get; init; } = Array.Empty<TaskDependencyRefDto>();
 
@@ -160,6 +164,11 @@ public sealed record CreateTaskRequest
     /// <summary>true ise bu adim ana akisin degil geri donus planinin bir parcasidir.</summary>
     public bool IsRollbackStep { get; init; }
 
+    /// <summary>Bos birakilirsa ana akisin parcasi olur; doldurulursa (orn. "Senaryo-A")
+    /// o isimdeki alternatif senaryoya eklenir.</summary>
+    [StringLength(100)]
+    public string? ScenarioGroup { get; init; }
+
     /// <summary>Bos birakilirsa gorev listenin sonuna eklenir.</summary>
     public int? Order { get; init; }
 }
@@ -200,6 +209,11 @@ public sealed record UpdateTaskRequest
     /// <summary>true ise bu adim ana akisin degil geri donus planinin bir parcasidir.</summary>
     public bool IsRollbackStep { get; init; }
 
+    /// <summary>Bos birakilirsa ana akisin parcasi olur; doldurulursa (orn. "Senaryo-A")
+    /// o isimdeki alternatif senaryoya eklenir.</summary>
+    [StringLength(100)]
+    public string? ScenarioGroup { get; init; }
+
     public Guid? ScriptId { get; init; }
 }
 
@@ -233,6 +247,14 @@ public sealed record ReorderTasksRequest
     /// <summary>Gorev kimlikleri, istenen yeni sirada.</summary>
     [Required, MinLength(1)]
     public required IReadOnlyList<Guid> TaskIdsInOrder { get; init; }
+}
+
+/// <summary>Alternatif senaryoya gecis istegi (bkz. TaskService.SwitchScenarioAsync).</summary>
+public sealed record SwitchScenarioRequest
+{
+    /// <summary>Gecilecek senaryo grubunun adi, orn. "Senaryo-A".</summary>
+    [Required, StringLength(100, MinimumLength = 1)]
+    public required string ScenarioGroup { get; init; }
 }
 
 /// <summary>Goreve kisi veya grup atama istegi.</summary>

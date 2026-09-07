@@ -76,6 +76,9 @@ public sealed class BookRunnerApiClient(HttpClient httpClient, ILogger<BookRunne
     public Task StartRollbackAsync(Guid runbookId, CancellationToken ct = default)
         => PostAsync<object?, object>($"api/runbooks/{runbookId}/start-rollback", null, ct);
 
+    public Task SwitchScenarioAsync(Guid runbookId, SwitchScenarioRequest request, CancellationToken ct = default)
+        => PostAsync<SwitchScenarioRequest, object>($"api/runbooks/{runbookId}/switch-scenario", request, ct);
+
     public Task DeleteTaskAsync(Guid taskId, CancellationToken ct = default)
         => SendAsync(HttpMethod.Delete, $"api/tasks/{taskId}", ct);
 

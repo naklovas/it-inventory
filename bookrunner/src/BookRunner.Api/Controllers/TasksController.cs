@@ -68,6 +68,20 @@ public sealed class TasksController(ITaskService tasks) : ControllerBase
         return NoContent();
     }
 
+    /// <summary>
+    /// Secilen senaryoya gecer: ana akistaki kapanmamis gorevler otomatik
+    /// "Atlandi" olur, senaryo adimlarinin tarihleri hesaplanir.
+    /// </summary>
+    [HttpPost("runbooks/{runbookId:guid}/switch-scenario")]
+    [Authorize(Policy = Permissions.RunbookRead)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> SwitchScenario(
+        Guid runbookId, [FromBody] SwitchScenarioRequest request, CancellationToken ct)
+    {
+        await tasks.SwitchScenarioAsync(runbookId, request, ct);
+        return NoContent();
+    }
+
     /// <summary>Gorevleri surukle-birak sonrasi yeniden siralar.</summary>
     [HttpPost("runbooks/{runbookId:guid}/tasks/reorder")]
     [Authorize(Policy = Permissions.RunbookRead)]
