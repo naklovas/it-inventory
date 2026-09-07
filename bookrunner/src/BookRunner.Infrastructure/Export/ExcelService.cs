@@ -24,7 +24,7 @@ public sealed class ExcelService(
     private static readonly string[] ImportHeaders =
     [
         "Sira", "Baslik", "Aciklama", "Oncelik", "Tahmini Sure (dk)",
-        "Planlanan Baslangic", "Planlanan Bitis", "Renk (#RRGGBB)", "Geri Alma Notu"
+        "Planlanan Baslangic", "Planlanan Bitis", "Renk (#RRGGBB)", "Geri Alma Notu", "Birim"
     ];
 
     public async Task<byte[]> ExportRunbookAsync(Guid runbookId, CancellationToken ct = default)
@@ -155,6 +155,7 @@ public sealed class ExcelService(
         sheet.Cell(2, 7).Value = "01.01.2026 22:45";
         sheet.Cell(2, 8).Value = "#4F86F7";
         sheet.Cell(2, 9).Value = "Yedek dosyasi silinir.";
+        sheet.Cell(2, 10).Value = "Veritabani Yonetimi";
         sheet.Row(2).Style.Font.Italic = true;
         sheet.Row(2).Style.Font.FontColor = XLColor.Gray;
 
@@ -166,6 +167,7 @@ public sealed class ExcelService(
         help.Cell(4, 1).Value = "- Oncelik: Dusuk / Normal / Yuksek / Kritik";
         help.Cell(5, 1).Value = "- Tarih bicimi: gg.aa.yyyy SS:dd";
         help.Cell(6, 1).Value = "- Renk bos birakilirsa sira numarasina gore otomatik atanir.";
+        help.Cell(7, 1).Value = "- Birim bos birakilabilir; doluysa sistemde tanimli bir takim adiyla BIREBIR eslesmelidir.";
         help.Columns().AdjustToContents();
 
         sheet.Columns().AdjustToContents();
@@ -183,6 +185,14 @@ public sealed class ExcelService(
 
         var errors = new List<ImportError>();
         var parsed = new List<RunbookTask>();
+        var parsedGroups = new Dictionary<Guid, AppGroup>();
+
+        // Birim adi -> takim grubu (yalnizca IsTeam=true, AD guvenlik gruplari
+        // degil - bkz. AppGroup.IsTeam yorumu). Tum satirlar icin tek seferde
+        // yuklenip bellekte eslesir.
+        var teamGroups = await db.Groups
+            .Where(g => g.IsTeam && g.IsActive)
+            .ToDictionaryAsync(g => g.DisplayName, g => g, StringComparer.OrdinalIgnoreCase, ct);
 
         var maxOrder = await db.Tasks.Where(t => t.RunbookId == runbookId).MaxAsync(t => (int?)t.Order, ct) ?? 0;
         var lastRow = sheet.LastRowUsed()?.RowNumber() ?? 1;
@@ -282,7 +292,19 @@ public sealed class ExcelService(
                 continue;
             }
 
-            parsed.Add(new RunbookTask
+            AppGroup? teamGroup = null;
+            var departmentName = row.Cell(10).GetString().Trim();
+            if (!string.IsNullOrWhiteSpace(departmentName))
+            {
+                if (!teamGroups.TryGetValue(departmentName, out teamGroup))
+                {
+                    errors.Add(new ImportError(rowNumber, "Birim",
+                        $"'{departmentName}' adinda tanimli bir takim bulunamadi."));
+                    continue;
+                }
+            }
+
+            var task = new RunbookTask
             {
                 RunbookId = runbookId,
                 Order = order,
@@ -294,7 +316,13 @@ public sealed class ExcelService(
                 PlannedEnd = plannedEnd,
                 ColorHex = string.IsNullOrWhiteSpace(color) ? AvatarHelper.TaskColor(order) : color,
                 RollbackNotes = NullIfEmpty(row.Cell(9).GetString())
-            });
+            };
+
+            parsed.Add(task);
+            if (teamGroup is not null)
+            {
+                parsedGroups[task.Id] = teamGroup;
+            }
         }
 
         // Dogrulama modunda ya da hatali satir varsa hicbir sey yazilmaz: ya hep ya hic.
@@ -315,6 +343,17 @@ public sealed class ExcelService(
                     ActorDisplayName = currentUser.DisplayName,
                     Summary = "Gorev Excel ice aktarimi ile olusturuldu."
                 });
+
+                if (parsedGroups.TryGetValue(task.Id, out var teamGroup))
+                {
+                    db.Assignments.Add(new TaskAssignment
+                    {
+                        TaskId = task.Id,
+                        AssigneeType = AssigneeType.Group,
+                        GroupId = teamGroup.Id,
+                        IsActive = true
+                    });
+                }
             }
 
             await db.SaveChangesAsync(ct);
