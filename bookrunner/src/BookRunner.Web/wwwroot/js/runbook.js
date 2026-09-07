@@ -133,7 +133,34 @@
             "T" + pad(d.getHours()) + ":" + pad(d.getMinutes());
     }
 
-    /** Gorev tarih secicilerine runbook'un planlanan araligini min/max olarak uygular. */
+    /**
+     * Runbook'un planlanan araligi disinda bir deger secilmisse en yakin sinira
+     * ceker. min/max HTML ozniteligi yalnizca tarayicinin KENDI tarih secicisine
+     * ipucu verir; bu ekran native form submit KULLANMADIGINDAN (fetch ile JS
+     * gonderiyor) tarayici bu siniri hicbir zaman zorunlu kilmaz - kullanici
+     * araligin disinda bir deger yapistirabilir/yazabilir ve sunucuya kadar
+     * gider (orada hata olarak reddedilir, ama gec ve dolayli bir geri bildirimdir).
+     * "change" ile hemen sinira cekmek, secim aninda engellemeye en yakin davranistir.
+     */
+    function clampToPlannedRange(input) {
+        if (!input.value || !config.plannedStart || !config.plannedEnd) {
+            return;
+        }
+
+        const value = new Date(input.value).getTime();
+        const min = new Date(config.plannedStart).getTime();
+        const max = new Date(config.plannedEnd).getTime();
+
+        if (value < min) {
+            input.value = toLocalInputValue(config.plannedStart);
+            toast("Gorev tarihi runbook'un planlanan baslangicindan once olamaz; baslangica ayarlandi.", "warning");
+        } else if (value > max) {
+            input.value = toLocalInputValue(config.plannedEnd);
+            toast("Gorev tarihi runbook'un planlanan bitisinden sonra olamaz; bitise ayarlandi.", "warning");
+        }
+    }
+
+    /** Gorev tarih secicilerine runbook'un planlanan araligini min/max olarak uygular ve zorunlu kilar. */
     function applyPlannedRangeConstraint(startInput, endInput) {
         if (!startInput || !endInput || !config.plannedStart || !config.plannedEnd) {
             return;
@@ -145,6 +172,14 @@
         startInput.max = max;
         endInput.min = min;
         endInput.max = max;
+
+        [startInput, endInput].forEach((input) => {
+            if (input.dataset.rangeClampWired) {
+                return;
+            }
+            input.dataset.rangeClampWired = "true";
+            input.addEventListener("change", () => clampToPlannedRange(input));
+        });
     }
 
     applyPlannedRangeConstraint(document.getElementById("newTaskStart"), document.getElementById("newTaskEnd"));

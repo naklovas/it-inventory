@@ -1,6 +1,5 @@
 /* ==========================================================================
    BookRunner - tum "datetime-local" alanlarina uygulanan ortak davranis:
-   - Yarim saatlik dilimlerle secim (Service Manager benzeri).
    - "gg.aa.yyyy ss:dd" (SM/TR bicimi) veya ISO metin yapistirilabilmesi.
    Sayfadaki HER datetime-local input'a otomatik uygulanir; ayrica JS ile
    sonradan DOM'a eklenen alanlar (modallar) icin bir MutationObserver kullanir.
@@ -42,11 +41,12 @@
         }
         input.dataset.smartDatetimeWired = "true";
 
-        // Yarim saatlik dilimler: native secici (saat tekerlegi) 00/30 dakikada durur;
-        // yine de elle tam dakika yazilabilir/yapistirilabilir.
-        if (!input.step) {
-            input.step = "1800";
-        }
+        // step="1800" (yarim saatlik dilim) daha once denendi ama tarayicinin
+        // saat tekerlegini yalnizca 00/30 dakikada durdurup kullaniciyi tam
+        // dakika girmekten alikoydu (bazi tarayicilarda elle yazmak da
+        // zorlasiyor). Adim kisitlamasi kaldirildi; input'un varsayilan
+        // (dakika bazli, saniyesiz) davranisi kullanilir - istenen herhangi
+        // bir dakika serbestce girilebilir/yapistirilabilir.
 
         input.addEventListener("paste", (event) => {
             const clipboard = event.clipboardData || window.clipboardData;
