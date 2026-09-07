@@ -1615,11 +1615,11 @@ BEGIN
 
     IF NOT EXISTS (
         SELECT 1 FROM [bookrunner].[__EFMigrationsHistory]
-        WHERE [MigrationId] = N'20260907073856_AddScenarioBranching'
+        WHERE [MigrationId] = N'20260907074108_AddScenarioBranching'
     )
     BEGIN
         INSERT INTO [bookrunner].[__EFMigrationsHistory] ([MigrationId], [ProductVersion])
-        VALUES (N'20260907073856_AddScenarioBranching', N'9.0.19');
+        VALUES (N'20260907074108_AddScenarioBranching', N'9.0.19');
     END
 
     PRINT N'';
