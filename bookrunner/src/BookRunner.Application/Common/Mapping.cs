@@ -120,6 +120,7 @@ public static class Mapping
         ScenarioGroup = task.ScenarioGroup,
         FailureAction = task.FailureAction,
         FailureScenarioGroup = task.FailureScenarioGroup,
+        SuccessScenarioGroup = task.SuccessScenarioGroup,
         Predecessors = task.Predecessors
             .OrderBy(d => d.DependsOnTask.Order)
             .Select(d => new TaskDependencyRefDto

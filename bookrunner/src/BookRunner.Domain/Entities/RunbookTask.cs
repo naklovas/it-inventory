@@ -85,6 +85,14 @@ public class RunbookTask : AuditableEntity, ISoftDeletable
     /// senaryo grubunun adi (orn. "Senaryo-A").</summary>
     public string? FailureScenarioGroup { get; set; }
 
+    /// <summary>
+    /// Dolu ise, bu gorev "Tamamlandi" olarak isaretlendiginde otomatik gecilecek
+    /// senaryo grubunun adi (orn. "Senaryo-B"). FailureAction'dan farkli olarak
+    /// basarili durumun tek anlamli hedefi senaryoya gecistir - "basarili olursa
+    /// geri donus baslat" mantiksiz oldugundan ayri bir enum yoktur.
+    /// </summary>
+    public string? SuccessScenarioGroup { get; set; }
+
     /// <summary>Tamamlandi olarak isaretlenirken girilen, gelecege yonelik not
     /// (orn. "bir dahaki sefere X'e dikkat edilmeli"). Tarihcedeki durum degisikligi
     /// notundan farkli olarak burada kalici ve gorev karti uzerinde dogrudan gorunur.</summary>

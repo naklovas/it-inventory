@@ -695,7 +695,8 @@ public sealed class RunbookService(
             IsRollbackStep = source.IsRollbackStep,
             ScenarioGroup = source.ScenarioGroup,
             FailureAction = source.FailureAction,
-            FailureScenarioGroup = source.FailureScenarioGroup
+            FailureScenarioGroup = source.FailureScenarioGroup,
+            SuccessScenarioGroup = source.SuccessScenarioGroup
         };
 
         if (copyAssignments)

@@ -85,7 +85,10 @@ public sealed class TaskService(
             FailureAction = request.FailureAction,
             FailureScenarioGroup = request.FailureAction == TaskFailureAction.SwitchToScenario
                 ? request.FailureScenarioGroup?.Trim()
-                : null
+                : null,
+            SuccessScenarioGroup = string.IsNullOrWhiteSpace(request.SuccessScenarioGroup)
+                ? null
+                : request.SuccessScenarioGroup.Trim()
         };
 
         var dependsOnIds = request.DependsOnTaskIds.Distinct().ToList();
@@ -162,6 +165,9 @@ public sealed class TaskService(
         task.FailureScenarioGroup = request.FailureAction == TaskFailureAction.SwitchToScenario
             ? request.FailureScenarioGroup?.Trim()
             : null;
+        task.SuccessScenarioGroup = string.IsNullOrWhiteSpace(request.SuccessScenarioGroup)
+            ? null
+            : request.SuccessScenarioGroup.Trim();
 
         if (!string.IsNullOrWhiteSpace(request.ColorHex))
         {
@@ -311,24 +317,28 @@ public sealed class TaskService(
             task.Runbook.ActualEnd = null;
         }
 
-        // Gorev bazinda tanimlanmis "basarisiz olursa ne olsun" davranisi (bkz.
-        // RunbookTask.FailureAction): operatorun ayrica "Geri Donus Adimlarini
-        // Baslat"/"X Senaryosuna Gec" butonuna basmasina gerek kalmadan otomatik
-        // tetiklenir. Hedef zaten aktifse veya tanimli degilse (rollback adimi/
-        // senaryo yoksa) sessizce atlanir - bu otomatik adim asla hata firlatip
-        // durum degisikligini engellemez.
-        if (request.Status == RunbookTaskStatus.Failed && task.FailureAction != TaskFailureAction.None)
+        // Gorev bazinda tanimlanmis "basarili/basarisiz olursa ne olsun" davranisi
+        // (bkz. RunbookTask.FailureAction, RunbookTask.SuccessScenarioGroup):
+        // operatorun ayrica "Geri Donus Adimlarini Baslat"/"X Senaryosuna Gec"
+        // butonuna basmasina gerek kalmadan otomatik tetiklenir. Hedef zaten
+        // aktifse veya tanimli degilse (rollback adimi/senaryo yoksa) sessizce
+        // atlanir - bu otomatik adim asla hata firlatip durum degisikligini
+        // engellemez.
+        var hasFailureTrigger = request.Status == RunbookTaskStatus.Failed && task.FailureAction != TaskFailureAction.None;
+        var hasSuccessTrigger = request.Status == RunbookTaskStatus.Completed && !string.IsNullOrWhiteSpace(task.SuccessScenarioGroup);
+
+        if (hasFailureTrigger || hasSuccessTrigger)
         {
             var siblingTasks = await db.Tasks.Where(t => t.RunbookId == task.RunbookId).ToListAsync(ct);
 
-            if (task.FailureAction == TaskFailureAction.StartRollback
+            if (hasFailureTrigger && task.FailureAction == TaskFailureAction.StartRollback
                 && !task.Runbook.IsRollbackActive
                 && siblingTasks.Any(t => t.IsRollbackStep))
             {
                 ActivateRollback(task.Runbook, siblingTasks,
                     $"'{task.Title}' basarisiz oldugu icin geri donus plani otomatik baslatildi");
             }
-            else if (task.FailureAction == TaskFailureAction.SwitchToScenario
+            else if (hasFailureTrigger && task.FailureAction == TaskFailureAction.SwitchToScenario
                 && !task.Runbook.IsRollbackActive
                 && string.IsNullOrEmpty(task.Runbook.ActiveScenarioGroup)
                 && !string.IsNullOrWhiteSpace(task.FailureScenarioGroup)
@@ -336,6 +346,14 @@ public sealed class TaskService(
             {
                 ActivateScenario(task.Runbook, siblingTasks, task.FailureScenarioGroup!,
                     $"'{task.Title}' basarisiz oldugu icin '{task.FailureScenarioGroup}' senaryosuna otomatik gecildi");
+            }
+            else if (hasSuccessTrigger
+                && !task.Runbook.IsRollbackActive
+                && string.IsNullOrEmpty(task.Runbook.ActiveScenarioGroup)
+                && siblingTasks.Any(t => !t.IsRollbackStep && t.ScenarioGroup == task.SuccessScenarioGroup))
+            {
+                ActivateScenario(task.Runbook, siblingTasks, task.SuccessScenarioGroup!,
+                    $"'{task.Title}' basarili oldugu icin '{task.SuccessScenarioGroup}' senaryosuna otomatik gecildi");
             }
         }
 

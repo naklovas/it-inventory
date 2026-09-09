@@ -309,6 +309,10 @@
                     <label class="form-label small br-muted">Hangi senaryo</label>
                     <input class="form-control" id="newTaskFailureScenario" placeholder="orn. Senaryo-A" list="scenarioGroupOptions" />
                 </div>
+                <div class="col-md-6">
+                    <label class="form-label small br-muted">Basarili olursa hangi senaryoya gecilsin (opsiyonel)</label>
+                    <input class="form-control" id="newTaskSuccessScenario" placeholder="orn. Senaryo-B" list="scenarioGroupOptions" />
+                </div>
                 @if (mainTasks.Count > 0)
                 {
                     <div class="col-12">
@@ -541,6 +545,33 @@
                         <textarea class="form-control" rows="2" id="scenarioStepDescription"
                                   placeholder="Bu adimda ne yapilacak?"></textarea>
                     </div>
+                    <div class="col-12">
+                        <hr class="my-1" />
+                        <p class="small br-muted mb-2">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Bu senaryonun hangi durumda otomatik devreye girecegini belirlemek icin bir
+                            ana akis gorevine baglayin. Bagli gorev secilmezse plan dumduz akar; bu
+                            senaryo hicbir gorevin sonucuna otomatik baglanmaz, yalnizca yukaridaki
+                            "Senaryosuna Gec" butonuyla elle baslatilabilir.
+                        </p>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small br-muted">Bagli gorev (opsiyonel)</label>
+                        <select class="form-select" id="scenarioStepLinkedTask">
+                            <option value="">-- Secilmedi (elle baslatilir) --</option>
+                            @foreach (var candidate in mainTasks)
+                            {
+                                <option value="@candidate.Id">@candidate.Order. @candidate.Title</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-6" id="scenarioStepConditionWrap" hidden>
+                        <label class="form-label small br-muted">Bagli gorev su durumda olursa bu senaryoya gecilsin</label>
+                        <select class="form-select" id="scenarioStepCondition">
+                            <option value="Failure">Basarisiz olursa</option>
+                            <option value="Success">Basarili olursa</option>
+                        </select>
+                    </div>
                 </div>
                 <div class="mt-3 d-flex gap-2">
                     <button class="btn btn-primary btn-sm" id="btnAddScenarioStep"><i class="bi bi-check-lg me-1"></i>Ekle</button>
@@ -657,6 +688,10 @@
                     <div class="col-md-6" id="editTaskFailureScenarioWrap" hidden>
                         <label class="form-label small br-muted">Hangi senaryo</label>
                         <input class="form-control" id="editTaskFailureScenario" placeholder="orn. Senaryo-A" list="scenarioGroupOptions" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small br-muted">Basarili olursa hangi senaryoya gecilsin (opsiyonel)</label>
+                        <input class="form-control" id="editTaskSuccessScenario" placeholder="orn. Senaryo-B" list="scenarioGroupOptions" />
                     </div>
                     <div class="col-12">
                         <label class="form-label small br-muted">
@@ -920,6 +955,7 @@
             scenarioGroup = t.ScenarioGroup,
             failureAction = t.FailureAction.ToString(),
             failureScenarioGroup = t.FailureScenarioGroup,
+            successScenarioGroup = t.SuccessScenarioGroup,
             dependsOnTaskIds = t.Predecessors.Select(p => p.TaskId),
             assignmentIds = t.Assignments.Where(a => a.IsActive).Select(a => a.Id)
         }),

@@ -134,6 +134,35 @@
     }
 
     /**
+     * config.tasks'taki bir gorevin tum alanlarindan UpdateTask govdesi kurar;
+     * overrides ile yalnizca degistirilecek alanlar ustune yazilir. UpdateTask
+     * TUM alanlari degistirdiginden (kismi guncelleme degildir), tek bir alani
+     * (orn. senaryo baglantisi) degistirmek icin bile digerlerinin korunmasi
+     * gerekir - bu yuzden bulk renk degisikliginde ve senaryo-gorev baglamada
+     * ortak kullanilir.
+     */
+    function buildUpdateTaskPayload(task, overrides) {
+        return Object.assign({
+            title: task.title,
+            description: task.description || null,
+            priority: task.priority,
+            estimatedMinutes: task.estimatedMinutes,
+            plannedStart: task.plannedStart,
+            plannedEnd: task.plannedEnd,
+            dependsOnTaskIds: task.dependsOnTaskIds || [],
+            rollbackNotes: task.rollbackNotes || null,
+            scriptId: task.scriptId || null,
+            isOutageStep: task.isOutageStep,
+            plannedOutageMinutes: task.plannedOutageMinutes,
+            isRollbackStep: task.isRollbackStep,
+            scenarioGroup: task.scenarioGroup || null,
+            failureAction: task.failureAction || "None",
+            failureScenarioGroup: task.failureScenarioGroup || null,
+            successScenarioGroup: task.successScenarioGroup || null
+        }, overrides || {});
+    }
+
+    /**
      * Runbook'un planlanan araligi disinda bir deger secilmisse en yakin sinira
      * ceker. min/max HTML ozniteligi yalnizca tarayicinin KENDI tarih secicisine
      * ipucu verir; bu ekran native form submit KULLANMADIGINDAN (fetch ile JS
@@ -290,6 +319,7 @@
             const outageMinutes = document.getElementById("newTaskOutageMinutes").value;
             const failureAction = document.getElementById("newTaskFailureAction").value;
             const failureScenarioGroup = document.getElementById("newTaskFailureScenario").value.trim();
+            const successScenarioGroup = document.getElementById("newTaskSuccessScenario").value.trim();
             const dependsOnTaskIds = Array.from(document.querySelectorAll(".br-new-task-depends:checked"))
                 .map((el) => el.value);
 
@@ -312,7 +342,8 @@
                     isOutageStep: isOutage,
                     plannedOutageMinutes: isOutage && outageMinutes ? parseInt(outageMinutes, 10) : null,
                     failureAction: failureAction,
-                    failureScenarioGroup: failureAction === "SwitchToScenario" ? failureScenarioGroup : null
+                    failureScenarioGroup: failureAction === "SwitchToScenario" ? failureScenarioGroup : null,
+                    successScenarioGroup: successScenarioGroup || null
                 }, { id: config.runbookId });
 
                 if (selection.newTask.length > 0) {
@@ -389,6 +420,15 @@
 
     // -------------------------------------------------------------- senaryo plani
 
+    /** "Bagli gorev" secilince kosul (basarili/basarisiz) alanini gosterir/gizler. */
+    const scenarioLinkedTaskSelect = document.getElementById("scenarioStepLinkedTask");
+    const scenarioConditionWrap = document.getElementById("scenarioStepConditionWrap");
+    if (scenarioLinkedTaskSelect && scenarioConditionWrap) {
+        scenarioLinkedTaskSelect.addEventListener("change", () => {
+            scenarioConditionWrap.hidden = !scenarioLinkedTaskSelect.value;
+        });
+    }
+
     const addScenarioStepButton = document.getElementById("btnAddScenarioStep");
     if (addScenarioStepButton) {
         addScenarioStepButton.addEventListener("click", async () => {
@@ -404,6 +444,8 @@
             }
 
             const minutes = document.getElementById("scenarioStepMinutes").value;
+            const linkedTaskId = document.getElementById("scenarioStepLinkedTask").value;
+            const condition = document.getElementById("scenarioStepCondition").value;
 
             try {
                 await post("AddTask", {
@@ -413,6 +455,24 @@
                     estimatedMinutes: minutes ? parseInt(minutes, 10) : null,
                     scenarioGroup: scenarioGroup
                 }, { id: config.runbookId });
+
+                // Bagli gorev secildiyse, bu senaryoyu o gorevin basarili/basarisiz
+                // sonucuna baglar - kaynak gorevin UpdateTask ile tum alanlari
+                // korunarak, yalnizca ilgili tetikleyici alan(lar)i degistirilir.
+                if (linkedTaskId) {
+                    const linkedTask = (config.tasks || []).find((item) => item.id === linkedTaskId);
+                    if (linkedTask) {
+                        const overrides = condition === "Success"
+                            ? { successScenarioGroup: scenarioGroup }
+                            : { failureAction: "SwitchToScenario", failureScenarioGroup: scenarioGroup };
+
+                        try {
+                            await post("UpdateTask", buildUpdateTaskPayload(linkedTask, overrides), { taskId: linkedTaskId });
+                        } catch (linkError) {
+                            toast("Senaryo adimi eklendi ama gorev baglama basarisiz: " + linkError.message, "warning");
+                        }
+                    }
+                }
 
                 reload();
             } catch (error) {
@@ -533,6 +593,7 @@
             failureActionSelect.value = task.failureAction || "None";
             document.getElementById("editTaskFailureScenario").value = task.failureScenarioGroup || "";
             failureScenarioWrap.hidden = failureActionSelect.value !== "SwitchToScenario";
+            document.getElementById("editTaskSuccessScenario").value = task.successScenarioGroup || "";
 
             const startInput = document.getElementById("editTaskStart");
             const endInput = document.getElementById("editTaskEnd");
@@ -559,6 +620,7 @@
             const outageMinutes = document.getElementById("editTaskOutageMinutes").value;
             const failureAction = document.getElementById("editTaskFailureAction").value;
             const failureScenarioGroup = document.getElementById("editTaskFailureScenario").value.trim();
+            const successScenarioGroup = document.getElementById("editTaskSuccessScenario").value.trim();
             const dependsOnTaskIds = Array.from(document.querySelectorAll(".br-edit-task-depends:checked"))
                 .map((el) => el.value);
 
@@ -590,7 +652,8 @@
                     isRollbackStep: isRollbackStep,
                     scenarioGroup: scenarioGroup,
                     failureAction: failureAction,
-                    failureScenarioGroup: failureAction === "SwitchToScenario" ? failureScenarioGroup : null
+                    failureScenarioGroup: failureAction === "SwitchToScenario" ? failureScenarioGroup : null,
+                    successScenarioGroup: successScenarioGroup || null
                 }, { taskId: document.getElementById("editTaskId").value });
 
                 editTaskModal.hide();
@@ -932,6 +995,7 @@
             document.getElementById("newTaskFailureAction").value = "None";
             document.getElementById("newTaskFailureScenario").value = "";
             document.getElementById("newTaskFailureScenarioWrap").hidden = true;
+            document.getElementById("newTaskSuccessScenario").value = "";
         });
     }
 
@@ -1134,24 +1198,7 @@
                     return Promise.resolve();
                 }
 
-                return post("UpdateTask", {
-                    title: task.title,
-                    description: task.description || null,
-                    colorHex: color,
-                    priority: task.priority,
-                    estimatedMinutes: task.estimatedMinutes,
-                    plannedStart: task.plannedStart,
-                    plannedEnd: task.plannedEnd,
-                    dependsOnTaskIds: task.dependsOnTaskIds || [],
-                    rollbackNotes: task.rollbackNotes || null,
-                    scriptId: task.scriptId || null,
-                    isOutageStep: task.isOutageStep,
-                    plannedOutageMinutes: task.plannedOutageMinutes,
-                    isRollbackStep: task.isRollbackStep,
-                    scenarioGroup: task.scenarioGroup || null,
-                    failureAction: task.failureAction || "None",
-                    failureScenarioGroup: task.failureScenarioGroup || null
-                }, { taskId: id });
+                return post("UpdateTask", buildUpdateTaskPayload(task, { colorHex: color }), { taskId: id });
             }));
 
             const failed = results.filter((r) => r.status === "rejected").length;

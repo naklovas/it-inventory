@@ -63,6 +63,14 @@
                         </span>
                     }
 
+                    @if (!string.IsNullOrEmpty(t.SuccessScenarioGroup))
+                    {
+                        <span class="badge text-bg-success-subtle border border-success-subtle text-success-emphasis"
+                              title="Bu gorev basarili (Tamamlandi) olursa belirtilen senaryoya otomatik gecilir">
+                            <i class="bi bi-lightning-fill"></i> Basariliysa: @t.SuccessScenarioGroup
+                        </span>
+                    }
+
                     @if (t.Priority >= TaskPriority.High)
                     {
                         <span class="small br-priority-@t.Priority.ToString().ToLowerInvariant()">

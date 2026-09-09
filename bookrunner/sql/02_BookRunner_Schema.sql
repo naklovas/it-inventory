@@ -357,6 +357,7 @@ BEGIN
         [ScenarioGroup] nvarchar(100) NULL,
         [FailureAction] int NOT NULL,
         [FailureScenarioGroup] nvarchar(100) NULL,
+        [SuccessScenarioGroup] nvarchar(100) NULL,
         [ScriptId] uniqueidentifier NULL,
         [RollbackNotes] nvarchar(4000) NULL,
         [IsDeleted] bit NOT NULL,
@@ -435,6 +436,14 @@ GO
 IF COL_LENGTH(N'bookrunner.Tasks', 'FailureScenarioGroup') IS NULL
 BEGIN
     ALTER TABLE [bookrunner].[Tasks] ADD [FailureScenarioGroup] nvarchar(100) NULL;
+END
+GO
+
+-- Mevcut kurulumlarda Tasks tablosu "basarili olursa" senaryo hedefi olmadan
+-- olusturulmus olabilir (bkz. RunbookTask.SuccessScenarioGroup).
+IF COL_LENGTH(N'bookrunner.Tasks', 'SuccessScenarioGroup') IS NULL
+BEGIN
+    ALTER TABLE [bookrunner].[Tasks] ADD [SuccessScenarioGroup] nvarchar(100) NULL;
 END
 GO
 
@@ -1645,6 +1654,15 @@ BEGIN
     BEGIN
         INSERT INTO [bookrunner].[__EFMigrationsHistory] ([MigrationId], [ProductVersion])
         VALUES (N'20260909084838_AddTaskFailureAction', N'9.0.19');
+    END
+
+    IF NOT EXISTS (
+        SELECT 1 FROM [bookrunner].[__EFMigrationsHistory]
+        WHERE [MigrationId] = N'20260909113631_AddTaskSuccessScenario'
+    )
+    BEGIN
+        INSERT INTO [bookrunner].[__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+        VALUES (N'20260909113631_AddTaskSuccessScenario', N'9.0.19');
     END
 
     PRINT N'';
