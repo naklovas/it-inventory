@@ -103,13 +103,15 @@ kurulmasi onerilir - sunucu yeniden baslasa bile otomatik ayaga kalkar. Proje za
 (`builder.Services.AddWindowsService(...)` - `dotnet run` ile konsoldan calistirinca hicbir
 etkisi yok, sadece `sc create` ile servis olarak kurulunca devreye girer).
 
-Proje **net10.0** hedefler (guncel .NET LTS surumu). Sunucuya `dotnet-hosting-10.0.x`
-(ASP.NET Core Hosting Bundle) kurulduysa asagidaki **framework-dependent** yayin
-yeterlidir - daha kucuk cikti, sunucudaki ortak runtime'i kullanir:
+Proje **net8.0** hedefler (LTS, en genis Visual Studio/SDK uyumlulugu - net9.0/net10.0
+icin daha yeni bir VS surumu gerekir). Onerilen yontem **self-contained** yayindir - .NET
+runtime'i uygulamanin kendi klasorune gomer, sunucudaki hangi .NET surumu/Hosting Bundle
+kurulu olursa olsun (ya da hic kurulu olmasa da) calisir, ileride VS/SDK surum uyumsuzlugu
+yasanmaz:
 
 ```powershell
-# 1) Yayinla (framework-dependent - sunucuda .NET 10 Hosting Bundle kurulu olmali)
-dotnet publish -c Release -r win-x64 --self-contained false -o C:\Servisler\MailRelay
+# 1) Yayinla (self-contained - sunucuda ayrica .NET kurulu olmasina gerek yok)
+dotnet publish -c Release -r win-x64 --self-contained true -o C:\Servisler\MailRelay
 
 # 2) Windows Servisi olarak kaydet (Yonetici PowerShell)
 sc.exe create MailRelayService binPath= "C:\Servisler\MailRelay\MailRelay.Service.exe" start= auto
@@ -121,13 +123,12 @@ sc.exe stop MailRelayService
 sc.exe delete MailRelayService
 ```
 
-Hosting Bundle'i kurmak istemediginiz/kuramadiginiz bir sunucu icin alternatif olarak
-**self-contained** yayin da kullanilabilir - .NET runtime'i uygulamanin kendi klasorune
-gomer, sunucudaki ortak kuruluma hic dokunmaz, hicbir onkosul gerektirmez (sadece dosya
-boyutu daha buyuktur):
+Sunucuya **.NET 8** Hosting Bundle'i (`dotnet-hosting-8.0.x`, `dotnet-hosting-10.0.11`
+degil - surum eslesmezse ayni "compatible runtime not found" hatasi tekrar alinir)
+kurduysaniz framework-dependent yayin da kullanilabilir, daha kucuk cikti verir:
 
 ```powershell
-dotnet publish -c Release -r win-x64 --self-contained true -o C:\Servisler\MailRelay
+dotnet publish -c Release -r win-x64 --self-contained false -o C:\Servisler\MailRelay
 ```
 
 (2. adimdaki `sc.exe` komutlari her iki yayin turunde de aynidir.)
