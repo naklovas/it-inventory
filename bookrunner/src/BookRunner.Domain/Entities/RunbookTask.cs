@@ -74,6 +74,17 @@ public class RunbookTask : AuditableEntity, ISoftDeletable
     public string? ScenarioGroup { get; set; }
 
     /// <summary>
+    /// Yalnizca ScenarioGroup doluyken anlamlidir. Dolu ise, bu senaryo grubunun
+    /// TUM adimlari kapandiginda ana runbook bu gorevden (rejoin noktasi) devam
+    /// eder - senaryo gecici bir sapaktir. Bos ise senaryo TEK YONLUDUR: tum
+    /// adimlari kapaninca runbook orada biter (bkz. TaskService.ActivateScenario,
+    /// TaskService.TryAutoCompleteRunbookAsync). Ayni gruptaki adimlardan
+    /// herhangi birinde dolu deger yeterlidir - grubun tumune ayni degerin
+    /// kopyalanmasi gerekmez.
+    /// </summary>
+    public Guid? ScenarioRejoinTaskId { get; set; }
+
+    /// <summary>
     /// Bu gorev "Basarisiz" olarak isaretlendiginde otomatik tetiklenecek eylem.
     /// Operatorun ayrica "Geri Donus Adimlarini Baslat"/"X Senaryosuna Gec"
     /// butonuna basmasina gerek kalmaz (bkz. TaskService.ChangeStatusAsync).

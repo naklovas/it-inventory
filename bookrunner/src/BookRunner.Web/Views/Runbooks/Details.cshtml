@@ -478,6 +478,8 @@
     {
         var groupSteps = r.Tasks.Where(t => !t.IsRollbackStep && t.ScenarioGroup == groupName).OrderBy(t => t.Order).ToList();
         var isActiveGroup = r.ActiveScenarioGroup == groupName;
+        var rejoinTaskId = groupSteps.Select(s => s.ScenarioRejoinTaskId).FirstOrDefault(id => id.HasValue);
+        var rejoinTask = rejoinTaskId.HasValue ? r.Tasks.FirstOrDefault(t => t.Id == rejoinTaskId.Value) : null;
         <div class="br-card p-3 mb-3">
             <div class="d-flex justify-content-between align-items-center mb-2">
                 <h3 class="h6 mb-0">@groupName @if (isActiveGroup) { <span class="badge text-bg-info ms-1">Aktif</span> }</h3>
@@ -488,6 +490,16 @@
                     </button>
                 }
             </div>
+            <p class="small br-muted mb-2">
+                @if (rejoinTask is not null)
+                {
+                    <text><i class="bi bi-arrow-return-right me-1"></i>Bittiginde ana akista <strong>@rejoinTask.Order. @rejoinTask.Title</strong> gorevinden devam eder.</text>
+                }
+                else
+                {
+                    <text><i class="bi bi-info-circle me-1"></i>Tek yonlu senaryo: tum adimlar tamamlaninca runbook burada sona erer.</text>
+                }
+            </p>
             <div class="br-scenario-task-list" data-scenario-group="@groupName" data-sortable="@Model.CanEditThis.ToString().ToLowerInvariant()">
                 @foreach (var step in groupSteps)
                 {
@@ -570,6 +582,23 @@
                         <select class="form-select" id="scenarioStepCondition">
                             <option value="Failure">Basarisiz olursa</option>
                             <option value="Success">Basarili olursa</option>
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <p class="small br-muted mb-2">
+                            <i class="bi bi-signpost-split me-1"></i>
+                            Bu senaryo TUM adimlariyla tamamlaninca ana runbook nereden devam etsin?
+                            Secilmezse senaryo tek yonludur - biterse runbook orada sona erer.
+                        </p>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small br-muted">Bittiginde ana runbook'ta devam edilecek gorev (opsiyonel)</label>
+                        <select class="form-select" id="scenarioStepRejoinTask">
+                            <option value="">-- Secilmedi (tek yonlu, runbook'u bitirir) --</option>
+                            @foreach (var candidate in mainTasks)
+                            {
+                                <option value="@candidate.Id">@candidate.Order. @candidate.Title</option>
+                            }
                         </select>
                     </div>
                 </div>
@@ -692,6 +721,18 @@
                     <div class="col-12">
                         <label class="form-label small br-muted">Basarili olursa hangi senaryoya gecilsin (opsiyonel)</label>
                         <input class="form-control" id="editTaskSuccessScenario" placeholder="orn. Senaryo-B" list="scenarioGroupOptions" />
+                    </div>
+                    <div class="col-12" id="editTaskRejoinWrap" hidden>
+                        <label class="form-label small br-muted">
+                            Bu senaryo grubu tamamlaninca ana runbook'ta devam edilecek gorev (opsiyonel)
+                        </label>
+                        <select class="form-select" id="editTaskRejoinTask">
+                            <option value="">-- Secilmedi (tek yonlu, runbook'u bitirir) --</option>
+                            @foreach (var candidate in mainTasks)
+                            {
+                                <option value="@candidate.Id">@candidate.Order. @candidate.Title</option>
+                            }
+                        </select>
                     </div>
                     <div class="col-12">
                         <label class="form-label small br-muted">
@@ -956,6 +997,7 @@
             failureAction = t.FailureAction.ToString(),
             failureScenarioGroup = t.FailureScenarioGroup,
             successScenarioGroup = t.SuccessScenarioGroup,
+            scenarioRejoinTaskId = t.ScenarioRejoinTaskId,
             dependsOnTaskIds = t.Predecessors.Select(p => p.TaskId),
             assignmentIds = t.Assignments.Where(a => a.IsActive).Select(a => a.Id)
         }),

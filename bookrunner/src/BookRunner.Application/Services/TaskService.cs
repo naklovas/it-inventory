@@ -45,6 +45,11 @@ public sealed class TaskService(
         ValidateTaskPlannedRange(runbook, request.PlannedStart, request.PlannedEnd);
 
         var scenarioGroup = string.IsNullOrWhiteSpace(request.ScenarioGroup) ? null : request.ScenarioGroup.Trim();
+        var scenarioRejoinTaskId = scenarioGroup is not null ? request.ScenarioRejoinTaskId : null;
+        if (scenarioRejoinTaskId.HasValue)
+        {
+            await ValidateScenarioRejoinTaskAsync(runbookId, scenarioRejoinTaskId.Value, ct);
+        }
 
         // Ana akis, geri donus adimlari ve her senaryo grubu ayri listeler olarak
         // numaralanir (bkz. RunbookTask.IsRollbackStep, RunbookTask.ScenarioGroup) -
@@ -82,6 +87,7 @@ public sealed class TaskService(
             PlannedOutageMinutes = request.IsOutageStep ? request.PlannedOutageMinutes : null,
             IsRollbackStep = request.IsRollbackStep,
             ScenarioGroup = scenarioGroup,
+            ScenarioRejoinTaskId = scenarioRejoinTaskId,
             FailureAction = request.FailureAction,
             FailureScenarioGroup = request.FailureAction == TaskFailureAction.SwitchToScenario
                 ? request.FailureScenarioGroup?.Trim()
@@ -161,6 +167,12 @@ public sealed class TaskService(
         }
         task.IsRollbackStep = request.IsRollbackStep;
         task.ScenarioGroup = string.IsNullOrWhiteSpace(request.ScenarioGroup) ? null : request.ScenarioGroup.Trim();
+        var scenarioRejoinTaskId = task.ScenarioGroup is not null ? request.ScenarioRejoinTaskId : null;
+        if (scenarioRejoinTaskId.HasValue)
+        {
+            await ValidateScenarioRejoinTaskAsync(task.RunbookId, scenarioRejoinTaskId.Value, ct);
+        }
+        task.ScenarioRejoinTaskId = scenarioRejoinTaskId;
         task.FailureAction = request.FailureAction;
         task.FailureScenarioGroup = request.FailureAction == TaskFailureAction.SwitchToScenario
             ? request.FailureScenarioGroup?.Trim()
@@ -536,18 +548,36 @@ public sealed class TaskService(
             .OrderBy(t => t.Order)
             .ToList();
 
+        // Senaryo grubunun rejoin noktasi (bkz. RunbookTask.ScenarioRejoinTaskId):
+        // gruptaki herhangi bir adimda dolu olmasi yeterlidir, tumune kopyalanmasi
+        // gerekmez.
+        var rejoinTaskId = scenarioSteps.Select(t => t.ScenarioRejoinTaskId).FirstOrDefault(id => id.HasValue);
+        var rejoinOrder = rejoinTaskId.HasValue
+            ? tasks.FirstOrDefault(t => t.Id == rejoinTaskId.Value)?.Order
+            : null;
+
         // Senaryo secilmeden once izlenen ana akis (ScenarioGroup bos) - gecis
         // yalnizca ana akistan yapilabilir, bir senaryodan digerine degil.
         var mainTasks = tasks.Where(t => !t.IsRollbackStep && t.ScenarioGroup == null).ToList();
 
         var now = DateTimeOffset.UtcNow;
 
+        // Rejoin noktasi tanimliysa yalnizca ONDAN ONCEKI acik ana akis gorevleri
+        // Atlandi olur; rejoin noktasi ve sonrasina DOKUNULMAZ - senaryo bitince
+        // oradan kaldigi yerden devam edilebilsin diye (bkz.
+        // TryAutoCompleteRunbookAsync). Rejoin noktasi tanimli degilse (tek yonlu
+        // dal) TUM acik ana akis gorevleri Atlandi olur - eski davranis.
+        //
         // Yalnizca gercekten "acik" (Bekliyor/Devam Eden/Bloke) gorevler Atlandi
         // olur. IsClosed() (Tamamlandi/Atlandi/N-A) burada YETERLI DEGIL - Failed
         // de kapanmis sayilmalidir, aksi halde bu dongu az once "Basarisiz"
         // isaretlenmis (senaryoyu tetikleyen) gorevin durumunu sessizce
         // "Atlandi"ya cevirip asil sebebi gizlerdi.
-        foreach (var task in mainTasks.Where(t => t.Status is RunbookTaskStatus.NotStarted or RunbookTaskStatus.InProgress or RunbookTaskStatus.Blocked))
+        var tasksToSkip = mainTasks.Where(t =>
+            t.Status is RunbookTaskStatus.NotStarted or RunbookTaskStatus.InProgress or RunbookTaskStatus.Blocked
+            && (rejoinOrder is null || t.Order < rejoinOrder.Value));
+
+        foreach (var task in tasksToSkip)
         {
             var oldStatus = task.Status;
             task.Status = RunbookTaskStatus.Skipped;
@@ -733,6 +763,30 @@ public sealed class TaskService(
     }
 
     /// <summary>
+    /// Bir senaryo adiminin rejoin noktasinin (ScenarioRejoinTaskId) gecerli
+    /// olup olmadigini dogrular: hedef, ayni runbook'ta ve ANA AKISTA (geri
+    /// donus adimi degil, baska bir senaryonun parcasi degil) olmalidir -
+    /// aksi halde senaryo bitince nereye donulecegi belirsiz/anlamsiz olurdu.
+    /// </summary>
+    private async Task ValidateScenarioRejoinTaskAsync(Guid runbookId, Guid rejoinTaskId, CancellationToken ct)
+    {
+        var target = await db.Tasks
+            .Where(t => t.Id == rejoinTaskId && t.RunbookId == runbookId)
+            .Select(t => new { t.IsRollbackStep, t.ScenarioGroup })
+            .FirstOrDefaultAsync(ct);
+
+        if (target is null)
+        {
+            throw new NotFoundException("Gorev", rejoinTaskId);
+        }
+
+        if (target.IsRollbackStep || target.ScenarioGroup is not null)
+        {
+            throw new BusinessRuleException("Senaryo bitince devam edilecek gorev ana akista olmalidir.");
+        }
+    }
+
+    /// <summary>
     /// Secilen oncul kimliklerinin gecerliligini (kendine referans yok, ayni
     /// runbook icinde) ve bu degisikligin bagimlilik dongusu olusturmadigini
     /// dogrular. Hem CreateAsync (henuz kaydedilmemis ama Id'si atanmis yeni
@@ -899,17 +953,51 @@ public sealed class TaskService(
         // senaryodan tetiklendigi onemsizdir - geri donus listesi senaryolardan
         // bagimsizdir); degilse ana akis (ActiveScenarioGroup bos) veya aktive
         // edilmis senaryonun kendi adimlari.
-        var taskStatuses = runbook.IsRollbackActive
-            ? await db.Tasks
+        List<RunbookTaskStatus> taskStatuses;
+        Guid? scenarioRejoinTaskId = null;
+
+        if (runbook.IsRollbackActive)
+        {
+            taskStatuses = await db.Tasks
                 .Where(t => t.RunbookId == runbookId && t.IsRollbackStep)
                 .Select(t => t.Status)
-                .ToListAsync(ct)
-            : await db.Tasks
+                .ToListAsync(ct);
+        }
+        else if (!string.IsNullOrEmpty(runbook.ActiveScenarioGroup))
+        {
+            var scenarioTasks = await db.Tasks
                 .Where(t => t.RunbookId == runbookId && !t.IsRollbackStep && t.ScenarioGroup == runbook.ActiveScenarioGroup)
+                .Select(t => new { t.Status, t.ScenarioRejoinTaskId })
+                .ToListAsync(ct);
+            taskStatuses = scenarioTasks.Select(t => t.Status).ToList();
+            scenarioRejoinTaskId = scenarioTasks.Select(t => t.ScenarioRejoinTaskId).FirstOrDefault(id => id.HasValue);
+        }
+        else
+        {
+            taskStatuses = await db.Tasks
+                .Where(t => t.RunbookId == runbookId && !t.IsRollbackStep && t.ScenarioGroup == null)
                 .Select(t => t.Status)
                 .ToListAsync(ct);
+        }
+
         if (taskStatuses.Count == 0 || taskStatuses.Any(status => !status.IsClosed()))
         {
+            return;
+        }
+
+        if (scenarioRejoinTaskId.HasValue)
+        {
+            // Senaryo tek yonlu degil: tum adimlari kapandi ama runbook burada
+            // bitmiyor, rejoin noktasindan (ve sonrasindan) ana akisa devam
+            // ediliyor. Bu adim/sonrasi hic Atlandi yapilmamisti (bkz.
+            // ActivateScenario), o yuzden burada baska bir sey yapmaya gerek yok -
+            // yalnizca senaryo bayragi kaldirilir ki bir sonraki durum
+            // degisikliginde bu metot ana akisi degerlendirsin.
+            runbook.ActiveScenarioGroup = null;
+            await db.SaveChangesAsync(ct);
+            await audit.LogAsync(AuditAction.Update, nameof(Runbook), runbook.Id.ToString(),
+                "Senaryo tamamlandigi icin ana akisa geri donuldu.", runbook.Id, ct: ct);
+            await realtime.RunbookChangedAsync(runbook.Id, "scenario-rejoined", ct);
             return;
         }
 

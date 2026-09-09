@@ -121,6 +121,7 @@ public static class Mapping
         FailureAction = task.FailureAction,
         FailureScenarioGroup = task.FailureScenarioGroup,
         SuccessScenarioGroup = task.SuccessScenarioGroup,
+        ScenarioRejoinTaskId = task.ScenarioRejoinTaskId,
         Predecessors = task.Predecessors
             .OrderBy(d => d.DependsOnTask.Order)
             .Select(d => new TaskDependencyRefDto

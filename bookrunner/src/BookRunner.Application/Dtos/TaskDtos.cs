@@ -44,6 +44,11 @@ public sealed record RunbookTaskDto
     /// alternatif senaryonun parcasidir.</summary>
     public string? ScenarioGroup { get; init; }
 
+    /// <summary>Yalnizca ScenarioGroup doluyken anlamlidir. Dolu ise, bu senaryo
+    /// grubu tum adimlariyla kapandiginda ana runbook'un devam edecegi gorev
+    /// (rejoin noktasi). Bos ise senaryo tek yonludur - biterse runbook orada sona erer.</summary>
+    public Guid? ScenarioRejoinTaskId { get; init; }
+
     /// <summary>Bu gorev "Basarisiz" olursa otomatik tetiklenecek eylem.</summary>
     public TaskFailureAction FailureAction { get; init; }
 
@@ -181,6 +186,10 @@ public sealed record CreateTaskRequest
     [StringLength(100)]
     public string? ScenarioGroup { get; init; }
 
+    /// <summary>Yalnizca ScenarioGroup doluyken anlamlidir: bu senaryo grubu tum
+    /// adimlariyla kapandiginda ana runbook'un devam edecegi gorev (rejoin noktasi).</summary>
+    public Guid? ScenarioRejoinTaskId { get; init; }
+
     /// <summary>Bu gorev "Basarisiz" olursa otomatik tetiklenecek eylem.</summary>
     public TaskFailureAction FailureAction { get; init; } = TaskFailureAction.None;
 
@@ -236,6 +245,10 @@ public sealed record UpdateTaskRequest
     /// o isimdeki alternatif senaryoya eklenir.</summary>
     [StringLength(100)]
     public string? ScenarioGroup { get; init; }
+
+    /// <summary>Yalnizca ScenarioGroup doluyken anlamlidir: bu senaryo grubu tum
+    /// adimlariyla kapandiginda ana runbook'un devam edecegi gorev (rejoin noktasi).</summary>
+    public Guid? ScenarioRejoinTaskId { get; init; }
 
     /// <summary>Bu gorev "Basarisiz" olursa otomatik tetiklenecek eylem.</summary>
     public TaskFailureAction FailureAction { get; init; } = TaskFailureAction.None;

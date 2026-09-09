@@ -675,6 +675,16 @@ public sealed class RunbookService(
                     db.TaskDependencies.Add(new TaskDependency { TaskId = copy.Id, DependsOnTaskId = newDependsOnId });
                 }
             }
+
+            // ScenarioRejoinTaskId eski runbook'taki bir gorevi isaret eder;
+            // TaskDependency ile ayni sebepten (Id'ler kopyalanirken yeniden
+            // uretilir) yeni Id'ye cevrilmesi gerekir, aksi halde kopyalanan
+            // runbook'ta var olmayan/yanlis bir goreve isaret ederdi.
+            if (source.ScenarioRejoinTaskId.HasValue &&
+                idMap.TryGetValue(source.ScenarioRejoinTaskId.Value, out var newRejoinTaskId))
+            {
+                copy.ScenarioRejoinTaskId = newRejoinTaskId;
+            }
         }
     }
 

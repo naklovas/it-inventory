@@ -380,6 +380,7 @@ BEGIN
         [ActualOutageMinutes] int NULL,
         [IsRollbackStep] bit NOT NULL,
         [ScenarioGroup] nvarchar(100) NULL,
+        [ScenarioRejoinTaskId] uniqueidentifier NULL,
         [FailureAction] int NOT NULL,
         [FailureScenarioGroup] nvarchar(100) NULL,
         [SuccessScenarioGroup] nvarchar(100) NULL,
@@ -447,6 +448,14 @@ GO
 IF COL_LENGTH(N'bookrunner.Tasks', 'ScenarioGroup') IS NULL
 BEGIN
     ALTER TABLE [bookrunner].[Tasks] ADD [ScenarioGroup] nvarchar(100) NULL;
+END
+GO
+
+-- Mevcut kurulumlarda Tasks tablosu senaryo rejoin noktasi olmadan
+-- olusturulmus olabilir (bkz. RunbookTask.ScenarioRejoinTaskId).
+IF COL_LENGTH(N'bookrunner.Tasks', 'ScenarioRejoinTaskId') IS NULL
+BEGIN
+    ALTER TABLE [bookrunner].[Tasks] ADD [ScenarioRejoinTaskId] uniqueidentifier NULL;
 END
 GO
 
@@ -1688,6 +1697,15 @@ BEGIN
     BEGIN
         INSERT INTO [bookrunner].[__EFMigrationsHistory] ([MigrationId], [ProductVersion])
         VALUES (N'20260909113631_AddTaskSuccessScenario', N'9.0.19');
+    END
+
+    IF NOT EXISTS (
+        SELECT 1 FROM [bookrunner].[__EFMigrationsHistory]
+        WHERE [MigrationId] = N'20260909123908_AddScenarioRejoin'
+    )
+    BEGIN
+        INSERT INTO [bookrunner].[__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+        VALUES (N'20260909123908_AddScenarioRejoin', N'9.0.19');
     END
 
     PRINT N'';

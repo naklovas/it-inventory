@@ -156,6 +156,7 @@
             plannedOutageMinutes: task.plannedOutageMinutes,
             isRollbackStep: task.isRollbackStep,
             scenarioGroup: task.scenarioGroup || null,
+            scenarioRejoinTaskId: task.scenarioRejoinTaskId || null,
             failureAction: task.failureAction || "None",
             failureScenarioGroup: task.failureScenarioGroup || null,
             successScenarioGroup: task.successScenarioGroup || null
@@ -446,6 +447,7 @@
             const minutes = document.getElementById("scenarioStepMinutes").value;
             const linkedTaskId = document.getElementById("scenarioStepLinkedTask").value;
             const condition = document.getElementById("scenarioStepCondition").value;
+            const rejoinTaskId = document.getElementById("scenarioStepRejoinTask").value;
 
             try {
                 await post("AddTask", {
@@ -453,7 +455,8 @@
                     description: document.getElementById("scenarioStepDescription").value || null,
                     priority: document.getElementById("scenarioStepPriority").value,
                     estimatedMinutes: minutes ? parseInt(minutes, 10) : null,
-                    scenarioGroup: scenarioGroup
+                    scenarioGroup: scenarioGroup,
+                    scenarioRejoinTaskId: rejoinTaskId || null
                 }, { id: config.runbookId });
 
                 // Bagli gorev secildiyse, bu senaryoyu o gorevin basarili/basarisiz
@@ -595,6 +598,12 @@
             failureScenarioWrap.hidden = failureActionSelect.value !== "SwitchToScenario";
             document.getElementById("editTaskSuccessScenario").value = task.successScenarioGroup || "";
 
+            // Rejoin secimi yalnizca senaryo adimlari icin anlamlidir (ScenarioGroup
+            // doluysa) - ana akis/geri donus gorevlerinde gizlenir.
+            const rejoinWrap = document.getElementById("editTaskRejoinWrap");
+            rejoinWrap.hidden = !task.scenarioGroup;
+            document.getElementById("editTaskRejoinTask").value = task.scenarioRejoinTaskId || "";
+
             const startInput = document.getElementById("editTaskStart");
             const endInput = document.getElementById("editTaskEnd");
             startInput.value = toLocalInputValue(task.plannedStart);
@@ -621,6 +630,7 @@
             const failureAction = document.getElementById("editTaskFailureAction").value;
             const failureScenarioGroup = document.getElementById("editTaskFailureScenario").value.trim();
             const successScenarioGroup = document.getElementById("editTaskSuccessScenario").value.trim();
+            const rejoinTaskId = document.getElementById("editTaskRejoinTask").value;
             const dependsOnTaskIds = Array.from(document.querySelectorAll(".br-edit-task-depends:checked"))
                 .map((el) => el.value);
 
@@ -651,6 +661,7 @@
                     plannedOutageMinutes: isOutage && outageMinutes ? parseInt(outageMinutes, 10) : null,
                     isRollbackStep: isRollbackStep,
                     scenarioGroup: scenarioGroup,
+                    scenarioRejoinTaskId: scenarioGroup ? (rejoinTaskId || null) : null,
                     failureAction: failureAction,
                     failureScenarioGroup: failureAction === "SwitchToScenario" ? failureScenarioGroup : null,
                     successScenarioGroup: successScenarioGroup || null
