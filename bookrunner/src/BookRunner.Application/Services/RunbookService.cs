@@ -693,7 +693,9 @@ public sealed class RunbookService(
             IsOutageStep = source.IsOutageStep,
             PlannedOutageMinutes = source.PlannedOutageMinutes,
             IsRollbackStep = source.IsRollbackStep,
-            ScenarioGroup = source.ScenarioGroup
+            ScenarioGroup = source.ScenarioGroup,
+            FailureAction = source.FailureAction,
+            FailureScenarioGroup = source.FailureScenarioGroup
         };
 
         if (copyAssignments)

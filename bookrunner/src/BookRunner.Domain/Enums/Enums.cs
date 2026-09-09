@@ -34,6 +34,22 @@ public enum TaskPriority
     Critical = 3
 }
 
+/// <summary>
+/// Bir gorev "Basarisiz" olarak isaretlendiginde otomatik tetiklenecek eylem
+/// (bkz. RunbookTask.FailureAction). Operatorun ayrica "Geri Donus Adimlarini
+/// Baslat"/"X Senaryosuna Gec" butonuna basmasina gerek kalmadan, gorev bazinda
+/// tanimlanan davranis kendiliginden calisir.
+/// </summary>
+public enum TaskFailureAction
+{
+    /// <summary>Bu gorev basarisiz olursa otomatik bir eylem tetiklenmez.</summary>
+    None = 0,
+    /// <summary>Bu gorev basarisiz olursa geri donus plani otomatik baslatilir (tanimli geri donus adimi varsa).</summary>
+    StartRollback = 1,
+    /// <summary>Bu gorev basarisiz olursa RunbookTask.FailureScenarioGroup'ta belirtilen senaryoya otomatik gecilir.</summary>
+    SwitchToScenario = 2
+}
+
 /// <summary>Bir gorevin kisiye mi yoksa AD grubuna mi atandigi.</summary>
 public enum AssigneeType
 {

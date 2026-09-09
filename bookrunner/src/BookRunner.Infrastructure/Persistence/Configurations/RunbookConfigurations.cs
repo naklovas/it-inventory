@@ -65,6 +65,8 @@ public sealed class RunbookTaskConfiguration : IEntityTypeConfiguration<RunbookT
         builder.Property(t => t.RollbackNotes).HasMaxLength(4000);
         builder.Property(t => t.CompletionNote).HasMaxLength(2000);
         builder.Property(t => t.ScenarioGroup).HasMaxLength(100);
+        builder.Property(t => t.FailureAction).HasConversion<int>();
+        builder.Property(t => t.FailureScenarioGroup).HasMaxLength(100);
         builder.Property(t => t.CreatedBy).HasMaxLength(256).IsRequired();
         builder.Property(t => t.UpdatedBy).HasMaxLength(256);
         builder.Property(t => t.DeletedBy).HasMaxLength(256);

@@ -44,6 +44,12 @@ public sealed record RunbookTaskDto
     /// alternatif senaryonun parcasidir.</summary>
     public string? ScenarioGroup { get; init; }
 
+    /// <summary>Bu gorev "Basarisiz" olursa otomatik tetiklenecek eylem.</summary>
+    public TaskFailureAction FailureAction { get; init; }
+
+    /// <summary>FailureAction = SwitchToScenario oldugunda otomatik gecilecek senaryo grubu.</summary>
+    public string? FailureScenarioGroup { get; init; }
+
     /// <summary>Bu gorevin oncelleri (bu gorev baslamadan/tamamlanmadan once kapanmasi gerekenler).</summary>
     public IReadOnlyList<TaskDependencyRefDto> Predecessors { get; init; } = Array.Empty<TaskDependencyRefDto>();
 
@@ -169,6 +175,13 @@ public sealed record CreateTaskRequest
     [StringLength(100)]
     public string? ScenarioGroup { get; init; }
 
+    /// <summary>Bu gorev "Basarisiz" olursa otomatik tetiklenecek eylem.</summary>
+    public TaskFailureAction FailureAction { get; init; } = TaskFailureAction.None;
+
+    /// <summary>FailureAction = SwitchToScenario oldugunda otomatik gecilecek senaryo grubu.</summary>
+    [StringLength(100)]
+    public string? FailureScenarioGroup { get; init; }
+
     /// <summary>Bos birakilirsa gorev listenin sonuna eklenir.</summary>
     public int? Order { get; init; }
 }
@@ -213,6 +226,13 @@ public sealed record UpdateTaskRequest
     /// o isimdeki alternatif senaryoya eklenir.</summary>
     [StringLength(100)]
     public string? ScenarioGroup { get; init; }
+
+    /// <summary>Bu gorev "Basarisiz" olursa otomatik tetiklenecek eylem.</summary>
+    public TaskFailureAction FailureAction { get; init; } = TaskFailureAction.None;
+
+    /// <summary>FailureAction = SwitchToScenario oldugunda otomatik gecilecek senaryo grubu.</summary>
+    [StringLength(100)]
+    public string? FailureScenarioGroup { get; init; }
 
     public Guid? ScriptId { get; init; }
 }

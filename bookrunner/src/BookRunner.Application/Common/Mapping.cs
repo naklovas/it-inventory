@@ -118,6 +118,8 @@ public static class Mapping
         ActualOutageMinutes = task.ActualOutageMinutes,
         IsRollbackStep = task.IsRollbackStep,
         ScenarioGroup = task.ScenarioGroup,
+        FailureAction = task.FailureAction,
+        FailureScenarioGroup = task.FailureScenarioGroup,
         Predecessors = task.Predecessors
             .OrderBy(d => d.DependsOnTask.Order)
             .Select(d => new TaskDependencyRefDto

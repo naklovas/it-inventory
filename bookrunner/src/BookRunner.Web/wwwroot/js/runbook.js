@@ -258,6 +258,22 @@
     wireOutageToggle("newTaskOutage", "newTaskOutageMinutesWrap");
     wireOutageToggle("editTaskOutage", "editTaskOutageMinutesWrap");
 
+    /** "Basarisiz olursa" secimi "Senaryoya gec" oldugunda hedef senaryo alanini gosterir/gizler. */
+    function wireFailureActionToggle(selectId, wrapId) {
+        const select = document.getElementById(selectId);
+        const wrap = document.getElementById(wrapId);
+        if (!select || !wrap) {
+            return;
+        }
+
+        const sync = () => { wrap.hidden = select.value !== "SwitchToScenario"; };
+        select.addEventListener("change", sync);
+        sync();
+    }
+
+    wireFailureActionToggle("newTaskFailureAction", "newTaskFailureScenarioWrap");
+    wireFailureActionToggle("editTaskFailureAction", "editTaskFailureScenarioWrap");
+
     // ------------------------------------------------------------ gorev ekleme
 
     const addTaskButton = document.getElementById("btnAddTask");
@@ -272,8 +288,15 @@
             const minutes = document.getElementById("newTaskMinutes").value;
             const isOutage = document.getElementById("newTaskOutage").checked;
             const outageMinutes = document.getElementById("newTaskOutageMinutes").value;
+            const failureAction = document.getElementById("newTaskFailureAction").value;
+            const failureScenarioGroup = document.getElementById("newTaskFailureScenario").value.trim();
             const dependsOnTaskIds = Array.from(document.querySelectorAll(".br-new-task-depends:checked"))
                 .map((el) => el.value);
+
+            if (failureAction === "SwitchToScenario" && !failureScenarioGroup) {
+                toast("Basarisiz olursa gecilecek senaryonun adini girin.", "warning");
+                return;
+            }
 
             try {
                 const created = await post("AddTask", {
@@ -287,7 +310,9 @@
                     dependsOnTaskIds: dependsOnTaskIds,
                     rollbackNotes: document.getElementById("newTaskRollback").value || null,
                     isOutageStep: isOutage,
-                    plannedOutageMinutes: isOutage && outageMinutes ? parseInt(outageMinutes, 10) : null
+                    plannedOutageMinutes: isOutage && outageMinutes ? parseInt(outageMinutes, 10) : null,
+                    failureAction: failureAction,
+                    failureScenarioGroup: failureAction === "SwitchToScenario" ? failureScenarioGroup : null
                 }, { id: config.runbookId });
 
                 if (selection.newTask.length > 0) {
@@ -503,6 +528,12 @@
             outageWrap.hidden = !task.isOutageStep;
             document.getElementById("editTaskOutageMinutes").value = task.plannedOutageMinutes || "";
 
+            const failureActionSelect = document.getElementById("editTaskFailureAction");
+            const failureScenarioWrap = document.getElementById("editTaskFailureScenarioWrap");
+            failureActionSelect.value = task.failureAction || "None";
+            document.getElementById("editTaskFailureScenario").value = task.failureScenarioGroup || "";
+            failureScenarioWrap.hidden = failureActionSelect.value !== "SwitchToScenario";
+
             const startInput = document.getElementById("editTaskStart");
             const endInput = document.getElementById("editTaskEnd");
             startInput.value = toLocalInputValue(task.plannedStart);
@@ -526,8 +557,15 @@
             const minutes = document.getElementById("editTaskMinutes").value;
             const isOutage = document.getElementById("editTaskOutage").checked;
             const outageMinutes = document.getElementById("editTaskOutageMinutes").value;
+            const failureAction = document.getElementById("editTaskFailureAction").value;
+            const failureScenarioGroup = document.getElementById("editTaskFailureScenario").value.trim();
             const dependsOnTaskIds = Array.from(document.querySelectorAll(".br-edit-task-depends:checked"))
                 .map((el) => el.value);
+
+            if (failureAction === "SwitchToScenario" && !failureScenarioGroup) {
+                toast("Basarisiz olursa gecilecek senaryonun adini girin.", "warning");
+                return;
+            }
 
             // UpdateTask butun alanlari degistirir; bu form geri donus bayragini/
             // senaryo grubunu gostermez, o yuzden mevcut degerleri config.tasks'tan
@@ -550,7 +588,9 @@
                     isOutageStep: isOutage,
                     plannedOutageMinutes: isOutage && outageMinutes ? parseInt(outageMinutes, 10) : null,
                     isRollbackStep: isRollbackStep,
-                    scenarioGroup: scenarioGroup
+                    scenarioGroup: scenarioGroup,
+                    failureAction: failureAction,
+                    failureScenarioGroup: failureAction === "SwitchToScenario" ? failureScenarioGroup : null
                 }, { taskId: document.getElementById("editTaskId").value });
 
                 editTaskModal.hide();
@@ -889,6 +929,9 @@
             document.querySelectorAll(".br-new-task-depends:checked").forEach((el) => { el.checked = false; });
             document.getElementById("newTaskOutage").checked = false;
             document.getElementById("newTaskOutageMinutesWrap").hidden = true;
+            document.getElementById("newTaskFailureAction").value = "None";
+            document.getElementById("newTaskFailureScenario").value = "";
+            document.getElementById("newTaskFailureScenarioWrap").hidden = true;
         });
     }
 
@@ -1105,7 +1148,9 @@
                     isOutageStep: task.isOutageStep,
                     plannedOutageMinutes: task.plannedOutageMinutes,
                     isRollbackStep: task.isRollbackStep,
-                    scenarioGroup: task.scenarioGroup || null
+                    scenarioGroup: task.scenarioGroup || null,
+                    failureAction: task.failureAction || "None",
+                    failureScenarioGroup: task.failureScenarioGroup || null
                 }, { taskId: id });
             }));
 

@@ -297,6 +297,18 @@
                     <label class="form-label small br-muted">Planlanan kesinti (dk)</label>
                     <input class="form-control" type="number" min="0" id="newTaskOutageMinutes" />
                 </div>
+                <div class="col-md-4">
+                    <label class="form-label small br-muted">Basarisiz olursa</label>
+                    <select class="form-select" id="newTaskFailureAction">
+                        <option value="None" selected>Otomatik eylem yok</option>
+                        <option value="StartRollback">Geri donus planini otomatik baslat</option>
+                        <option value="SwitchToScenario">Bir senaryoya otomatik gec</option>
+                    </select>
+                </div>
+                <div class="col-md-4" id="newTaskFailureScenarioWrap" hidden>
+                    <label class="form-label small br-muted">Hangi senaryo</label>
+                    <input class="form-control" id="newTaskFailureScenario" placeholder="orn. Senaryo-A" list="scenarioGroupOptions" />
+                </div>
                 @if (mainTasks.Count > 0)
                 {
                     <div class="col-12">
@@ -634,6 +646,18 @@
                         <label class="form-label small br-muted">Planlanan kesinti (dk)</label>
                         <input class="form-control" type="number" min="0" id="editTaskOutageMinutes" />
                     </div>
+                    <div class="col-md-6">
+                        <label class="form-label small br-muted">Basarisiz olursa</label>
+                        <select class="form-select" id="editTaskFailureAction">
+                            <option value="None">Otomatik eylem yok</option>
+                            <option value="StartRollback">Geri donus planini otomatik baslat</option>
+                            <option value="SwitchToScenario">Bir senaryoya otomatik gec</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6" id="editTaskFailureScenarioWrap" hidden>
+                        <label class="form-label small br-muted">Hangi senaryo</label>
+                        <input class="form-control" id="editTaskFailureScenario" placeholder="orn. Senaryo-A" list="scenarioGroupOptions" />
+                    </div>
                     <div class="col-12">
                         <label class="form-label small br-muted">
                             Oncul gorevler (bu gorev, secilenler kapanmadan baslatilamaz/tamamlanamaz)
@@ -894,6 +918,8 @@
             plannedOutageMinutes = t.PlannedOutageMinutes,
             isRollbackStep = t.IsRollbackStep,
             scenarioGroup = t.ScenarioGroup,
+            failureAction = t.FailureAction.ToString(),
+            failureScenarioGroup = t.FailureScenarioGroup,
             dependsOnTaskIds = t.Predecessors.Select(p => p.TaskId),
             assignmentIds = t.Assignments.Where(a => a.IsActive).Select(a => a.Id)
         }),

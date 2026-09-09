@@ -380,6 +380,8 @@ BEGIN
         [ActualOutageMinutes] int NULL,
         [IsRollbackStep] bit NOT NULL,
         [ScenarioGroup] nvarchar(100) NULL,
+        [FailureAction] int NOT NULL,
+        [FailureScenarioGroup] nvarchar(100) NULL,
         [ScriptId] uniqueidentifier NULL,
         [RollbackNotes] nvarchar(4000) NULL,
         [IsDeleted] bit NOT NULL,
@@ -444,6 +446,20 @@ GO
 IF COL_LENGTH(N'bookrunner.Tasks', 'ScenarioGroup') IS NULL
 BEGIN
     ALTER TABLE [bookrunner].[Tasks] ADD [ScenarioGroup] nvarchar(100) NULL;
+END
+GO
+
+-- Mevcut kurulumlarda Tasks tablosu gorev bazinda "basarisiz olursa" otomatik
+-- eylem alanlari olmadan olusturulmus olabilir (bkz. RunbookTask.FailureAction).
+IF COL_LENGTH(N'bookrunner.Tasks', 'FailureAction') IS NULL
+BEGIN
+    ALTER TABLE [bookrunner].[Tasks] ADD [FailureAction] int NOT NULL CONSTRAINT [DF_Tasks_FailureAction] DEFAULT (0);
+END
+GO
+
+IF COL_LENGTH(N'bookrunner.Tasks', 'FailureScenarioGroup') IS NULL
+BEGIN
+    ALTER TABLE [bookrunner].[Tasks] ADD [FailureScenarioGroup] nvarchar(100) NULL;
 END
 GO
 
@@ -1645,6 +1661,15 @@ BEGIN
     BEGIN
         INSERT INTO [bookrunner].[__EFMigrationsHistory] ([MigrationId], [ProductVersion])
         VALUES (N'20260907074108_AddScenarioBranching', N'9.0.19');
+    END
+
+    IF NOT EXISTS (
+        SELECT 1 FROM [bookrunner].[__EFMigrationsHistory]
+        WHERE [MigrationId] = N'20260909084838_AddTaskFailureAction'
+    )
+    BEGIN
+        INSERT INTO [bookrunner].[__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+        VALUES (N'20260909084838_AddTaskFailureAction', N'9.0.19');
     END
 
     PRINT N'';

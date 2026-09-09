@@ -28,6 +28,14 @@ public static class DisplayText
         _ => status.ToString()
     };
 
+    public static string FailureAction(TaskFailureAction action) => action switch
+    {
+        TaskFailureAction.None => "Otomatik eylem yok",
+        TaskFailureAction.StartRollback => "Geri donus planini otomatik baslat",
+        TaskFailureAction.SwitchToScenario => "Senaryoya otomatik gec",
+        _ => action.ToString()
+    };
+
     public static string Priority(TaskPriority priority) => priority switch
     {
         TaskPriority.Low => "Dusuk",

@@ -48,6 +48,21 @@
                         </span>
                     }
 
+                    @if (t.FailureAction == TaskFailureAction.StartRollback)
+                    {
+                        <span class="badge text-bg-warning-subtle border border-warning-subtle text-warning-emphasis"
+                              title="Bu gorev basarisiz olursa geri donus plani otomatik baslar">
+                            <i class="bi bi-lightning-fill"></i> Basarisizsa: Geri donus
+                        </span>
+                    }
+                    else if (t.FailureAction == TaskFailureAction.SwitchToScenario && !string.IsNullOrEmpty(t.FailureScenarioGroup))
+                    {
+                        <span class="badge text-bg-warning-subtle border border-warning-subtle text-warning-emphasis"
+                              title="Bu gorev basarisiz olursa belirtilen senaryoya otomatik gecilir">
+                            <i class="bi bi-lightning-fill"></i> Basarisizsa: @t.FailureScenarioGroup
+                        </span>
+                    }
+
                     @if (t.Priority >= TaskPriority.High)
                     {
                         <span class="small br-priority-@t.Priority.ToString().ToLowerInvariant()">

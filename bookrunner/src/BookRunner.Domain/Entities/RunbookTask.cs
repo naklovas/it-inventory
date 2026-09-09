@@ -73,6 +73,18 @@ public class RunbookTask : AuditableEntity, ISoftDeletable
     /// </summary>
     public string? ScenarioGroup { get; set; }
 
+    /// <summary>
+    /// Bu gorev "Basarisiz" olarak isaretlendiginde otomatik tetiklenecek eylem.
+    /// Operatorun ayrica "Geri Donus Adimlarini Baslat"/"X Senaryosuna Gec"
+    /// butonuna basmasina gerek kalmaz (bkz. TaskService.ChangeStatusAsync).
+    /// Varsayilan None ise davranis degismez - manuel butonlar hala calisir.
+    /// </summary>
+    public TaskFailureAction FailureAction { get; set; } = TaskFailureAction.None;
+
+    /// <summary>FailureAction = SwitchToScenario oldugunda otomatik gecilecek
+    /// senaryo grubunun adi (orn. "Senaryo-A").</summary>
+    public string? FailureScenarioGroup { get; set; }
+
     /// <summary>Tamamlandi olarak isaretlenirken girilen, gelecege yonelik not
     /// (orn. "bir dahaki sefere X'e dikkat edilmeli"). Tarihcedeki durum degisikligi
     /// notundan farkli olarak burada kalici ve gorev karti uzerinde dogrudan gorunur.</summary>
