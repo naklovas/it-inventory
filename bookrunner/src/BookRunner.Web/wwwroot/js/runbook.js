@@ -208,6 +208,11 @@
                 return;
             }
             input.dataset.rangeClampWired = "true";
+            // "input" ile her segment (yil/ay/gun/saat/dakika) tamamlandiginda
+            // hemen duzeltilir - kullanicinin gozle gorup fark etmeden odaktan
+            // cikip degeri "kaydetmis" hissetmesini onler. "change" da (blur/
+            // yapistirma sonrasi) yedek olarak birakilir.
+            input.addEventListener("input", () => clampToPlannedRange(input));
             input.addEventListener("change", () => clampToPlannedRange(input));
         });
     }
