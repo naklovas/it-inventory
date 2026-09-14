@@ -128,6 +128,7 @@ public sealed class RunbookFormViewModel : PageViewModel
     /// yalnizca mevcut degeri korumak icin gizli alan olarak tasinir.
     /// </summary>
     public int? ActualMinutes { get; set; }
+    public int? ActualOutageMinutes { get; set; }
     public string? CompletionNote { get; set; }
 
     /// <summary>Seyir alaninda otomatik tamamlama icin mevcut seyir adlari.</summary>

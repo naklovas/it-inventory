@@ -89,6 +89,10 @@
                 {
                     <span><i class="bi bi-stopwatch"></i> Gerceklesen sure: @r.ActualMinutes dk</span>
                 }
+                @if (r.ActualOutageMinutes.HasValue)
+                {
+                    <span><i class="bi bi-exclamation-triangle"></i> Gerceklesen kesinti (toplam): @r.ActualOutageMinutes dk</span>
+                }
                 @{
                     var outageTasks = r.Tasks.Where(t => t.IsOutageStep).ToList();
                 }
@@ -646,9 +650,9 @@
                 <input type="hidden" id="completeTaskId" />
                 <label class="form-label small br-muted">Gerceklesen sure (dakika)</label>
                 <input class="form-control mb-2" type="number" min="0" id="completeTaskMinutes" placeholder="orn. 45" />
-                <div id="completeTaskOutageWrap" hidden>
-                    <label class="form-label small br-muted">Gerceklesen kesinti (dakika)</label>
-                    <input class="form-control mb-2" type="number" min="0" id="completeTaskOutageMinutes" placeholder="orn. 15" />
+                <div id="completeTaskOutageWrap">
+                    <label class="form-label small br-muted">Gerceklesen kesinti (dakika) *</label>
+                    <input class="form-control mb-2" type="number" min="0" id="completeTaskOutageMinutes" placeholder="orn. 15" required />
                 </div>
                 <label class="form-label small br-muted">Not (gelecek icin, opsiyonel)</label>
                 <textarea class="form-control" rows="3" id="completeTaskNote"
@@ -922,6 +926,9 @@
                     <label class="form-label small br-muted">Gerceklesen sure (dakika)</label>
                     <input class="form-control mb-2" type="number" min="0" name="actualMinutes"
                            placeholder="orn. 90" />
+                    <label class="form-label small br-muted">Gerceklesen kesinti (dakika) *</label>
+                    <input class="form-control mb-2" type="number" min="0" name="actualOutageMinutes"
+                           placeholder="orn. 15" required />
                     <label class="form-label small br-muted">Not (gelecek icin, opsiyonel)</label>
                     <textarea class="form-control" rows="3" name="completionNote"
                               placeholder="Bir dahaki sefere dikkat edilmesi gereken bir sey var mi?"></textarea>

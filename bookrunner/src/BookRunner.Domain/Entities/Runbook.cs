@@ -48,6 +48,15 @@ public class Runbook : AuditableEntity, ISoftDeletable
     /// olabilir, gercek harcanan efor burada ayrica belirtilir.</summary>
     public int? ActualMinutes { get; set; }
 
+    /// <summary>
+    /// Tamamlandi olarak isaretlenirken elle girilen, calismanin TOPLAM
+    /// gerceklesen kesinti suresi (dakika). Gorevlerin kendi ActualOutageMinutes
+    /// toplamindan bagimsizdir - orn. kesintiler ust uste binmis olabilir,
+    /// operator burada gercek toplam kesinti suresini kendi degerlendirmesiyle
+    /// girer. Kesintili gorev olmasa bile her runbook tamamlanirken sorulur.
+    /// </summary>
+    public int? ActualOutageMinutes { get; set; }
+
     /// <summary>Tamamlandi olarak isaretlenirken girilen, gelecege yonelik not
     /// (orn. "bir dahaki sefere X'e dikkat edilmeli").</summary>
     public string? CompletionNote { get; set; }

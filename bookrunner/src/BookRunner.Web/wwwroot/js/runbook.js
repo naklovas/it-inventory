@@ -550,20 +550,27 @@
     if (confirmCompleteTaskButton) {
         confirmCompleteTaskButton.addEventListener("click", async () => {
             const minutes = document.getElementById("completeTaskMinutes").value;
-            const outageMinutes = document.getElementById("completeTaskOutageMinutes").value;
+            const outageMinutesInput = document.getElementById("completeTaskOutageMinutes");
+            const outageMinutes = outageMinutesInput.value;
             const note = document.getElementById("completeTaskNote").value.trim();
+
+            if (outageMinutes === "") {
+                outageMinutesInput.reportValidity();
+                return;
+            }
 
             // URLSearchParams her degeri String()'e cevirir - "undefined" gibi
             // gecersiz bir metin gondermemek icin bos alanlar sozlukten tamamen cikarilir.
-            const query = { taskId: document.getElementById("completeTaskId").value, status: "Completed" };
+            const query = {
+                taskId: document.getElementById("completeTaskId").value,
+                status: "Completed",
+                actualOutageMinutes: parseInt(outageMinutes, 10)
+            };
             if (note) {
                 query.note = note;
             }
             if (minutes) {
                 query.actualMinutes = parseInt(minutes, 10);
-            }
-            if (outageMinutes) {
-                query.actualOutageMinutes = parseInt(outageMinutes, 10);
             }
 
             try {
@@ -723,12 +730,10 @@
             // "Tamamlandi" gercek sure/not istedigi icin once bir modal acilir;
             // diger durum degisiklikleri (Devam ediyor, Bloke, vb.) hemen gonderilir.
             if (statusButton.dataset.status === "Completed" && completeTaskModal) {
-                const task = (config.tasks || []).find((item) => item.id === statusButton.dataset.taskId);
                 document.getElementById("completeTaskId").value = statusButton.dataset.taskId;
                 document.getElementById("completeTaskMinutes").value = "";
                 document.getElementById("completeTaskNote").value = "";
                 document.getElementById("completeTaskOutageMinutes").value = "";
-                document.getElementById("completeTaskOutageWrap").hidden = !(task && task.isOutageStep);
                 completeTaskModal.show();
                 return;
             }

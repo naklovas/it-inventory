@@ -96,6 +96,9 @@ public sealed record RunbookDetailDto
     /// <summary>Tamamlandi olarak isaretlenirken elle girilen gercek sure (dakika).</summary>
     public int? ActualMinutes { get; init; }
 
+    /// <summary>Tamamlandi olarak isaretlenirken girilen, calismanin toplam gerceklesen kesinti suresi (dakika).</summary>
+    public int? ActualOutageMinutes { get; init; }
+
     /// <summary>Tamamlandi olarak isaretlenirken girilen, gelecege yonelik not.</summary>
     public string? CompletionNote { get; init; }
 
@@ -208,6 +211,11 @@ public sealed record UpdateRunbookRequest
     /// </summary>
     [Range(0, 100000)]
     public int? ActualMinutes { get; init; }
+
+    /// <summary>Tamamlandi olarak isaretlenirken girilen, calismanin toplam
+    /// gerceklesen kesinti suresi (dakika).</summary>
+    [Range(0, 100000)]
+    public int? ActualOutageMinutes { get; init; }
 
     /// <summary>Tamamlandi olarak isaretlenirken girilen, gelecege yonelik not.</summary>
     [StringLength(2000)]

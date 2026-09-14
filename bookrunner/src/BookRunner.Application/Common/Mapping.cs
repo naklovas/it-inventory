@@ -185,6 +185,7 @@ public static class Mapping
         ActualStart = runbook.ActualStart,
         ActualEnd = runbook.ActualEnd,
         ActualMinutes = runbook.ActualMinutes,
+        ActualOutageMinutes = runbook.ActualOutageMinutes,
         CompletionNote = runbook.CompletionNote,
         IsRollbackActive = runbook.IsRollbackActive,
         ActiveScenarioGroup = runbook.ActiveScenarioGroup,

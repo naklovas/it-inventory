@@ -275,6 +275,7 @@ public sealed class RunbookService(
         runbook.ServiceManagerWorkItemId = request.ServiceManagerWorkItemId;
         runbook.Tags = Mapping.JoinTags(request.Tags);
         runbook.ActualMinutes = request.ActualMinutes;
+        runbook.ActualOutageMinutes = request.ActualOutageMinutes;
         runbook.CompletionNote = string.IsNullOrWhiteSpace(request.CompletionNote) ? null : request.CompletionNote.Trim();
 
         if (request.OwnerUserId.HasValue && request.OwnerUserId.Value != runbook.OwnerUserId)

@@ -260,6 +260,7 @@ BEGIN
         [ServiceManagerWorkItemId] nvarchar(64) NULL,
         [Tags] nvarchar(1000) NULL,
         [ActualMinutes] int NULL,
+        [ActualOutageMinutes] int NULL,
         [CompletionNote] nvarchar(2000) NULL,
         [IsRollbackActive] bit NOT NULL,
         [ActiveScenarioGroup] nvarchar(100) NULL,
@@ -291,6 +292,14 @@ GO
 IF COL_LENGTH(N'bookrunner.Runbooks', 'ActualMinutes') IS NULL
 BEGIN
     ALTER TABLE [bookrunner].[Runbooks] ADD [ActualMinutes] int NULL;
+END
+GO
+
+-- Mevcut kurulumlarda Runbooks tablosu toplam gerceklesen kesinti suresi
+-- olmadan olusturulmus olabilir; runbook tamamlanirken mutlaka sorulur.
+IF COL_LENGTH(N'bookrunner.Runbooks', 'ActualOutageMinutes') IS NULL
+BEGIN
+    ALTER TABLE [bookrunner].[Runbooks] ADD [ActualOutageMinutes] int NULL;
 END
 GO
 
@@ -1706,6 +1715,15 @@ BEGIN
     BEGIN
         INSERT INTO [bookrunner].[__EFMigrationsHistory] ([MigrationId], [ProductVersion])
         VALUES (N'20260909123908_AddScenarioRejoin', N'9.0.19');
+    END
+
+    IF NOT EXISTS (
+        SELECT 1 FROM [bookrunner].[__EFMigrationsHistory]
+        WHERE [MigrationId] = N'20260914110205_AddRunbookActualOutageMinutes'
+    )
+    BEGIN
+        INSERT INTO [bookrunner].[__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+        VALUES (N'20260914110205_AddRunbookActualOutageMinutes', N'9.0.19');
     END
 
     PRINT N'';

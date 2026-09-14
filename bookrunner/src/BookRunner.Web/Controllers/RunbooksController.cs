@@ -185,6 +185,7 @@ public sealed class RunbooksController(
             TagsText = string.Join(", ", runbook.Tags),
             RowVersion = runbook.RowVersion,
             ActualMinutes = runbook.ActualMinutes,
+            ActualOutageMinutes = runbook.ActualOutageMinutes,
             CompletionNote = runbook.CompletionNote
         };
         await PopulateSeyirNamesAsync(form, ct);
@@ -213,6 +214,7 @@ public sealed class RunbooksController(
             ServiceManagerWorkItemId = form.ServiceManagerWorkItemId,
             Tags = form.Tags,
             ActualMinutes = form.ActualMinutes,
+            ActualOutageMinutes = form.ActualOutageMinutes,
             CompletionNote = form.CompletionNote,
             RowVersion = form.RowVersion
         }, ct), "Runbook guncellenemedi");
@@ -247,7 +249,7 @@ public sealed class RunbooksController(
     /// </summary>
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> CompleteRunbook(Guid id, int? actualMinutes, string? completionNote, CancellationToken ct)
+    public async Task<IActionResult> CompleteRunbook(Guid id, int? actualMinutes, int? actualOutageMinutes, string? completionNote, CancellationToken ct)
     {
         var runbook = await Api.GetRunbookAsync(id, ct);
         if (runbook is null)
@@ -268,6 +270,7 @@ public sealed class RunbooksController(
             ServiceManagerWorkItemId = runbook.ServiceManagerWorkItemId,
             Tags = runbook.Tags,
             ActualMinutes = actualMinutes,
+            ActualOutageMinutes = actualOutageMinutes,
             CompletionNote = completionNote,
             RowVersion = runbook.RowVersion
         }, ct), "Runbook tamamlanamadi");
