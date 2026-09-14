@@ -424,6 +424,41 @@
         });
     }
 
+    const cancelRollbackOnlyButton = document.getElementById("btnCancelRollbackOnly");
+    if (cancelRollbackOnlyButton) {
+        cancelRollbackOnlyButton.addEventListener("click", async () => {
+            if (!confirm("Geri donus iptal edilecek: ana akisa donulecek, geri donus adimlari " +
+                "'Baslamadi' durumuna sifirlanacak ama tanimlari korunacak (bir gorev tekrar " +
+                "basarisiz olursa yeniden tetiklenebilir). Emin misiniz?")) {
+                return;
+            }
+
+            try {
+                await post("DeactivateRollback", undefined, { id: config.runbookId, deleteSteps: false });
+                reload();
+            } catch (error) {
+                showActionError(error);
+            }
+        });
+    }
+
+    const cancelRollbackFullButton = document.getElementById("btnCancelRollbackFull");
+    if (cancelRollbackFullButton) {
+        cancelRollbackFullButton.addEventListener("click", async () => {
+            if (!confirm("TUM geri donus plani iptal edilecek: ana akisa donulecek ve geri donus " +
+                "adimlari KALICI OLARAK SILINECEK. Bu islem geri alinamaz. Emin misiniz?")) {
+                return;
+            }
+
+            try {
+                await post("DeactivateRollback", undefined, { id: config.runbookId, deleteSteps: true });
+                reload();
+            } catch (error) {
+                showActionError(error);
+            }
+        });
+    }
+
     // -------------------------------------------------------------- senaryo plani
 
     /** "Bagli gorev" secilince kosul (basarili/basarisiz) alanini gosterir/gizler. */

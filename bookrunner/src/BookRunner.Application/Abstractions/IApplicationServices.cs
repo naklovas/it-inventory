@@ -105,6 +105,14 @@ public interface ITaskService
     Task StartRollbackAsync(Guid runbookId, CancellationToken ct = default);
 
     /// <summary>
+    /// Aktif geri donus planini iptal eder. deleteSteps false ise yalnizca
+    /// aktivasyon geri alinir (adimlar NotStarted'a doner, tanimlari kalir,
+    /// tekrar tetiklenebilir); true ise adimlar da silinir. Tetikleyen kosul
+    /// ortadan kalktiginda (bkz. ChangeStatusAsync) otomatik olarak da calisir.
+    /// </summary>
+    Task DeactivateRollbackAsync(Guid runbookId, bool deleteSteps, CancellationToken ct = default);
+
+    /// <summary>
     /// "X Senaryosuna Gec" ile alternatif senaryo dalina geciler: ana akistaki
     /// kapanmamis adimlar otomatik "Atlandi" olur, secilen senaryo grubunun
     /// adimlarinin tarihleri o andan itibaren sirayla hesaplanir. Runbook basina

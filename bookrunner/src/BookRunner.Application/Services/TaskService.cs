@@ -369,6 +369,25 @@ public sealed class TaskService(
             }
         }
 
+        // Geri donus plani aktifken, onu tetikleyen kosul ortadan kalkarsa (aktif
+        // akista artik hicbir gorev "Basarisiz" degilse) otomatik olarak iptal
+        // edilir - aksi halde bir yonetici tetikleyen gorevi "Devam Ediyor" veya
+        // "Baslamadi"ya geri cekse bile geri donus plani yanlislikla aktif
+        // gorunmeye devam ederdi (bkz. DeactivateRollbackCoreAsync - adimlar
+        // NotStarted'a doner, tanimlari SILINMEZ, tekrar tetiklenebilir).
+        if (task.Runbook.IsRollbackActive)
+        {
+            var rollbackCheckTasks = await db.Tasks.Where(t => t.RunbookId == task.RunbookId).ToListAsync(ct);
+            var stillFailing = rollbackCheckTasks.Any(t =>
+                !t.IsRollbackStep && t.ScenarioGroup == task.Runbook.ActiveScenarioGroup && t.Status == RunbookTaskStatus.Failed);
+
+            if (!stillFailing)
+            {
+                await DeactivateRollbackCoreAsync(task.Runbook, rollbackCheckTasks, deleteSteps: false,
+                    $"'{task.Title}' artik basarisiz degil, akista baska basarisiz gorev kalmadi", ct);
+            }
+        }
+
         await db.SaveChangesAsync(ct);
 
         if (request.Status is RunbookTaskStatus.Completed or RunbookTaskStatus.Failed && currentUser.UserId is { } actorId)
@@ -446,6 +465,89 @@ public sealed class TaskService(
         await audit.LogAsync(AuditAction.Update, nameof(Runbook), runbookId.ToString(),
             "Geri donus plani baslatildi.", runbookId, ct: ct);
         await realtime.RunbookChangedAsync(runbookId, "rollback-started", ct);
+    }
+
+    /// <summary>
+    /// Aktif geri donus planini manuel olarak iptal eder (bkz. otomatik iptal
+    /// icin ChangeStatusAsync). <paramref name="deleteSteps"/> false ise
+    /// yalnizca aktivasyon geri alinir - adimlar NotStarted'a doner ama
+    /// tanimlari kalir, tekrar bir gorev basarisiz olursa yeniden
+    /// tetiklenebilir. true ise TUM plan iptal edilir - adimlar da silinir.
+    /// </summary>
+    public async Task DeactivateRollbackAsync(Guid runbookId, bool deleteSteps, CancellationToken ct = default)
+    {
+        await access.EnsureForRunbookAsync(runbookId, Permissions.TaskExecute, ct);
+
+        var runbook = await db.Runbooks.FirstOrDefaultAsync(r => r.Id == runbookId, ct)
+            ?? throw new NotFoundException("Runbook", runbookId);
+
+        if (!runbook.IsRollbackActive)
+        {
+            throw new BusinessRuleException("Geri donus plani zaten aktif degil.");
+        }
+
+        var tasks = await db.Tasks.Where(t => t.RunbookId == runbookId).ToListAsync(ct);
+        var reason = deleteSteps ? "geri donus plani tamamen iptal edildi" : "geri donus iptal edildi";
+        await DeactivateRollbackCoreAsync(runbook, tasks, deleteSteps, reason, ct);
+
+        await db.SaveChangesAsync(ct);
+
+        var message = deleteSteps
+            ? "Geri donus plani tamamen iptal edildi (adimlar silindi)."
+            : "Geri donus iptal edildi (adimlar korundu, tekrar tetiklenebilir).";
+        await audit.LogAsync(AuditAction.Update, nameof(Runbook), runbookId.ToString(), message, runbookId, ct: ct);
+        await realtime.RunbookChangedAsync(runbookId, "rollback-deactivated", ct);
+    }
+
+    /// <summary>
+    /// Geri donus aktivasyonunu geri alir: adimlar NotStarted'a doner (gerceklesen/
+    /// planlanan tarihler temizlenir - yeniden tetiklenirse zaten otomatik
+    /// hesaplanir), <paramref name="deleteSteps"/> true ise adimlarin kendisi de
+    /// (yumusak) silinir. Hem manuel iptal (DeactivateRollbackAsync) hem otomatik
+    /// iptal (ChangeStatusAsync - tetikleyen kosul ortadan kalkinca) buradan gecer.
+    /// </summary>
+    private async Task DeactivateRollbackCoreAsync(
+        Runbook runbook, List<RunbookTask> tasks, bool deleteSteps, string reason, CancellationToken ct)
+    {
+        var rollbackSteps = tasks.Where(t => t.IsRollbackStep).ToList();
+
+        foreach (var step in rollbackSteps)
+        {
+            if (step.Status != RunbookTaskStatus.NotStarted)
+            {
+                AddActivity(step.Id, TaskActivityType.StatusChanged,
+                    $"Durum {DisplayText.Status(step.Status)} -> {DisplayText.Status(RunbookTaskStatus.NotStarted)} ({reason})",
+                    DisplayText.Status(step.Status), DisplayText.Status(RunbookTaskStatus.NotStarted));
+            }
+
+            step.Status = RunbookTaskStatus.NotStarted;
+            step.ActualStart = null;
+            step.ActualEnd = null;
+            step.ActualMinutes = null;
+            step.ActualOutageMinutes = null;
+            step.CompletionNote = null;
+            step.PlannedStart = null;
+            step.PlannedEnd = null;
+        }
+
+        if (deleteSteps && rollbackSteps.Count > 0)
+        {
+            var stepIds = rollbackSteps.Select(s => s.Id).ToHashSet();
+            var relatedDependencies = await db.TaskDependencies
+                .Where(d => stepIds.Contains(d.TaskId) || stepIds.Contains(d.DependsOnTaskId))
+                .ToListAsync(ct);
+            db.TaskDependencies.RemoveRange(relatedDependencies);
+
+            var now = DateTimeOffset.UtcNow;
+            foreach (var step in rollbackSteps)
+            {
+                step.IsDeleted = true;
+                step.DeletedAt = now;
+                step.DeletedBy = currentUser.UserName;
+            }
+        }
+
+        runbook.IsRollbackActive = false;
     }
 
     /// <summary>

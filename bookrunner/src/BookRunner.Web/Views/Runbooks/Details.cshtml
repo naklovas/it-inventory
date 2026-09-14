@@ -386,6 +386,28 @@
                     <i class="bi bi-exclamation-triangle me-1"></i>Geri Donus Adimlarini Baslat
                 </button>
             }
+            @if (Model.CanExecuteThis && r.IsRollbackActive)
+            {
+                <div class="dropdown">
+                    <button class="btn btn-outline-danger btn-sm dropdown-toggle" data-bs-toggle="dropdown">
+                        <i class="bi bi-arrow-return-left me-1"></i>Geri Donusu Iptal Et
+                    </button>
+                    <ul class="dropdown-menu">
+                        <li>
+                            <button class="dropdown-item" id="btnCancelRollbackOnly">
+                                Yalnizca Geri Donusu Iptal Et
+                                <div class="small br-muted">Ana akisa doner; geri donus adimlari korunur, tekrar tetiklenebilir.</div>
+                            </button>
+                        </li>
+                        <li>
+                            <button class="dropdown-item text-danger" id="btnCancelRollbackFull">
+                                Tum Plani Iptal Et
+                                <div class="small br-muted">Ana akisa doner; geri donus adimlari kalici olarak silinir.</div>
+                            </button>
+                        </li>
+                    </ul>
+                </div>
+            }
         </div>
     </div>
 

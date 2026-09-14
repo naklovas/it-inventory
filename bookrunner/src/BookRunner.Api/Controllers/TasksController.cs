@@ -68,6 +68,16 @@ public sealed class TasksController(ITaskService tasks) : ControllerBase
         return NoContent();
     }
 
+    /// <summary>Aktif geri donus planini iptal eder (deleteSteps=true ise adimlar da silinir).</summary>
+    [HttpPost("runbooks/{runbookId:guid}/deactivate-rollback")]
+    [Authorize(Policy = Permissions.RunbookRead)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> DeactivateRollback(Guid runbookId, [FromQuery] bool deleteSteps, CancellationToken ct)
+    {
+        await tasks.DeactivateRollbackAsync(runbookId, deleteSteps, ct);
+        return NoContent();
+    }
+
     /// <summary>
     /// Secilen senaryoya gecer: ana akistaki kapanmamis gorevler otomatik
     /// "Atlandi" olur, senaryo adimlarinin tarihleri hesaplanir.

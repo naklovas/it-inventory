@@ -422,6 +422,16 @@ public sealed class RunbooksController(
             return null;
         });
 
+    /// <summary>Aktif geri donus planini iptal eder (deleteSteps=true ise adimlar da silinir).</summary>
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public Task<IActionResult> DeactivateRollback(Guid id, bool deleteSteps, CancellationToken ct)
+        => JsonResultAsync<object?>(async () =>
+        {
+            await Api.DeactivateRollbackAsync(id, deleteSteps, ct);
+            return null;
+        });
+
     /// <summary>Secilen senaryoya gecer.</summary>
     [HttpPost]
     [ValidateAntiForgeryToken]
