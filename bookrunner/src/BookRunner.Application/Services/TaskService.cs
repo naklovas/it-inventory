@@ -348,7 +348,7 @@ public sealed class TaskService(
                 && siblingTasks.Any(t => t.IsRollbackStep))
             {
                 ActivateRollback(task.Runbook, siblingTasks,
-                    $"'{task.Title}' basarisiz oldugu icin geri donus plani otomatik baslatildi");
+                    $"'{task.Title}' basarisiz oldugu icin geri donus plani otomatik baslatildi", autoTriggered: true);
             }
             else if (hasFailureTrigger && task.FailureAction == TaskFailureAction.SwitchToScenario
                 && !task.Runbook.IsRollbackActive
@@ -375,7 +375,12 @@ public sealed class TaskService(
         // "Baslamadi"ya geri cekse bile geri donus plani yanlislikla aktif
         // gorunmeye devam ederdi (bkz. DeactivateRollbackCoreAsync - adimlar
         // NotStarted'a doner, tanimlari SILINMEZ, tekrar tetiklenebilir).
-        if (task.Runbook.IsRollbackActive)
+        // Manuel baslatilan bir plan boyle bir kosula bagli olmadigi icin bu
+        // otomatik iptal yalnizca OTOMATIK tetiklenen aktivasyonlarda calisir
+        // (bkz. Runbook.IsRollbackAutoTriggered) - aksi halde operator manuel
+        // baslattigi anda, hicbir gorev "Basarisiz" olmadigi icin plan hemen
+        // kendiliginden iptal edilmis olurdu.
+        if (task.Runbook.IsRollbackActive && task.Runbook.IsRollbackAutoTriggered)
         {
             var rollbackCheckTasks = await db.Tasks.Where(t => t.RunbookId == task.RunbookId).ToListAsync(ct);
             var stillFailing = rollbackCheckTasks.Any(t =>
@@ -447,18 +452,11 @@ public sealed class TaskService(
             throw new BusinessRuleException("Bu runbook icin tanimlanmis bir geri donus adimi yok.");
         }
 
-        // Yalnizca su an izlenen tek grup dikkate alinir: ana akis (henuz senaryo
-        // secilmemisse) veya aktive edilmis senaryonun kendi adimlari. Baska,
-        // hic secilmemis senaryo gruplarinin onceden yazilmis adimlari bu
-        // kontrole dahil edilmez.
-        var activeTrackTasks = tasks.Where(t => !t.IsRollbackStep && t.ScenarioGroup == runbook.ActiveScenarioGroup).ToList();
-        if (!activeTrackTasks.Any(t => t.Status == RunbookTaskStatus.Failed))
-        {
-            throw new BusinessRuleException(
-                "Geri donus plani yalnizca akista en az bir gorev 'Basarisiz' oldugunda baslatilabilir.");
-        }
-
-        ActivateRollback(runbook, tasks, "geri donus plani baslatildi");
+        // Manuel baslatmada bir gorevin "Basarisiz" olmasi sart degildir - operator
+        // herhangi bir zamanda dogrudan geri donus planina gecebilir. Otomatik
+        // tetikleme (bir gorevin FailureAction'i uzerinden) zaten yalnizca o gorev
+        // basarisiz oldugunda calisir; bu ayrica bir on kosul degildir.
+        ActivateRollback(runbook, tasks, "geri donus plani baslatildi", autoTriggered: false);
 
         await db.SaveChangesAsync(ct);
 
@@ -548,6 +546,7 @@ public sealed class TaskService(
         }
 
         runbook.IsRollbackActive = false;
+        runbook.IsRollbackAutoTriggered = false;
     }
 
     /// <summary>
@@ -558,8 +557,9 @@ public sealed class TaskService(
     /// bu metot yalnizca uygular, ayrica dogrulama yapmaz (hem manuel buton hem
     /// gorev bazinda otomatik tetikleme buradan gecer).
     /// </summary>
-    private void ActivateRollback(Runbook runbook, List<RunbookTask> tasks, string reason)
+    private void ActivateRollback(Runbook runbook, List<RunbookTask> tasks, string reason, bool autoTriggered)
     {
+        runbook.IsRollbackAutoTriggered = autoTriggered;
         var rollbackSteps = tasks.Where(t => t.IsRollbackStep).OrderBy(t => t.Order).ToList();
         var activeTrackTasks = tasks.Where(t => !t.IsRollbackStep && t.ScenarioGroup == runbook.ActiveScenarioGroup).ToList();
         var now = DateTimeOffset.UtcNow;

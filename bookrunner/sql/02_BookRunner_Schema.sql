@@ -238,6 +238,7 @@ BEGIN
         [ActualOutageMinutes] int NULL,
         [CompletionNote] nvarchar(2000) NULL,
         [IsRollbackActive] bit NOT NULL,
+        [IsRollbackAutoTriggered] bit NOT NULL CONSTRAINT [DF_Runbooks_IsRollbackAutoTriggered] DEFAULT (0),
         [ActiveScenarioGroup] nvarchar(100) NULL,
         [RowVersion] rowversion NULL,
         [IsDeleted] bit NOT NULL,
@@ -289,6 +290,15 @@ GO
 IF COL_LENGTH(N'bookrunner.Runbooks', 'IsRollbackActive') IS NULL
 BEGIN
     ALTER TABLE [bookrunner].[Runbooks] ADD [IsRollbackActive] bit NOT NULL CONSTRAINT [DF_Runbooks_IsRollbackActive] DEFAULT (0);
+END
+GO
+
+-- Mevcut kurulumlarda Runbooks tablosu, gecerli aktivasyonun otomatik mi
+-- (bir gorevin basarisiz olmasiyla) yoksa manuel mi baslatildigini ayirt
+-- eden bayrak olmadan olusturulmus olabilir.
+IF COL_LENGTH(N'bookrunner.Runbooks', 'IsRollbackAutoTriggered') IS NULL
+BEGIN
+    ALTER TABLE [bookrunner].[Runbooks] ADD [IsRollbackAutoTriggered] bit NOT NULL CONSTRAINT [DF_Runbooks_IsRollbackAutoTriggered] DEFAULT (0);
 END
 GO
 
@@ -1699,6 +1709,15 @@ BEGIN
     BEGIN
         INSERT INTO [bookrunner].[__EFMigrationsHistory] ([MigrationId], [ProductVersion])
         VALUES (N'20260914110205_AddRunbookActualOutageMinutes', N'9.0.19');
+    END
+
+    IF NOT EXISTS (
+        SELECT 1 FROM [bookrunner].[__EFMigrationsHistory]
+        WHERE [MigrationId] = N'20260914151023_AddRunbookRollbackAutoTriggered'
+    )
+    BEGIN
+        INSERT INTO [bookrunner].[__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+        VALUES (N'20260914151023_AddRunbookRollbackAutoTriggered', N'9.0.19');
     END
 
     PRINT N'';

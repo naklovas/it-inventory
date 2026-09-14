@@ -71,6 +71,16 @@ public class Runbook : AuditableEntity, ISoftDeletable
     public bool IsRollbackActive { get; set; }
 
     /// <summary>
+    /// true ise gecerli aktivasyon bir gorevin "Basarisiz" olmasiyla OTOMATIK
+    /// tetiklenmistir; false ise operator manuel olarak baslatmistir (bir
+    /// gorevin basarisiz olmasi sart degildir). Yalnizca otomatik tetiklenen
+    /// aktivasyonlar, tetikleyen kosul ortadan kalkinca (akista basarisiz
+    /// gorev kalmayinca) otomatik iptal edilir - manuel baslatilan bir plan
+    /// boyle bir kosula bagli olmadigi icin kendiliginden iptal edilmez.
+    /// </summary>
+    public bool IsRollbackAutoTriggered { get; set; }
+
+    /// <summary>
     /// Bos ise calisma ANA AKISI izliyor. Dolu ise (orn. "Senaryo-A") calisma o
     /// isimdeki alternatif senaryoya geçmis demektir: gecis aninda ana akistaki
     /// kapanmamis adimlar otomatik "Atlandi" yapilmis, o senaryonun adimlarinin

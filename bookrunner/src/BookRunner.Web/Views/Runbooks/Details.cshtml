@@ -6,7 +6,9 @@
     var isTemplate = r.IsTemplate;
     var mainTasks = r.Tasks.Where(t => !t.IsRollbackStep && string.IsNullOrEmpty(t.ScenarioGroup)).OrderBy(t => t.Order).ToList();
     var rollbackSteps = r.Tasks.Where(t => t.IsRollbackStep).OrderBy(t => t.Order).ToList();
-    var canStartRollback = rollbackSteps.Count > 0 && mainTasks.Any(t => t.Status == RunbookTaskStatus.Failed);
+    // Manuel baslatmada bir gorevin "Basarisiz" olmasi sart degil - operator
+    // istedigi zaman dogrudan gecebilir (bkz. TaskService.StartRollbackAsync).
+    var canStartRollback = rollbackSteps.Count > 0;
     // Her senaryo grubu (orn. "Senaryo-A") ayri, gizli bir liste olarak tutulur;
     // henuz secilmemisse "X Senaryosuna Gec" ile aktive edilir (bkz.
     // Runbook.ActiveScenarioGroup, TaskService.SwitchScenarioAsync).
@@ -386,7 +388,7 @@
             @if (Model.CanExecuteThis && !r.IsRollbackActive)
             {
                 <button class="btn btn-danger btn-sm" id="btnStartRollback" disabled="@(!canStartRollback)"
-                        title="@(canStartRollback ? "Ana akistaki kapanmamis adimlar Atlandi olur, geri donus adimlarinin tarihleri hesaplanir." : "Yalnizca ana akista en az bir gorev 'Basarisiz' oldugunda aktif olur.")">
+                        title="@(canStartRollback ? "Ana akistaki kapanmamis adimlar Atlandi olur, geri donus adimlarinin tarihleri hesaplanir." : "Once en az bir geri donus adimi tanimlamalisiniz.")">
                     <i class="bi bi-exclamation-triangle me-1"></i>Geri Donus Adimlarini Baslat
                 </button>
             }

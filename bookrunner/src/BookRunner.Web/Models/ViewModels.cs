@@ -96,10 +96,23 @@ public sealed class RunbookDetailViewModel : PageViewModel
 
     public IReadOnlyList<ScriptDto> Scripts { get; init; } = Array.Empty<ScriptDto>();
 
-    public int TotalTasks => Runbook.Tasks.Count;
+    /// <summary>
+    /// Su an fiilen izlenen tek grup: geri donus aktifse yalnizca geri donus
+    /// adimlari, bir senaryo aktifse yalnizca o senaryonun adimlari, hicbiri
+    /// aktif degilse yalnizca ana akis (senaryo/geri donus adimlari haric).
+    /// Tamamlanma yuzdesi boylece hic tetiklenmemis geri donus/senaryo
+    /// adimlarindan etkilenmez - onlar tetiklenmedikce paydaya girmez.
+    /// </summary>
+    public IEnumerable<RunbookTaskDto> ActiveTrackTasks => Runbook.Tasks.Where(t =>
+        Runbook.IsRollbackActive
+            ? t.IsRollbackStep
+            : !string.IsNullOrEmpty(Runbook.ActiveScenarioGroup)
+                ? !t.IsRollbackStep && t.ScenarioGroup == Runbook.ActiveScenarioGroup
+                : !t.IsRollbackStep && string.IsNullOrEmpty(t.ScenarioGroup));
 
-    public int CompletedTasks => Runbook.Tasks.Count(t =>
-        t.Status is Domain.Enums.RunbookTaskStatus.Completed or Domain.Enums.RunbookTaskStatus.Skipped);
+    public int TotalTasks => ActiveTrackTasks.Count();
+
+    public int CompletedTasks => ActiveTrackTasks.Count(t => t.Status.IsClosed());
 
     public int ProgressPercent => TotalTasks == 0 ? 0 : (int)Math.Round(CompletedTasks * 100.0 / TotalTasks);
 }

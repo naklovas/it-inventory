@@ -116,8 +116,24 @@ public sealed class RunbookService(
             {
                 Runbook = r,
                 Owner = r.Owner,
-                TaskCount = r.Tasks.Count,
-                CompletedTaskCount = r.Tasks.Count(t => t.Status == RunbookTaskStatus.Completed || t.Status == RunbookTaskStatus.Skipped),
+                // Yalnizca su an fiilen izlenen tek grup paydaya girer: geri donus
+                // aktifse yalnizca geri donus adimlari, bir senaryo aktifse yalnizca
+                // o senaryonun adimlari, hicbiri aktif degilse yalnizca ana akis.
+                // Boylece hic tetiklenmemis geri donus/senaryo adimlari yuzdeyi
+                // %100'e ulasilamaz hale getirmez.
+                TaskCount = r.Tasks.Count(t =>
+                    r.IsRollbackActive
+                        ? t.IsRollbackStep
+                        : (r.ActiveScenarioGroup != null && r.ActiveScenarioGroup != "")
+                            ? !t.IsRollbackStep && t.ScenarioGroup == r.ActiveScenarioGroup
+                            : !t.IsRollbackStep && (t.ScenarioGroup == null || t.ScenarioGroup == "")),
+                CompletedTaskCount = r.Tasks.Count(t =>
+                    (r.IsRollbackActive
+                        ? t.IsRollbackStep
+                        : (r.ActiveScenarioGroup != null && r.ActiveScenarioGroup != "")
+                            ? !t.IsRollbackStep && t.ScenarioGroup == r.ActiveScenarioGroup
+                            : !t.IsRollbackStep && (t.ScenarioGroup == null || t.ScenarioGroup == ""))
+                    && (t.Status == RunbookTaskStatus.Completed || t.Status == RunbookTaskStatus.Skipped || t.Status == RunbookTaskStatus.NotApplicable)),
                 CommentCount = r.Tasks.SelectMany(t => t.Comments).Count(c => !c.IsDeleted),
                 ParticipantUserIds = r.Tasks
                     .SelectMany(t => t.Assignments)
