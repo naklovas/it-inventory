@@ -1438,16 +1438,7 @@
     }
 
     // ------------------------------------------------------------ akis semasi
-
-    const FLOW_STATUS_COLORS = {
-        NotStarted: "#7B8794",
-        InProgress: "#2F80ED",
-        Completed: "#27AE60",
-        Failed: "#EB5757",
-        Blocked: "#F2994A",
-        Skipped: "#9AA5B1",
-        NotApplicable: "#9AA5B1"
-    };
+    // (durum renkleri Details.cshtml'deki .br-flow-status-* CSS siniflarinda tanimli)
 
     function flowNodeId(taskId) {
         return "t" + String(taskId).replace(/-/g, "");
@@ -1464,27 +1455,58 @@
         return escapeHtml(value).replace(/"/g, "&quot;");
     }
 
-    /** Bir gorevin ilk aktif atamasindan kisa ad + (varsa) fotograf HTML'i uretir. */
+    /**
+     * Bir gorevin ilk aktif atamasindan kisa ad + rozet HTML'i uretir. Fotograf
+     * BURADA <img> olarak eklenmez: Mermaid'in htmlLabels olcum gecisi her
+     * dugumu gercekten tarayiciya cizdirip olcer - onlarca gercek fotograf
+     * URL'si (AD'den) es zamanli yuklenmeye calisilirsa bu olcum asamasi cok
+     * yavaslayip buyuk runbook'larda arayuzu kilitleyebiliyor (rapor edilen
+     * "sonsuz donuyor" sorunu). Bunun yerine hafif bir bas harf rozeti
+     * cizilir; gercek fotograf render bittikten SONRA applyFlowchartPhotos()
+     * ile ayrica (engelleyici olmadan) yuklenir.
+     */
     function flowAssigneeHtml(task) {
         const assignment = (task.assignments || [])[0];
         if (!assignment) {
-            return "<span style='color:#9AA5B1'>Atanmamis</span>";
+            return "Atanmamis";
         }
         const name = flowEscapeText(assignment.name);
-        if (assignment.photoUrl) {
-            const src = escapeAttr(assignment.photoUrl);
-            return "<img src='" + src + "' width='20' height='20' " +
-                "style='border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:4px;'/>" + name;
-        }
-        return (assignment.isGroup ? "\u{1F465} " : "\u{1F464} ") + name;
+        const initials = flowEscapeText(assignment.initials || "?");
+        const color = escapeAttr(assignment.avatarColor || "#7B8794");
+        const badge = assignment.photoUrl
+            ? "<span class='br-flow-avatar' data-photo-url='" + escapeAttr(assignment.photoUrl) +
+              "' style='background-color:" + color + "'>" + initials + "</span>"
+            : (assignment.isGroup ? "\u{1F465} " : "\u{1F464} ");
+        return badge + name;
+    }
+
+    /**
+     * mermaid.render() tamamlandiktan SONRA cagrilir: dugum etiketlerindeki bas
+     * harf rozetlerine, varsa gercek fotograflari arka planda (engellemeden)
+     * yukler. Bir fotograf yuklenemezse rozet oldugu gibi (bas harfli) kalir.
+     */
+    function applyFlowchartPhotos(container) {
+        container.querySelectorAll(".br-flow-avatar[data-photo-url]").forEach((el) => {
+            const url = el.getAttribute("data-photo-url");
+            if (!url) {
+                return;
+            }
+            const img = new Image();
+            img.onload = () => {
+                el.style.backgroundImage = "url('" + url + "')";
+                el.style.backgroundSize = "cover";
+                el.style.backgroundPosition = "center";
+                el.textContent = "";
+            };
+            img.src = url;
+        });
     }
 
     function flowNodeLabel(task) {
-        const statusColor = FLOW_STATUS_COLORS[task.status] || "#7B8794";
-        return "\"<div style='text-align:center;line-height:1.35;padding:2px 4px;'>" +
+        return "\"<div class='br-flow-node'>" +
             "<b>" + task.order + ". " + flowEscapeText(task.title) + "</b><br/>" +
-            "<span style='font-size:11px'>" + flowAssigneeHtml(task) + "</span><br/>" +
-            "<span style='font-size:10px;color:" + statusColor + ";font-weight:600'>" + flowEscapeText(task.statusText) + "</span>" +
+            "<span class='br-flow-name'>" + flowAssigneeHtml(task) + "</span><br/>" +
+            "<span class='br-flow-status br-flow-status-" + task.status + "'>" + flowEscapeText(task.statusText) + "</span>" +
             "</div>\"";
     }
 
@@ -1591,28 +1613,47 @@
         });
     }
 
+    /** N saniye icinde cozulmezse reddeden bir zaman asimi - cizim hicbir sekilde sonsuza kadar donmesin diye. */
+    function withTimeout(promise, ms) {
+        return Promise.race([
+            promise,
+            new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), ms))
+        ]);
+    }
+
     async function renderFlowchart() {
         const loading = document.getElementById("flowchartLoading");
         const scroll = document.getElementById("flowchartScroll");
         const container = document.getElementById("flowchartMermaid");
 
         try {
-            await loadMermaid();
+            await withTimeout(loadMermaid(), 15000);
             window.mermaid.initialize({
                 startOnLoad: false,
                 theme: "base",
                 securityLevel: "loose",
+                maxTextSize: 900000,
+                maxEdges: 2000,
                 flowchart: { htmlLabels: true, curve: "basis" }
             });
             const definition = buildFlowchartDefinition();
-            const result = await window.mermaid.render("flowchartSvg", definition);
+            const result = await withTimeout(window.mermaid.render("flowchartSvg", definition), 20000);
+            // mermaid.render() bazi ic sinirlar (orn. metin uzunlugu) asilinca reddetmek
+            // yerine sessizce kucuk bir "hata" SVG'si dondurur - bunu basari sanmayalim.
+            if (result.svg.indexOf("error-icon") !== -1) {
+                throw new Error("mermaid-error-svg");
+            }
             container.innerHTML = result.svg;
+            applyFlowchartPhotos(container);
             loading.hidden = true;
             scroll.hidden = false;
         } catch (error) {
             loading.hidden = true;
             flowchartRendered = false;
-            toast("Akis semasi cizilemedi.", "danger");
+            const message = error && error.message === "timeout"
+                ? "Akis semasi cizimi zaman asimina ugradi (cok fazla gorev/dallanma olabilir)."
+                : "Akis semasi cizilemedi.";
+            toast(message, "danger");
         }
     }
 

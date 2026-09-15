@@ -644,6 +644,33 @@
 
 @* ------------------------------------------------------------------ modaller *@
 
+@*
+    Akis semasi dugum etiketleri icin sinifllar: her stili tek tek satir icinde
+    (inline style) tekrarlamak yerine burada tanimlanir. Buyuk runbook'larda
+    (cok gorev) Mermaid'in tanim metni uzunlugu icin bir ust siniri var
+    (varsayilan 50.000 karakter, asilinca sessizce hata simgesi ciziyor) -
+    inline style tekrari bu siniri kolayca asiyordu; siniflar tanimi cok
+    kisaltir (bkz. runbook.js flowNodeLabel/flowAssigneeHtml).
+*@
+<style>
+    .br-flow-node { text-align: center; line-height: 1.35; padding: 2px 4px; }
+    .br-flow-name { font-size: 11px; }
+    .br-flow-status { font-size: 10px; font-weight: 600; }
+    .br-flow-status-NotStarted { color: #7B8794; }
+    .br-flow-status-InProgress { color: #2F80ED; }
+    .br-flow-status-Completed { color: #27AE60; }
+    .br-flow-status-Failed { color: #EB5757; }
+    .br-flow-status-Blocked { color: #F2994A; }
+    .br-flow-status-Skipped { color: #9AA5B1; }
+    .br-flow-status-NotApplicable { color: #9AA5B1; }
+    .br-flow-avatar {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 16px; height: 16px; border-radius: 50%; color: #fff;
+        font-size: 8px; font-weight: 600; vertical-align: middle;
+        margin-right: 4px; overflow: hidden; background-size: cover; background-position: center;
+    }
+</style>
+
 <div class="modal fade" id="flowchartModal" tabindex="-1">
     <div class="modal-dialog modal-fullscreen">
         <div class="modal-content">
