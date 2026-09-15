@@ -95,6 +95,9 @@ public sealed class PdfService(BookRunnerDbContext db, IAuditService audit) : IP
             {
                 column.Item().Element(element => ComposeTask(element, task));
             }
+
+            column.Item().PageBreak();
+            column.Item().Element(element => ComposeFlowchart(element, runbook));
         });
     }
 
@@ -198,6 +201,160 @@ public sealed class PdfService(BookRunnerDbContext db, IAuditService audit) : IP
                 }
             });
     }
+
+    /// <summary>
+    /// Ana akisi, senaryo dallanmalarini ve geri donus planini sirali kutular
+    /// halinde cizer - arayuzdeki "Akis Semasi" butonunun (mermaid tabanli)
+    /// PDF karsiligi. Ayni grafigi cizmek yerine (PDF'te QuestPDF Canvas API'si
+    /// dusuk seviyeli oldugundan) okunmasi kolay, dikey siralanmis kutu+ok
+    /// deseni kullanilir.
+    /// </summary>
+    private static void ComposeFlowchart(IContainer container, Runbook runbook)
+    {
+        var allTasks = runbook.Tasks.ToList();
+        var mainTasks = allTasks.Where(t => !t.IsRollbackStep && string.IsNullOrEmpty(t.ScenarioGroup))
+            .OrderBy(t => t.Order).ToList();
+        var rollbackSteps = allTasks.Where(t => t.IsRollbackStep).OrderBy(t => t.Order).ToList();
+
+        var scenarioGroupNames = allTasks
+            .Where(t => !t.IsRollbackStep && !string.IsNullOrEmpty(t.ScenarioGroup))
+            .Select(t => t.ScenarioGroup!)
+            .Distinct()
+            .OrderBy(name => allTasks.Where(t => t.ScenarioGroup == name).Min(t => t.Order))
+            .ToList();
+
+        container.Column(column =>
+        {
+            column.Item().Text("Akis Semasi").SemiBold().FontSize(14);
+            column.Item().PaddingBottom(4).Text(
+                "Ana akis, senaryo dallanmalari ve geri donus plani asagida sirayla gosterilir.")
+                .FontSize(8).FontColor("#7B8794");
+
+            if (mainTasks.Count > 0)
+            {
+                ComposeFlowChain(column, "Ana Akis", "#4F86F7", mainTasks, null);
+            }
+
+            foreach (var groupName in scenarioGroupNames)
+            {
+                var steps = allTasks.Where(t => !t.IsRollbackStep && t.ScenarioGroup == groupName)
+                    .OrderBy(t => t.Order).ToList();
+                var rejoinTaskId = steps.Select(t => t.ScenarioRejoinTaskId).FirstOrDefault(id => id.HasValue);
+                var rejoinTask = rejoinTaskId.HasValue ? allTasks.FirstOrDefault(t => t.Id == rejoinTaskId.Value) : null;
+                var title = "Senaryo: " + groupName + (runbook.ActiveScenarioGroup == groupName ? " (AKTIF)" : "");
+                var footNote = rejoinTask is not null
+                    ? $"Tamamlaninca ana akista '{rejoinTask.Title}' gorevinden devam eder."
+                    : "Tek yonlu: tum adimlari tamamlaninca calisma burada sona erer.";
+                ComposeFlowChain(column, title, "#8BC34A", steps, footNote);
+            }
+
+            if (rollbackSteps.Count > 0)
+            {
+                var title = "Geri Donus Plani" + (runbook.IsRollbackActive ? " (AKTIF)" : "");
+                ComposeFlowChain(column, title, "#9C6ADE", rollbackSteps, null);
+            }
+        });
+    }
+
+    private static void ComposeFlowChain(
+        ColumnDescriptor column, string title, string accentColor, List<RunbookTask> steps, string? footNote)
+    {
+        column.Item().PaddingTop(10).Text(title).SemiBold().FontSize(11).FontColor(accentColor);
+
+        for (var i = 0; i < steps.Count; i++)
+        {
+            column.Item().Element(element => ComposeFlowNode(element, steps[i], accentColor));
+            if (i < steps.Count - 1)
+            {
+                column.Item().AlignCenter().Text("↓").FontSize(12).FontColor(accentColor);
+            }
+        }
+
+        if (!string.IsNullOrEmpty(footNote))
+        {
+            column.Item().PaddingTop(2).Text(footNote).FontSize(8).Italic().FontColor("#7B8794");
+        }
+    }
+
+    private static void ComposeFlowNode(IContainer container, RunbookTask task, string accentColor)
+    {
+        var (name, photo, _) = PrimaryAssignee(task);
+
+        container.Border(1).BorderColor("#D9E2EC").Background("#FFFFFF").Padding(6).Column(column =>
+        {
+            column.Item().Row(row =>
+            {
+                row.ConstantItem(4).Height(14).Background(accentColor);
+                row.RelativeItem().PaddingLeft(6).Row(inner =>
+                {
+                    inner.RelativeItem().Text(text =>
+                    {
+                        text.Span($"{task.Order}. ").SemiBold().FontColor(accentColor);
+                        text.Span(task.Title).SemiBold().FontSize(10);
+                    });
+                    inner.ConstantItem(90).AlignRight().Text(DisplayText.Status(task.Status))
+                        .FontSize(8).SemiBold().FontColor(StatusColor(task.Status));
+                });
+            });
+
+            column.Item().PaddingTop(3).PaddingLeft(10).Row(row =>
+            {
+                if (photo is { Length: > 0 })
+                {
+                    row.ConstantItem(16).Height(16).Image(photo).FitArea();
+                    row.ConstantItem(4);
+                }
+                row.RelativeItem().Text(name).FontSize(8).FontColor("#334E68");
+            });
+
+            foreach (var note in TriggerNotes(task))
+            {
+                column.Item().PaddingTop(3).PaddingLeft(10).Text(note.Text).FontSize(8).Italic().FontColor(note.Color);
+            }
+        });
+    }
+
+    private static (string Name, byte[]? Photo, bool IsGroup) PrimaryAssignee(RunbookTask task)
+    {
+        var assignment = task.Assignments.FirstOrDefault(a => a.IsActive);
+        if (assignment is null)
+        {
+            return ("Atanmamis", null, false);
+        }
+
+        return assignment.AssigneeType == AssigneeType.User
+            ? (assignment.User?.DisplayName ?? "-", assignment.User?.Photo, false)
+            : ($"{assignment.Group?.Name ?? "-"} (grup)", null, true);
+    }
+
+    private static IEnumerable<(string Text, string Color)> TriggerNotes(RunbookTask task)
+    {
+        if (task.FailureAction == TaskFailureAction.StartRollback)
+        {
+            yield return ("Basarisiz olursa -> Geri Donus Plani", "#C0504D");
+        }
+        else if (task.FailureAction == TaskFailureAction.SwitchToScenario && !string.IsNullOrEmpty(task.FailureScenarioGroup))
+        {
+            yield return ($"Basarisiz olursa -> Senaryo: {task.FailureScenarioGroup}", "#C0504D");
+        }
+
+        if (!string.IsNullOrEmpty(task.SuccessScenarioGroup))
+        {
+            yield return ($"Basarili olursa -> Senaryo: {task.SuccessScenarioGroup}", "#2E7D32");
+        }
+    }
+
+    private static string StatusColor(RunbookTaskStatus status) => status switch
+    {
+        RunbookTaskStatus.NotStarted => "#7B8794",
+        RunbookTaskStatus.InProgress => "#2F80ED",
+        RunbookTaskStatus.Completed => "#27AE60",
+        RunbookTaskStatus.Failed => "#EB5757",
+        RunbookTaskStatus.Blocked => "#F2994A",
+        RunbookTaskStatus.Skipped => "#9AA5B1",
+        RunbookTaskStatus.NotApplicable => "#9AA5B1",
+        _ => "#7B8794"
+    };
 
     private static void ComposeFooter(IContainer container)
     {

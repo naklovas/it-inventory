@@ -151,6 +151,9 @@
                 <i class="bi bi-check2-circle me-1"></i>Tamamla
             </button>
         }
+        <button class="btn btn-sm btn-outline-primary" id="btnShowFlowchart" data-bs-toggle="modal" data-bs-target="#flowchartModal">
+            <i class="bi bi-diagram-3 me-1"></i>Akis Semasi
+        </button>
         @if (Model.CanExport)
         {
             <a class="btn btn-sm btn-outline-success" asp-action="ExportExcel" asp-route-id="@r.Id">
@@ -641,6 +644,25 @@
 
 @* ------------------------------------------------------------------ modaller *@
 
+<div class="modal fade" id="flowchartModal" tabindex="-1">
+    <div class="modal-dialog modal-fullscreen">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-diagram-3 me-1"></i>Akis Semasi - @r.Code</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0">
+                <div id="flowchartLoading" class="d-flex align-items-center justify-content-center h-100">
+                    <div class="spinner-border text-primary" role="status"></div>
+                </div>
+                <div id="flowchartScroll" class="w-100 h-100" style="overflow:auto;" hidden>
+                    <div id="flowchartMermaid" class="mermaid p-3"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="completeTaskModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -1009,6 +1031,10 @@
         canExecute = Model.CanExecuteThis,
         plannedStart = r.PlannedStart,
         plannedEnd = r.PlannedEnd,
+        runbookCode = r.Code,
+        runbookTitle = r.Title,
+        isRollbackActive = r.IsRollbackActive,
+        activeScenarioGroup = r.ActiveScenarioGroup,
         tasks = r.Tasks.OrderBy(t => t.Order).Select(t => new
         {
             id = t.Id,
@@ -1030,7 +1056,19 @@
             successScenarioGroup = t.SuccessScenarioGroup,
             scenarioRejoinTaskId = t.ScenarioRejoinTaskId,
             dependsOnTaskIds = t.Predecessors.Select(p => p.TaskId),
-            assignmentIds = t.Assignments.Where(a => a.IsActive).Select(a => a.Id)
+            assignmentIds = t.Assignments.Where(a => a.IsActive).Select(a => a.Id),
+            status = t.Status.ToString(),
+            statusText = t.StatusText,
+            colorHex = t.ColorHex,
+            // Akis semasi (flowchart) icin: kim atanmis, fotografi var mi.
+            assignments = t.Assignments.Where(a => a.IsActive).Select(a => new
+            {
+                name = a.DisplayName,
+                initials = a.Initials,
+                avatarColor = a.AvatarColor,
+                isGroup = a.AssigneeType != AssigneeType.User,
+                photoUrl = a.User != null && a.User.HasPhoto ? Url.Action("Photo", "Home", new { id = a.User.Id }) : null
+            })
         }),
         antiforgery = Xsrf.GetAndStoreTokens(Context).RequestToken
     }))</script>

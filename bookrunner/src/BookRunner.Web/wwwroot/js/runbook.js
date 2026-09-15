@@ -1436,4 +1436,193 @@
             })
             .catch(() => setLive(false, "canli guncelleme yok"));
     }
+
+    // ------------------------------------------------------------ akis semasi
+
+    const FLOW_STATUS_COLORS = {
+        NotStarted: "#7B8794",
+        InProgress: "#2F80ED",
+        Completed: "#27AE60",
+        Failed: "#EB5757",
+        Blocked: "#F2994A",
+        Skipped: "#9AA5B1",
+        NotApplicable: "#9AA5B1"
+    };
+
+    function flowNodeId(taskId) {
+        return "t" + String(taskId).replace(/-/g, "");
+    }
+
+    /**
+     * Mermaid dugum/subgraph etiketleri "..." ile sarmalanir; escapeHtml() metin
+     * dugumleri icin yeterlidir ama duz cift tirnagi KACISLAMAZ (HTML metin
+     * icerigi icin gerekmez) - bu yuzden burada ayrica &quot;'a cevrilir, aksi
+     * halde bir gorev basligindaki " karakteri Mermaid'in disaridaki tirnak
+     * sinirini erken kapatip sozdizimi hatasi verir.
+     */
+    function flowEscapeText(value) {
+        return escapeHtml(value).replace(/"/g, "&quot;");
+    }
+
+    /** Bir gorevin ilk aktif atamasindan kisa ad + (varsa) fotograf HTML'i uretir. */
+    function flowAssigneeHtml(task) {
+        const assignment = (task.assignments || [])[0];
+        if (!assignment) {
+            return "<span style='color:#9AA5B1'>Atanmamis</span>";
+        }
+        const name = flowEscapeText(assignment.name);
+        if (assignment.photoUrl) {
+            const src = escapeAttr(assignment.photoUrl);
+            return "<img src='" + src + "' width='20' height='20' " +
+                "style='border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:4px;'/>" + name;
+        }
+        return (assignment.isGroup ? "\u{1F465} " : "\u{1F464} ") + name;
+    }
+
+    function flowNodeLabel(task) {
+        const statusColor = FLOW_STATUS_COLORS[task.status] || "#7B8794";
+        return "\"<div style='text-align:center;line-height:1.35;padding:2px 4px;'>" +
+            "<b>" + task.order + ". " + flowEscapeText(task.title) + "</b><br/>" +
+            "<span style='font-size:11px'>" + flowAssigneeHtml(task) + "</span><br/>" +
+            "<span style='font-size:10px;color:" + statusColor + ";font-weight:600'>" + flowEscapeText(task.statusText) + "</span>" +
+            "</div>\"";
+    }
+
+    /** config.tasks'taki gercek verilerle bir Mermaid flowchart tanimi uretir. */
+    function buildFlowchartDefinition() {
+        const tasks = config.tasks || [];
+        const mainTasks = tasks.filter((t) => !t.isRollbackStep && !t.scenarioGroup).sort((a, b) => a.order - b.order);
+        const rollbackSteps = tasks.filter((t) => t.isRollbackStep).sort((a, b) => a.order - b.order);
+
+        const scenarioGroupNames = [];
+        tasks.forEach((t) => {
+            if (!t.isRollbackStep && t.scenarioGroup && scenarioGroupNames.indexOf(t.scenarioGroup) === -1) {
+                scenarioGroupNames.push(t.scenarioGroup);
+            }
+        });
+        const scenarioGroups = scenarioGroupNames.map((name) => ({
+            name,
+            tasks: tasks.filter((t) => !t.isRollbackStep && t.scenarioGroup === name).sort((a, b) => a.order - b.order)
+        }));
+
+        const lines = ["flowchart TD"];
+
+        function renderChain(list) {
+            list.forEach((t, i) => {
+                lines.push("    " + flowNodeId(t.id) + "[" + flowNodeLabel(t) + "]");
+                if (i > 0) {
+                    lines.push("    " + flowNodeId(list[i - 1].id) + " --> " + flowNodeId(t.id));
+                }
+            });
+        }
+
+        if (mainTasks.length > 0) {
+            lines.push("    subgraph ANA[\"Ana Akis\"]");
+            lines.push("    direction TB");
+            renderChain(mainTasks);
+            lines.push("    end");
+        }
+
+        scenarioGroups.forEach((group, gi) => {
+            const active = config.activeScenarioGroup === group.name ? " (AKTIF)" : "";
+            lines.push("    subgraph SC" + gi + "[\"Senaryo: " + flowEscapeText(group.name) + active + "\"]");
+            lines.push("    direction TB");
+            renderChain(group.tasks);
+            lines.push("    end");
+        });
+
+        if (rollbackSteps.length > 0) {
+            const active = config.isRollbackActive ? " (AKTIF)" : "";
+            lines.push("    subgraph RB[\"Geri Donus Plani" + active + "\"]");
+            lines.push("    direction TB");
+            renderChain(rollbackSteps);
+            lines.push("    end");
+        }
+
+        // Tetikleme / rejoin oklari (kesikli - otomatik veya manuel gecisler)
+        tasks.forEach((t) => {
+            if (t.isRollbackStep) {
+                return;
+            }
+            if (t.failureAction === "StartRollback" && rollbackSteps.length > 0) {
+                lines.push("    " + flowNodeId(t.id) + " -.->|\"Basarisiz\"| " + flowNodeId(rollbackSteps[0].id));
+            } else if (t.failureAction === "SwitchToScenario" && t.failureScenarioGroup) {
+                const target = scenarioGroups.find((g) => g.name === t.failureScenarioGroup);
+                if (target && target.tasks.length > 0) {
+                    lines.push("    " + flowNodeId(t.id) + " -.->|\"Basarisiz\"| " + flowNodeId(target.tasks[0].id));
+                }
+            }
+            if (t.successScenarioGroup) {
+                const target = scenarioGroups.find((g) => g.name === t.successScenarioGroup);
+                if (target && target.tasks.length > 0) {
+                    lines.push("    " + flowNodeId(t.id) + " -.->|\"Basarili\"| " + flowNodeId(target.tasks[0].id));
+                }
+            }
+        });
+
+        scenarioGroups.forEach((group) => {
+            const rejoinSource = group.tasks.find((t) => t.scenarioRejoinTaskId);
+            if (rejoinSource) {
+                const rejoinTarget = mainTasks.find((t) => t.id === rejoinSource.scenarioRejoinTaskId);
+                const lastStep = group.tasks[group.tasks.length - 1];
+                if (rejoinTarget && lastStep) {
+                    lines.push("    " + flowNodeId(lastStep.id) + " -.->|\"Rejoin\"| " + flowNodeId(rejoinTarget.id));
+                }
+            }
+        });
+
+        lines.push("    classDef default fill:#F5F7FA,stroke:#334E68,color:#1F2933;");
+
+        return lines.join("\n");
+    }
+
+    let flowchartRendered = false;
+
+    function loadMermaid() {
+        if (window.mermaid) {
+            return Promise.resolve();
+        }
+        return new Promise((resolve, reject) => {
+            const script = document.createElement("script");
+            script.src = "/lib/mermaid/mermaid.min.js";
+            script.onload = resolve;
+            script.onerror = reject;
+            document.head.appendChild(script);
+        });
+    }
+
+    async function renderFlowchart() {
+        const loading = document.getElementById("flowchartLoading");
+        const scroll = document.getElementById("flowchartScroll");
+        const container = document.getElementById("flowchartMermaid");
+
+        try {
+            await loadMermaid();
+            window.mermaid.initialize({
+                startOnLoad: false,
+                theme: "base",
+                securityLevel: "loose",
+                flowchart: { htmlLabels: true, curve: "basis" }
+            });
+            const definition = buildFlowchartDefinition();
+            const result = await window.mermaid.render("flowchartSvg", definition);
+            container.innerHTML = result.svg;
+            loading.hidden = true;
+            scroll.hidden = false;
+        } catch (error) {
+            loading.hidden = true;
+            flowchartRendered = false;
+            toast("Akis semasi cizilemedi.", "danger");
+        }
+    }
+
+    const flowchartModalElement = document.getElementById("flowchartModal");
+    if (flowchartModalElement) {
+        flowchartModalElement.addEventListener("shown.bs.modal", () => {
+            if (!flowchartRendered) {
+                flowchartRendered = true;
+                renderFlowchart();
+            }
+        });
+    }
 })();
