@@ -219,8 +219,11 @@
                     {
                         if (status != t.Status)
                         {
+                            var blockedByAssignment = status == RunbookTaskStatus.InProgress && t.Assignments.Count == 0;
                             <button class="btn btn-sm btn-outline-secondary br-status-btn"
-                                    data-task-id="@t.Id" data-status="@status">
+                                    data-task-id="@t.Id" data-status="@status"
+                                    disabled="@blockedByAssignment"
+                                    title="@(blockedByAssignment ? "Once birine atanmalidir." : null)">
                                 @DisplayText.Status(status)
                             </button>
                         }

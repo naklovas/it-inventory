@@ -315,6 +315,18 @@ public sealed class TaskService(
             }
         }
 
+        // Bir gorev, kimseye atanmadan "Devam Ediyor" yapilamaz. Asagidaki
+        // blok yalnizca runbook'un ILK baslama anini (Taslak/Planlandi ->
+        // Devam Ediyor gecisini, TUM gorevleri kontrol ederek) kapsar; runbook
+        // zaten calisiyorken sonradan eklenen veya hala atanmamis kalan bir
+        // gorevin kendisinin baslatilmasi o blogun disinda kalirdi - bu yuzden
+        // burada, runbook'un durumundan bagimsiz olarak, HER ZAMAN bu gorevin
+        // kendi atamasi kontrol edilir.
+        if (request.Status == RunbookTaskStatus.InProgress && !task.Assignments.Any(a => a.IsActive))
+        {
+            throw new BusinessRuleException("Bu gorev baslatilamaz: once birine atanmalidir.");
+        }
+
         // Runbook henuz baslamadiysa (Taslak/Planlandi), ilk gorevin "Devam
         // Ediyor" olmasi runbook'u da otomatik baslatir (asagida). Bu anda
         // runbook'taki HICBIR gorevin (ana akis, senaryo, geri donus - hepsi
