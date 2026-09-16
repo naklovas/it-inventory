@@ -808,6 +808,14 @@
             outageWrap.hidden = !task.isOutageStep;
             document.getElementById("editTaskOutageMinutes").value = task.plannedOutageMinutes || "";
 
+            // Bir senaryo adiminin kendi basina basarili/basarisiz durumu yoktur
+            // (yalnizca senaryonun TUMU basarili/basarisiz sayilir) - bu yuzden
+            // otomatik eylem secicileri yalnizca ana akis/geri donus gorevlerinde
+            // gosterilir, senaryo adimlarinda gizlenip yerine bir bilgi notu cizilir.
+            const isScenarioStep = !!task.scenarioGroup;
+            document.getElementById("editTaskAutoActionsSection").hidden = isScenarioStep;
+            document.getElementById("editTaskScenarioStepNote").hidden = !isScenarioStep;
+
             const failureActionSelect = document.getElementById("editTaskFailureAction");
             const failureScenarioWrap = document.getElementById("editTaskFailureScenarioWrap");
             const failureTargetWrap = document.getElementById("editTaskFailureTargetWrap");

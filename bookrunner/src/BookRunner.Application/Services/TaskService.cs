@@ -69,7 +69,16 @@ public sealed class TaskService(
             await ValidateScenarioRejoinTaskAsync(runbookId, scenarioRejoinTaskId.Value, ct);
         }
 
-        var failureTargetTaskId = request.FailureAction == TaskFailureAction.SwitchToTask
+        // Bir senaryo adiminin kendi basina "basarili/basarisiz" durumu yoktur -
+        // yalnizca senaryonun TUMU basarili/basarisiz sayilir (bkz. Scenario
+        // entity, ActivateScenario). Bu yuzden otomatik eylem alanlari yalnizca
+        // ANA AKIS gorevlerinde anlamlidir; bir senaryo adimi icin istekte
+        // gelseler bile sessizce yok sayilir - senaryo adimlari icin gecerli
+        // olan tek baglanti turu Predecessors/Successors'tir.
+        var isScenarioStep = scenarioGroup is not null;
+
+        var failureAction = isScenarioStep ? TaskFailureAction.None : request.FailureAction;
+        var failureTargetTaskId = failureAction == TaskFailureAction.SwitchToTask
             ? request.FailureTargetTaskId
             : null;
         if (failureTargetTaskId.HasValue)
@@ -80,10 +89,10 @@ public sealed class TaskService(
         // Basarili oldugunda iki hedef turu (senaryo/gorev) birbirini dislar -
         // senaryo adi doluysa gorev hedefi yok sayilir (UI ikisini ayni anda
         // doldurmaz, bu yalnizca bir savunma katmanidir).
-        var successScenarioGroup = string.IsNullOrWhiteSpace(request.SuccessScenarioGroup)
+        var successScenarioGroup = isScenarioStep || string.IsNullOrWhiteSpace(request.SuccessScenarioGroup)
             ? null
             : request.SuccessScenarioGroup.Trim();
-        var successTargetTaskId = successScenarioGroup is null ? request.SuccessTargetTaskId : null;
+        var successTargetTaskId = !isScenarioStep && successScenarioGroup is null ? request.SuccessTargetTaskId : null;
         if (successTargetTaskId.HasValue)
         {
             await ValidateScenarioRejoinTaskAsync(runbookId, successTargetTaskId.Value, ct);
@@ -126,8 +135,8 @@ public sealed class TaskService(
             IsRollbackStep = request.IsRollbackStep,
             ScenarioGroup = scenarioGroup,
             ScenarioRejoinTaskId = scenarioRejoinTaskId,
-            FailureAction = request.FailureAction,
-            FailureScenarioGroup = request.FailureAction == TaskFailureAction.SwitchToScenario
+            FailureAction = failureAction,
+            FailureScenarioGroup = failureAction == TaskFailureAction.SwitchToScenario
                 ? request.FailureScenarioGroup?.Trim()
                 : null,
             FailureTargetTaskId = failureTargetTaskId,
@@ -211,11 +220,19 @@ public sealed class TaskService(
             await ValidateScenarioRejoinTaskAsync(task.RunbookId, scenarioRejoinTaskId.Value, ct);
         }
         task.ScenarioRejoinTaskId = scenarioRejoinTaskId;
-        task.FailureAction = request.FailureAction;
-        task.FailureScenarioGroup = request.FailureAction == TaskFailureAction.SwitchToScenario
+
+        // Bir senaryo adiminin kendi basina "basarili/basarisiz" durumu yoktur -
+        // yalnizca senaryonun TUMU basarili/basarisiz sayilir. Otomatik eylem
+        // alanlari yalnizca ANA AKIS gorevlerinde anlamlidir; bu gorev bir
+        // senaryo adimiysa (ScenarioGroup doluysa) hepsi sifirlanir - eski
+        // (kural oncesi) veri de bu goreve her Kaydet'te temizlenmis olur.
+        var isScenarioStep = task.ScenarioGroup is not null;
+
+        task.FailureAction = isScenarioStep ? TaskFailureAction.None : request.FailureAction;
+        task.FailureScenarioGroup = task.FailureAction == TaskFailureAction.SwitchToScenario
             ? request.FailureScenarioGroup?.Trim()
             : null;
-        var failureTargetTaskId = request.FailureAction == TaskFailureAction.SwitchToTask
+        var failureTargetTaskId = task.FailureAction == TaskFailureAction.SwitchToTask
             ? request.FailureTargetTaskId
             : null;
         if (failureTargetTaskId.HasValue)
@@ -223,10 +240,10 @@ public sealed class TaskService(
             await ValidateScenarioRejoinTaskAsync(task.RunbookId, failureTargetTaskId.Value, ct);
         }
         task.FailureTargetTaskId = failureTargetTaskId;
-        task.SuccessScenarioGroup = string.IsNullOrWhiteSpace(request.SuccessScenarioGroup)
+        task.SuccessScenarioGroup = isScenarioStep || string.IsNullOrWhiteSpace(request.SuccessScenarioGroup)
             ? null
             : request.SuccessScenarioGroup.Trim();
-        var successTargetTaskId = task.SuccessScenarioGroup is null ? request.SuccessTargetTaskId : null;
+        var successTargetTaskId = !isScenarioStep && task.SuccessScenarioGroup is null ? request.SuccessTargetTaskId : null;
         if (successTargetTaskId.HasValue)
         {
             await ValidateScenarioRejoinTaskAsync(task.RunbookId, successTargetTaskId.Value, ct);
@@ -768,9 +785,13 @@ public sealed class TaskService(
             triggerTask = await db.Tasks.FirstOrDefaultAsync(t => t.Id == request.TriggerTaskId.Value && t.RunbookId == runbookId, ct)
                 ?? throw new NotFoundException("Gorev", request.TriggerTaskId.Value);
 
-            if (triggerTask.IsRollbackStep)
+            // Bir senaryo adiminin (ve elbette geri donus adiminin) kendi basina
+            // basarili/basarisiz durumu yoktur - yalnizca senaryonun TUMU
+            // basarili/basarisiz sayilir. Bu yuzden bir senaryoyu yalnizca ANA
+            // AKIS gorevleri tetikleyebilir (ayni kural RejoinTaskId icin de gecerli).
+            if (triggerTask.IsRollbackStep || !string.IsNullOrEmpty(triggerTask.ScenarioGroup))
             {
-                throw new BusinessRuleException("Bir geri donus adimi senaryoyu tetikleyemez.");
+                throw new BusinessRuleException("Bir senaryoyu yalnizca ana akis gorevleri tetikleyebilir.");
             }
         }
 
@@ -850,9 +871,9 @@ public sealed class TaskService(
             newTriggerTask = await db.Tasks.FirstOrDefaultAsync(t => t.Id == request.TriggerTaskId.Value && t.RunbookId == scenario.RunbookId, ct)
                 ?? throw new NotFoundException("Gorev", request.TriggerTaskId.Value);
 
-            if (newTriggerTask.IsRollbackStep)
+            if (newTriggerTask.IsRollbackStep || !string.IsNullOrEmpty(newTriggerTask.ScenarioGroup))
             {
-                throw new BusinessRuleException("Bir geri donus adimi senaryoyu tetikleyemez.");
+                throw new BusinessRuleException("Bir senaryoyu yalnizca ana akis gorevleri tetikleyebilir.");
             }
         }
 

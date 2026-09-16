@@ -644,18 +644,18 @@
                         <p class="small br-muted mb-2">
                             <i class="bi bi-info-circle me-1"></i>
                             Bu senaryonun hangi durumda otomatik devreye girecegini belirlemek icin bir
-                            goreve baglayin (ana akis ya da baska bir senaryonun adimi olabilir). Bagli
+                            ANA AKIS gorevine baglayin (bir senaryo adiminin kendi basina basarili/basarisiz
+                            durumu yoktur, senaryo adimlari yalnizca birbirine oncul/ardil olabilir). Bagli
                             gorev secilmezse senaryo yalnizca "Senaryosuna Gec" butonuyla elle baslatilir.
                         </p>
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label small br-muted">Bagli gorev (opsiyonel)</label>
+                        <label class="form-label small br-muted">Bagli gorev (opsiyonel, yalnizca ana akis)</label>
                         <select class="form-select" id="newScenarioTriggerTask">
                             <option value="">-- Secilmedi (elle baslatilir) --</option>
-                            @foreach (var candidate in r.Tasks.Where(t => !t.IsRollbackStep).OrderBy(t => t.Order))
+                            @foreach (var candidate in mainTasks)
                             {
-                                var prefix = string.IsNullOrEmpty(candidate.ScenarioGroup) ? "" : $"[{candidate.ScenarioGroup}] ";
-                                <option value="@candidate.Id">@prefix@candidate.Order. @candidate.Title</option>
+                                <option value="@candidate.Id">@candidate.Order. @candidate.Title</option>
                             }
                         </select>
                     </div>
@@ -803,13 +803,12 @@
                         <input class="form-control" id="editScenarioName" />
                     </div>
                     <div class="col-12">
-                        <label class="form-label small br-muted">Bagli gorev (opsiyonel)</label>
+                        <label class="form-label small br-muted">Bagli gorev (opsiyonel, yalnizca ana akis)</label>
                         <select class="form-select" id="editScenarioTriggerTask">
                             <option value="">-- Secilmedi (elle baslatilir) --</option>
-                            @foreach (var candidate in r.Tasks.Where(t => !t.IsRollbackStep).OrderBy(t => t.Order))
+                            @foreach (var candidate in mainTasks)
                             {
-                                var prefix = string.IsNullOrEmpty(candidate.ScenarioGroup) ? "" : $"[{candidate.ScenarioGroup}] ";
-                                <option value="@candidate.Id">@prefix@candidate.Order. @candidate.Title</option>
+                                <option value="@candidate.Id">@candidate.Order. @candidate.Title</option>
                             }
                         </select>
                     </div>
@@ -904,62 +903,72 @@
                         <label class="form-label small br-muted">Planlanan kesinti (dk)</label>
                         <input class="form-control" type="number" min="0" id="editTaskOutageMinutes" />
                     </div>
-                    <div class="col-md-4">
-                        <label class="form-label small br-muted">Basarisiz olursa</label>
-                        <select class="form-select" id="editTaskFailureAction">
-                            <option value="None">Otomatik eylem yok</option>
-                            <option value="StartRollback">Geri donus planini otomatik baslat</option>
-                            <option value="SwitchToScenario">Bir senaryoya otomatik gec</option>
-                            <option value="SwitchToTask">Belirli bir goreve atla</option>
-                        </select>
+                    <div class="col-12" id="editTaskAutoActionsSection">
+                        <div class="row g-2">
+                            <div class="col-md-4">
+                                <label class="form-label small br-muted">Basarisiz olursa</label>
+                                <select class="form-select" id="editTaskFailureAction">
+                                    <option value="None">Otomatik eylem yok</option>
+                                    <option value="StartRollback">Geri donus planini otomatik baslat</option>
+                                    <option value="SwitchToScenario">Bir senaryoya otomatik gec</option>
+                                    <option value="SwitchToTask">Belirli bir goreve atla</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4" id="editTaskFailureScenarioWrap" hidden>
+                                <label class="form-label small br-muted">Hangi senaryo</label>
+                                <select class="form-select" id="editTaskFailureScenario">
+                                    <option value="">-- Secin --</option>
+                                    @foreach (var sc in scenarios)
+                                    {
+                                        <option value="@sc.Name">@sc.Name</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-4" id="editTaskFailureTargetWrap" hidden>
+                                <label class="form-label small br-muted">Hangi gorev</label>
+                                <select class="form-select" id="editTaskFailureTarget">
+                                    <option value="">-- Secin --</option>
+                                    @foreach (var candidate in taskJumpTargets)
+                                    {
+                                        <option value="@candidate.Id">@candidate.Order. @candidate.Title</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small br-muted">Basarili olursa (opsiyonel)</label>
+                                <select class="form-select" id="editTaskSuccessAction">
+                                    <option value="None">Otomatik eylem yok</option>
+                                    <option value="SwitchToScenario">Bir senaryoya otomatik gec</option>
+                                    <option value="SwitchToTask">Belirli bir goreve atla</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4" id="editTaskSuccessScenarioWrap" hidden>
+                                <label class="form-label small br-muted">Hangi senaryo</label>
+                                <select class="form-select" id="editTaskSuccessScenario">
+                                    <option value="">-- Secin --</option>
+                                    @foreach (var sc in scenarios)
+                                    {
+                                        <option value="@sc.Name">@sc.Name</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-4" id="editTaskSuccessTargetWrap" hidden>
+                                <label class="form-label small br-muted">Hangi gorev</label>
+                                <select class="form-select" id="editTaskSuccessTarget">
+                                    <option value="">-- Secin --</option>
+                                    @foreach (var candidate in taskJumpTargets)
+                                    {
+                                        <option value="@candidate.Id">@candidate.Order. @candidate.Title</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
                     </div>
-                    <div class="col-md-4" id="editTaskFailureScenarioWrap" hidden>
-                        <label class="form-label small br-muted">Hangi senaryo</label>
-                        <select class="form-select" id="editTaskFailureScenario">
-                            <option value="">-- Secin --</option>
-                            @foreach (var sc in scenarios)
-                            {
-                                <option value="@sc.Name">@sc.Name</option>
-                            }
-                        </select>
-                    </div>
-                    <div class="col-md-4" id="editTaskFailureTargetWrap" hidden>
-                        <label class="form-label small br-muted">Hangi gorev</label>
-                        <select class="form-select" id="editTaskFailureTarget">
-                            <option value="">-- Secin --</option>
-                            @foreach (var candidate in taskJumpTargets)
-                            {
-                                <option value="@candidate.Id">@candidate.Order. @candidate.Title</option>
-                            }
-                        </select>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label small br-muted">Basarili olursa (opsiyonel)</label>
-                        <select class="form-select" id="editTaskSuccessAction">
-                            <option value="None">Otomatik eylem yok</option>
-                            <option value="SwitchToScenario">Bir senaryoya otomatik gec</option>
-                            <option value="SwitchToTask">Belirli bir goreve atla</option>
-                        </select>
-                    </div>
-                    <div class="col-md-4" id="editTaskSuccessScenarioWrap" hidden>
-                        <label class="form-label small br-muted">Hangi senaryo</label>
-                        <select class="form-select" id="editTaskSuccessScenario">
-                            <option value="">-- Secin --</option>
-                            @foreach (var sc in scenarios)
-                            {
-                                <option value="@sc.Name">@sc.Name</option>
-                            }
-                        </select>
-                    </div>
-                    <div class="col-md-4" id="editTaskSuccessTargetWrap" hidden>
-                        <label class="form-label small br-muted">Hangi gorev</label>
-                        <select class="form-select" id="editTaskSuccessTarget">
-                            <option value="">-- Secin --</option>
-                            @foreach (var candidate in taskJumpTargets)
-                            {
-                                <option value="@candidate.Id">@candidate.Order. @candidate.Title</option>
-                            }
-                        </select>
+                    <div class="col-12 small br-muted" id="editTaskScenarioStepNote" hidden>
+                        <i class="bi bi-info-circle me-1"></i>
+                        Bu bir senaryo adimidir; senaryo adimlarinin kendi basarili/basarisiz eylemi
+                        yoktur (yalnizca senaryonun TUMU basarili/basarisiz sayilir). Burada yalnizca
+                        oncul gorev secebilirsiniz.
                     </div>
                     <div class="col-12">
                         <label class="form-label small br-muted">
