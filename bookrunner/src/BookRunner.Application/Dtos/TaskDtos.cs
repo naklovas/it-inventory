@@ -62,10 +62,15 @@ public sealed record RunbookTaskDto
     public string? FailureTargetTaskTitle { get; init; }
 
     /// <summary>Dolu ise, bu gorev "Tamamlandi" olarak isaretlendiginde otomatik
-    /// gecilecek senaryo grubu (orn. "Senaryo-B"). Basarisiz durumundan farkli
-    /// olarak basarili tek bir hedefe (senaryoya gecis) sahip olabilir - "basarili
-    /// olursa geri donus baslat" anlamli olmadigindan ayri bir eylem turu yoktur.</summary>
+    /// gecilecek senaryo grubu (orn. "Senaryo-B").</summary>
     public string? SuccessScenarioGroup { get; init; }
+
+    /// <summary>Dolu ise, bu gorev "Tamamlandi" olarak isaretlendiginde otomatik
+    /// atlanacak ana akis gorevi (FailureTargetTaskId'nin basarili karsiligi).</summary>
+    public Guid? SuccessTargetTaskId { get; init; }
+
+    /// <summary>SuccessTargetTaskId doluyken o gorevin basligi (arayuzde gostermek icin).</summary>
+    public string? SuccessTargetTaskTitle { get; init; }
 
     /// <summary>Bu gorevin oncelleri (bu gorev baslamadan/tamamlanmadan once kapanmasi gerekenler).</summary>
     public IReadOnlyList<TaskDependencyRefDto> Predecessors { get; init; } = Array.Empty<TaskDependencyRefDto>();
@@ -210,6 +215,9 @@ public sealed record CreateTaskRequest
     [StringLength(100)]
     public string? SuccessScenarioGroup { get; init; }
 
+    /// <summary>Doldurulursa, bu gorev "Tamamlandi" olursa otomatik atlanacak ana akis gorevi.</summary>
+    public Guid? SuccessTargetTaskId { get; init; }
+
     /// <summary>Bos birakilirsa gorev listenin sonuna eklenir.</summary>
     public int? Order { get; init; }
 }
@@ -272,6 +280,9 @@ public sealed record UpdateTaskRequest
     /// <summary>Doldurulursa, bu gorev "Tamamlandi" olursa otomatik gecilecek senaryo grubu.</summary>
     [StringLength(100)]
     public string? SuccessScenarioGroup { get; init; }
+
+    /// <summary>Doldurulursa, bu gorev "Tamamlandi" olursa otomatik atlanacak ana akis gorevi.</summary>
+    public Guid? SuccessTargetTaskId { get; init; }
 
     public Guid? ScriptId { get; init; }
 }

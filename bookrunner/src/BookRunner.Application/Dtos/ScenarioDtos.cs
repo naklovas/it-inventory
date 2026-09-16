@@ -41,3 +41,22 @@ public sealed record CreateScenarioRequest
     /// <summary>TriggerTaskId doluyken zorunlu: Basarisiz mi Basarili mi olunca tetiklenecek.</summary>
     public ScenarioTriggerCondition? TriggerCondition { get; init; }
 }
+
+/// <summary>Var olan bir senaryoyu guncelleme istegi (bkz. TaskService.UpdateScenarioAsync).
+/// Adimlari etkilemez - yalnizca senaryonun kendisini (ad/tetikleyici/rejoin) degistirir.</summary>
+public sealed record UpdateScenarioRequest
+{
+    [Required, StringLength(100, MinimumLength = 1)]
+    public required string Name { get; init; }
+
+    /// <summary>Doldurulursa, bu senaryo TUM adimlariyla kapandiginda ana runbook'un
+    /// devam edecegi ANA AKIS gorevi. Bos ise senaryo tek yonludur.</summary>
+    public Guid? RejoinTaskId { get; init; }
+
+    /// <summary>Doldurulursa, bu gorev belirtilen kosulda olunca senaryo otomatik
+    /// baslatilir. Bos birakilirsa mevcut tetikleyici (varsa) kaldirilir.</summary>
+    public Guid? TriggerTaskId { get; init; }
+
+    /// <summary>TriggerTaskId doluyken zorunlu: Basarisiz mi Basarili mi olunca tetiklenecek.</summary>
+    public ScenarioTriggerCondition? TriggerCondition { get; init; }
+}

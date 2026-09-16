@@ -341,13 +341,31 @@
                         }
                     </select>
                 </div>
-                <div class="col-md-6">
-                    <label class="form-label small br-muted">Basarili olursa hangi senaryoya gecilsin (opsiyonel)</label>
+                <div class="col-md-4">
+                    <label class="form-label small br-muted">Basarili olursa (opsiyonel)</label>
+                    <select class="form-select" id="newTaskSuccessAction">
+                        <option value="None" selected>Otomatik eylem yok</option>
+                        <option value="SwitchToScenario">Bir senaryoya otomatik gec</option>
+                        <option value="SwitchToTask">Belirli bir goreve atla</option>
+                    </select>
+                </div>
+                <div class="col-md-4" id="newTaskSuccessScenarioWrap" hidden>
+                    <label class="form-label small br-muted">Hangi senaryo</label>
                     <select class="form-select" id="newTaskSuccessScenario">
-                        <option value="">-- Secilmedi --</option>
+                        <option value="">-- Secin --</option>
                         @foreach (var sc in scenarios)
                         {
                             <option value="@sc.Name">@sc.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-4" id="newTaskSuccessTargetWrap" hidden>
+                    <label class="form-label small br-muted">Hangi gorev</label>
+                    <select class="form-select" id="newTaskSuccessTarget">
+                        <option value="">-- Secin --</option>
+                        @foreach (var candidate in taskJumpTargets)
+                        {
+                            <option value="@candidate.Id">@candidate.Order. @candidate.Title</option>
                         }
                     </select>
                 </div>
@@ -551,6 +569,12 @@
                     {
                         <button class="btn btn-outline-primary btn-sm br-switch-scenario-btn" data-scenario-group="@scenario.Name">
                             <i class="bi bi-signpost-split me-1"></i>@scenario.Name Senaryosuna Gec
+                        </button>
+                    }
+                    @if (Model.CanEditThis)
+                    {
+                        <button class="btn btn-outline-secondary btn-sm br-edit-scenario-btn" data-scenario-id="@scenario.Id">
+                            <i class="bi bi-pencil me-1"></i>Duzenle
                         </button>
                     }
                     @if (Model.CanEditThis && groupSteps.Count == 0)
@@ -764,6 +788,58 @@
     </div>
 </div>
 
+<div class="modal fade" id="editScenarioModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Senaryoyu duzenle</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editScenarioId" />
+                <div class="row g-2">
+                    <div class="col-12">
+                        <label class="form-label small br-muted">Senaryo adi *</label>
+                        <input class="form-control" id="editScenarioName" />
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small br-muted">Bagli gorev (opsiyonel)</label>
+                        <select class="form-select" id="editScenarioTriggerTask">
+                            <option value="">-- Secilmedi (elle baslatilir) --</option>
+                            @foreach (var candidate in r.Tasks.Where(t => !t.IsRollbackStep).OrderBy(t => t.Order))
+                            {
+                                var prefix = string.IsNullOrEmpty(candidate.ScenarioGroup) ? "" : $"[{candidate.ScenarioGroup}] ";
+                                <option value="@candidate.Id">@prefix@candidate.Order. @candidate.Title</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-12" id="editScenarioConditionWrap" hidden>
+                        <label class="form-label small br-muted">Bagli gorev su durumda olursa bu senaryoya gecilsin</label>
+                        <select class="form-select" id="editScenarioCondition">
+                            <option value="Failure">Basarisiz olursa</option>
+                            <option value="Success">Basarili olursa</option>
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small br-muted">Bittiginde ana runbook'ta devam edilecek gorev (opsiyonel)</label>
+                        <select class="form-select" id="editScenarioRejoinTask">
+                            <option value="">-- Secilmedi (tek yonlu, runbook'u bitirir) --</option>
+                            @foreach (var candidate in mainTasks)
+                            {
+                                <option value="@candidate.Id">@candidate.Order. @candidate.Title</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Vazgec</button>
+                <button type="button" class="btn btn-primary" id="btnSaveScenarioEdit">Kaydet</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="editTaskModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
@@ -857,13 +933,31 @@
                             }
                         </select>
                     </div>
-                    <div class="col-12">
-                        <label class="form-label small br-muted">Basarili olursa hangi senaryoya gecilsin (opsiyonel)</label>
+                    <div class="col-md-4">
+                        <label class="form-label small br-muted">Basarili olursa (opsiyonel)</label>
+                        <select class="form-select" id="editTaskSuccessAction">
+                            <option value="None">Otomatik eylem yok</option>
+                            <option value="SwitchToScenario">Bir senaryoya otomatik gec</option>
+                            <option value="SwitchToTask">Belirli bir goreve atla</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4" id="editTaskSuccessScenarioWrap" hidden>
+                        <label class="form-label small br-muted">Hangi senaryo</label>
                         <select class="form-select" id="editTaskSuccessScenario">
-                            <option value="">-- Secilmedi --</option>
+                            <option value="">-- Secin --</option>
                             @foreach (var sc in scenarios)
                             {
                                 <option value="@sc.Name">@sc.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-4" id="editTaskSuccessTargetWrap" hidden>
+                        <label class="form-label small br-muted">Hangi gorev</label>
+                        <select class="form-select" id="editTaskSuccessTarget">
+                            <option value="">-- Secin --</option>
+                            @foreach (var candidate in taskJumpTargets)
+                            {
+                                <option value="@candidate.Id">@candidate.Order. @candidate.Title</option>
                             }
                         </select>
                     </div>
@@ -1114,6 +1208,14 @@
         canExecute = Model.CanExecuteThis,
         plannedStart = r.PlannedStart,
         plannedEnd = r.PlannedEnd,
+        scenarios = r.Scenarios.Select(s => new
+        {
+            id = s.Id,
+            name = s.Name,
+            rejoinTaskId = s.RejoinTaskId,
+            triggerTaskId = s.TriggerTaskId,
+            triggerCondition = s.TriggerCondition.HasValue ? s.TriggerCondition.Value.ToString() : null
+        }),
         tasks = r.Tasks.OrderBy(t => t.Order).Select(t => new
         {
             id = t.Id,
@@ -1134,6 +1236,7 @@
             failureScenarioGroup = t.FailureScenarioGroup,
             failureTargetTaskId = t.FailureTargetTaskId,
             successScenarioGroup = t.SuccessScenarioGroup,
+            successTargetTaskId = t.SuccessTargetTaskId,
             scenarioRejoinTaskId = t.ScenarioRejoinTaskId,
             dependsOnTaskIds = t.Predecessors.Select(p => p.TaskId),
             assignmentIds = t.Assignments.Where(a => a.IsActive).Select(a => a.Id)

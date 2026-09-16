@@ -485,6 +485,12 @@ public sealed class RunbooksController(
     public Task<IActionResult> CreateScenario(Guid id, [FromBody] CreateScenarioRequest request, CancellationToken ct)
         => JsonResultAsync(() => Api.CreateScenarioAsync(id, request, ct));
 
+    /// <summary>Var olan bir senaryoyu (ad/tetikleyici/rejoin) gunceller - adimlarini etkilemez.</summary>
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public Task<IActionResult> UpdateScenario(Guid scenarioId, [FromBody] UpdateScenarioRequest request, CancellationToken ct)
+        => JsonResultAsync(() => Api.UpdateScenarioAsync(scenarioId, request, ct));
+
     /// <summary>Bos (adimsiz) bir senaryoyu siler.</summary>
     [HttpPost]
     [ValidateAntiForgeryToken]

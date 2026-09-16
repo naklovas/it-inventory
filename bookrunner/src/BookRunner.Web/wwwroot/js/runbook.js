@@ -160,7 +160,8 @@
             failureAction: task.failureAction || "None",
             failureScenarioGroup: task.failureScenarioGroup || null,
             failureTargetTaskId: task.failureTargetTaskId || null,
-            successScenarioGroup: task.successScenarioGroup || null
+            successScenarioGroup: task.successScenarioGroup || null,
+            successTargetTaskId: task.successTargetTaskId || null
         }, overrides || {});
     }
 
@@ -295,10 +296,12 @@
     wireOutageToggle("editTaskOutage", "editTaskOutageMinutesWrap");
 
     /**
-     * "Basarisiz olursa" secimine gore ilgili hedef alanini gosterir/gizler:
-     * SwitchToScenario -> senaryo secimi, SwitchToTask -> gorev secimi.
+     * "Basarisiz/basarili olursa" secimine gore ilgili hedef alanini gosterir/gizler:
+     * SwitchToScenario -> senaryo secimi, SwitchToTask -> gorev secimi. Hem
+     * basarisiz (StartRollback/SwitchToScenario/SwitchToTask) hem basarili
+     * (SwitchToScenario/SwitchToTask) eylem secicileri icin ortak kullanilir.
      */
-    function wireFailureActionToggle(selectId, scenarioWrapId, targetWrapId) {
+    function wireActionToggle(selectId, scenarioWrapId, targetWrapId) {
         const select = document.getElementById(selectId);
         const scenarioWrap = document.getElementById(scenarioWrapId);
         const targetWrap = document.getElementById(targetWrapId);
@@ -318,8 +321,10 @@
         sync();
     }
 
-    wireFailureActionToggle("newTaskFailureAction", "newTaskFailureScenarioWrap", "newTaskFailureTargetWrap");
-    wireFailureActionToggle("editTaskFailureAction", "editTaskFailureScenarioWrap", "editTaskFailureTargetWrap");
+    wireActionToggle("newTaskFailureAction", "newTaskFailureScenarioWrap", "newTaskFailureTargetWrap");
+    wireActionToggle("editTaskFailureAction", "editTaskFailureScenarioWrap", "editTaskFailureTargetWrap");
+    wireActionToggle("newTaskSuccessAction", "newTaskSuccessScenarioWrap", "newTaskSuccessTargetWrap");
+    wireActionToggle("editTaskSuccessAction", "editTaskSuccessScenarioWrap", "editTaskSuccessTargetWrap");
 
     // ------------------------------------------------------------ gorev ekleme
 
@@ -338,7 +343,9 @@
             const failureAction = document.getElementById("newTaskFailureAction").value;
             const failureScenarioGroup = document.getElementById("newTaskFailureScenario").value.trim();
             const failureTargetTaskId = document.getElementById("newTaskFailureTarget").value;
+            const successAction = document.getElementById("newTaskSuccessAction").value;
             const successScenarioGroup = document.getElementById("newTaskSuccessScenario").value.trim();
+            const successTargetTaskId = document.getElementById("newTaskSuccessTarget").value;
             const dependsOnTaskIds = Array.from(document.querySelectorAll(".br-new-task-depends:checked"))
                 .map((el) => el.value);
 
@@ -348,6 +355,14 @@
             }
             if (failureAction === "SwitchToTask" && !failureTargetTaskId) {
                 toast("Basarisiz olursa atlanacak gorevi secin.", "warning");
+                return;
+            }
+            if (successAction === "SwitchToScenario" && !successScenarioGroup) {
+                toast("Basarili olursa gecilecek senaryoyu secin.", "warning");
+                return;
+            }
+            if (successAction === "SwitchToTask" && !successTargetTaskId) {
+                toast("Basarili olursa atlanacak gorevi secin.", "warning");
                 return;
             }
 
@@ -367,7 +382,8 @@
                     failureAction: failureAction,
                     failureScenarioGroup: failureAction === "SwitchToScenario" ? failureScenarioGroup : null,
                     failureTargetTaskId: failureAction === "SwitchToTask" ? failureTargetTaskId : null,
-                    successScenarioGroup: successScenarioGroup || null
+                    successScenarioGroup: successAction === "SwitchToScenario" ? successScenarioGroup : null,
+                    successTargetTaskId: successAction === "SwitchToTask" ? successTargetTaskId : null
                 }, { id: config.runbookId });
 
                 if (selection.newTask.length > 0) {
@@ -509,6 +525,64 @@
                     rejoinTaskId: rejoinTaskId || null
                 }, { id: config.runbookId });
 
+                reload();
+            } catch (error) {
+                showActionError(error);
+            }
+        });
+    }
+
+    const editScenarioModalElement = document.getElementById("editScenarioModal");
+    const editScenarioModal = editScenarioModalElement ? new bootstrap.Modal(editScenarioModalElement) : null;
+
+    const editScenarioTriggerTaskSelect = document.getElementById("editScenarioTriggerTask");
+    const editScenarioConditionWrap = document.getElementById("editScenarioConditionWrap");
+    if (editScenarioTriggerTaskSelect && editScenarioConditionWrap) {
+        editScenarioTriggerTaskSelect.addEventListener("change", () => {
+            editScenarioConditionWrap.hidden = !editScenarioTriggerTaskSelect.value;
+        });
+    }
+
+    document.querySelectorAll(".br-edit-scenario-btn").forEach((button) => {
+        button.addEventListener("click", () => {
+            const scenario = (config.scenarios || []).find((item) => item.id === button.dataset.scenarioId);
+            if (!scenario || !editScenarioModal) {
+                return;
+            }
+
+            document.getElementById("editScenarioId").value = scenario.id;
+            document.getElementById("editScenarioName").value = scenario.name;
+            document.getElementById("editScenarioTriggerTask").value = scenario.triggerTaskId || "";
+            document.getElementById("editScenarioCondition").value = scenario.triggerCondition || "Failure";
+            document.getElementById("editScenarioConditionWrap").hidden = !scenario.triggerTaskId;
+            document.getElementById("editScenarioRejoinTask").value = scenario.rejoinTaskId || "";
+
+            editScenarioModal.show();
+        });
+    });
+
+    const saveScenarioEditButton = document.getElementById("btnSaveScenarioEdit");
+    if (saveScenarioEditButton) {
+        saveScenarioEditButton.addEventListener("click", async () => {
+            const name = document.getElementById("editScenarioName").value.trim();
+            if (name.length < 1) {
+                toast("Senaryo adi girilmeli.", "warning");
+                return;
+            }
+
+            const triggerTaskId = document.getElementById("editScenarioTriggerTask").value;
+            const triggerCondition = document.getElementById("editScenarioCondition").value;
+            const rejoinTaskId = document.getElementById("editScenarioRejoinTask").value;
+
+            try {
+                await post("UpdateScenario", {
+                    name: name,
+                    triggerTaskId: triggerTaskId || null,
+                    triggerCondition: triggerTaskId ? triggerCondition : null,
+                    rejoinTaskId: rejoinTaskId || null
+                }, { scenarioId: document.getElementById("editScenarioId").value });
+
+                editScenarioModal.hide();
                 reload();
             } catch (error) {
                 showActionError(error);
@@ -742,7 +816,20 @@
             document.getElementById("editTaskFailureTarget").value = task.failureTargetTaskId || "";
             failureScenarioWrap.hidden = failureActionSelect.value !== "SwitchToScenario";
             failureTargetWrap.hidden = failureActionSelect.value !== "SwitchToTask";
+
+            // Basarili oldugunda tetiklenecek eylem icin ayri bir enum yok
+            // (bkz. RunbookTask.SuccessScenarioGroup/SuccessTargetTaskId) -
+            // hangi alan doluysa secim ona gore turetilir.
+            const successActionSelect = document.getElementById("editTaskSuccessAction");
+            const successScenarioWrap = document.getElementById("editTaskSuccessScenarioWrap");
+            const successTargetWrap = document.getElementById("editTaskSuccessTargetWrap");
+            successActionSelect.value = task.successTargetTaskId
+                ? "SwitchToTask"
+                : (task.successScenarioGroup ? "SwitchToScenario" : "None");
             document.getElementById("editTaskSuccessScenario").value = task.successScenarioGroup || "";
+            document.getElementById("editTaskSuccessTarget").value = task.successTargetTaskId || "";
+            successScenarioWrap.hidden = successActionSelect.value !== "SwitchToScenario";
+            successTargetWrap.hidden = successActionSelect.value !== "SwitchToTask";
 
             const startInput = document.getElementById("editTaskStart");
             const endInput = document.getElementById("editTaskEnd");
@@ -770,7 +857,9 @@
             const failureAction = document.getElementById("editTaskFailureAction").value;
             const failureScenarioGroup = document.getElementById("editTaskFailureScenario").value.trim();
             const failureTargetTaskId = document.getElementById("editTaskFailureTarget").value;
+            const successAction = document.getElementById("editTaskSuccessAction").value;
             const successScenarioGroup = document.getElementById("editTaskSuccessScenario").value.trim();
+            const successTargetTaskId = document.getElementById("editTaskSuccessTarget").value;
             const dependsOnTaskIds = Array.from(document.querySelectorAll(".br-edit-task-depends:checked"))
                 .map((el) => el.value);
 
@@ -780,6 +869,14 @@
             }
             if (failureAction === "SwitchToTask" && !failureTargetTaskId) {
                 toast("Basarisiz olursa atlanacak gorevi secin.", "warning");
+                return;
+            }
+            if (successAction === "SwitchToScenario" && !successScenarioGroup) {
+                toast("Basarili olursa gecilecek senaryoyu secin.", "warning");
+                return;
+            }
+            if (successAction === "SwitchToTask" && !successTargetTaskId) {
+                toast("Basarili olursa atlanacak gorevi secin.", "warning");
                 return;
             }
 
@@ -812,7 +909,8 @@
                     failureAction: failureAction,
                     failureScenarioGroup: failureAction === "SwitchToScenario" ? failureScenarioGroup : null,
                     failureTargetTaskId: failureAction === "SwitchToTask" ? failureTargetTaskId : null,
-                    successScenarioGroup: successScenarioGroup || null
+                    successScenarioGroup: successAction === "SwitchToScenario" ? successScenarioGroup : null,
+                    successTargetTaskId: successAction === "SwitchToTask" ? successTargetTaskId : null
                 }, { taskId: document.getElementById("editTaskId").value });
 
                 editTaskModal.hide();
@@ -1154,7 +1252,11 @@
             document.getElementById("newTaskFailureScenarioWrap").hidden = true;
             document.getElementById("newTaskFailureTarget").value = "";
             document.getElementById("newTaskFailureTargetWrap").hidden = true;
+            document.getElementById("newTaskSuccessAction").value = "None";
             document.getElementById("newTaskSuccessScenario").value = "";
+            document.getElementById("newTaskSuccessScenarioWrap").hidden = true;
+            document.getElementById("newTaskSuccessTarget").value = "";
+            document.getElementById("newTaskSuccessTargetWrap").hidden = true;
         });
     }
 

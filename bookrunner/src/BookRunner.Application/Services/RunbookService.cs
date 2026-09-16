@@ -212,7 +212,8 @@ public sealed class RunbookService(
         var tasks = runbook.Tasks
             .OrderBy(t => t.Order)
             .Select(t => t.ToDto(includeComments: true, mentionLookup,
-                t.FailureTargetTaskId.HasValue ? taskTitleLookup.GetValueOrDefault(t.FailureTargetTaskId.Value) : null))
+                t.FailureTargetTaskId.HasValue ? taskTitleLookup.GetValueOrDefault(t.FailureTargetTaskId.Value) : null,
+                t.SuccessTargetTaskId.HasValue ? taskTitleLookup.GetValueOrDefault(t.SuccessTargetTaskId.Value) : null))
             .ToList();
 
         var collaborators = await GetCollaboratorsAsync(id, ct);
@@ -712,6 +713,12 @@ public sealed class RunbookService(
                 idMap.TryGetValue(source.FailureTargetTaskId.Value, out var newFailureTargetId))
             {
                 copy.FailureTargetTaskId = newFailureTargetId;
+            }
+
+            if (source.SuccessTargetTaskId.HasValue &&
+                idMap.TryGetValue(source.SuccessTargetTaskId.Value, out var newSuccessTargetId))
+            {
+                copy.SuccessTargetTaskId = newSuccessTargetId;
             }
         }
 

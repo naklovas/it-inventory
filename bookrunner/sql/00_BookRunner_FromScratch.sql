@@ -404,6 +404,7 @@ BEGIN
         [FailureScenarioGroup] nvarchar(100) NULL,
         [FailureTargetTaskId] uniqueidentifier NULL,
         [SuccessScenarioGroup] nvarchar(100) NULL,
+        [SuccessTargetTaskId] uniqueidentifier NULL,
         [ScriptId] uniqueidentifier NULL,
         [RollbackNotes] nvarchar(4000) NULL,
         [IsDeleted] bit NOT NULL,
@@ -508,6 +509,15 @@ GO
 IF COL_LENGTH(N'bookrunner.Tasks', 'SuccessScenarioGroup') IS NULL
 BEGIN
     ALTER TABLE [bookrunner].[Tasks] ADD [SuccessScenarioGroup] nvarchar(100) NULL;
+END
+GO
+
+-- Mevcut kurulumlarda Tasks tablosu "basarili olursa belirli bir goreve atla"
+-- hedefi olmadan olusturulmus olabilir (bkz. RunbookTask.SuccessTargetTaskId).
+-- FailureTargetTaskId gibi kasitli olarak FK yoktur.
+IF COL_LENGTH(N'bookrunner.Tasks', 'SuccessTargetTaskId') IS NULL
+BEGIN
+    ALTER TABLE [bookrunner].[Tasks] ADD [SuccessTargetTaskId] uniqueidentifier NULL;
 END
 GO
 
@@ -1863,6 +1873,15 @@ BEGIN
     BEGIN
         INSERT INTO [bookrunner].[__EFMigrationsHistory] ([MigrationId], [ProductVersion])
         VALUES (N'20260916113724_AddScenarioEntityAndFailureTargetTask', N'9.0.19');
+    END
+
+    IF NOT EXISTS (
+        SELECT 1 FROM [bookrunner].[__EFMigrationsHistory]
+        WHERE [MigrationId] = N'20260916122746_AddSuccessTargetTaskId'
+    )
+    BEGIN
+        INSERT INTO [bookrunner].[__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+        VALUES (N'20260916122746_AddSuccessTargetTaskId', N'9.0.19');
     END
 
     PRINT N'';

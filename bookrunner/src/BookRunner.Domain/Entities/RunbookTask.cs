@@ -108,11 +108,21 @@ public class RunbookTask : AuditableEntity, ISoftDeletable
 
     /// <summary>
     /// Dolu ise, bu gorev "Tamamlandi" olarak isaretlendiginde otomatik gecilecek
-    /// senaryo grubunun adi (orn. "Senaryo-B"). FailureAction'dan farkli olarak
-    /// basarili durumun tek anlamli hedefi senaryoya gecistir - "basarili olursa
-    /// geri donus baslat" mantiksiz oldugundan ayri bir enum yoktur.
+    /// senaryo grubunun adi (orn. "Senaryo-B"). "Basarili olursa geri donus
+    /// baslat" mantiksiz oldugundan FailureAction'daki gibi ayri bir enum
+    /// yoktur; iki hedef turu (senaryo/gorev) SuccessScenarioGroup ve
+    /// SuccessTargetTaskId alanlarinin hangisinin dolu oldugu ile ayirt edilir
+    /// (UI ikisini ayni anda doldurmaz, TaskService.ChangeStatusAsync
+    /// SuccessScenarioGroup'u once kontrol eder).
     /// </summary>
     public string? SuccessScenarioGroup { get; set; }
+
+    /// <summary>
+    /// Dolu ise, bu gorev "Tamamlandi" olarak isaretlendiginde otomatik atlanacak
+    /// ANA AKIS gorevi (bkz. FailureTargetTaskId, TaskService.ActivateTaskJump).
+    /// SuccessScenarioGroup gibi kasitli olarak FK/navigasyon ozelligi yoktur.
+    /// </summary>
+    public Guid? SuccessTargetTaskId { get; set; }
 
     /// <summary>Tamamlandi olarak isaretlenirken girilen, gelecege yonelik not
     /// (orn. "bir dahaki sefere X'e dikkat edilmeli"). Tarihcedeki durum degisikligi

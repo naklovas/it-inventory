@@ -113,6 +113,14 @@ public sealed class TasksController(ITaskService tasks) : ControllerBase
         return CreatedAtAction(nameof(ListScenarios), new { runbookId }, created);
     }
 
+    /// <summary>Var olan bir senaryoyu (ad/tetikleyici/rejoin) gunceller - adimlarini etkilemez.</summary>
+    [HttpPut("scenarios/{scenarioId:guid}")]
+    [Authorize(Policy = Permissions.RunbookRead)]
+    [ProducesResponseType(typeof(ScenarioDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<ScenarioDto>> UpdateScenario(
+        Guid scenarioId, [FromBody] UpdateScenarioRequest request, CancellationToken ct)
+        => Ok(await tasks.UpdateScenarioAsync(scenarioId, request, ct));
+
     /// <summary>Bos (adimsiz) bir senaryoyu siler.</summary>
     [HttpDelete("scenarios/{scenarioId:guid}")]
     [Authorize(Policy = Permissions.RunbookRead)]

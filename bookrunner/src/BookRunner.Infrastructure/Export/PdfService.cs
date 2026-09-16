@@ -367,6 +367,14 @@ public sealed class PdfService(BookRunnerDbContext db, IAuditService audit) : IP
         {
             yield return ($"Basarili olursa -> Senaryo: {task.SuccessScenarioGroup}", "#2E7D32");
         }
+        else if (task.SuccessTargetTaskId.HasValue)
+        {
+            var target = allTasks.FirstOrDefault(t => t.Id == task.SuccessTargetTaskId.Value);
+            if (target is not null)
+            {
+                yield return ($"Basarili olursa -> Gorev {target.Order}. {target.Title}", "#2E7D32");
+            }
+        }
     }
 
     private static string StatusColor(RunbookTaskStatus status) => status switch

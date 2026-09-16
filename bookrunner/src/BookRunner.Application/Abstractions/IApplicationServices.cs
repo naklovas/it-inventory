@@ -131,6 +131,14 @@ public interface ITaskService
     /// <summary>Bu runbook'ta tanimli senaryolarin listesi (adimsiz olanlar dahil).</summary>
     Task<IReadOnlyList<ScenarioDto>> ListScenariosAsync(Guid runbookId, CancellationToken ct = default);
 
+    /// <summary>
+    /// Var olan bir senaryoyu (ad/tetikleyici/rejoin) gunceller - adimlarini
+    /// etkilemez. Ad degisirse tum uye gorevlerin ScenarioGroup'u ve bu
+    /// senaryoya referans veren FailureScenarioGroup/SuccessScenarioGroup/
+    /// Runbook.ActiveScenarioGroup degerleri de yeni adla eslenir.
+    /// </summary>
+    Task<ScenarioDto> UpdateScenarioAsync(Guid scenarioId, UpdateScenarioRequest request, CancellationToken ct = default);
+
     /// <summary>Bir senaryoyu siler - yalnizca hicbir adimi yoksa (yanlislikla
     /// olusturulmus bos bir senaryoyu temizlemek icin).</summary>
     Task DeleteScenarioAsync(Guid scenarioId, CancellationToken ct = default);

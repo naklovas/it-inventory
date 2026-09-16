@@ -182,6 +182,11 @@
                 if (target && target.tasks.length > 0) {
                     lines.push("    " + flowNodeId(t.id) + " -.->|\"Basarili\"| " + flowNodeId(target.tasks[0].id));
                 }
+            } else if (t.successTargetTaskId) {
+                const target = mainTasks.find((m) => m.id === t.successTargetTaskId);
+                if (target) {
+                    lines.push("    " + flowNodeId(t.id) + " -.->|\"Basarili\"| " + flowNodeId(target.id));
+                }
             }
         });
 

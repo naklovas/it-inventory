@@ -95,7 +95,8 @@ public static class Mapping
         this RunbookTask task,
         bool includeComments = true,
         IReadOnlyDictionary<Guid, AppUser>? mentionLookup = null,
-        string? failureTargetTaskTitle = null) => new()
+        string? failureTargetTaskTitle = null,
+        string? successTargetTaskTitle = null) => new()
     {
         Id = task.Id,
         RunbookId = task.RunbookId,
@@ -124,6 +125,8 @@ public static class Mapping
         FailureTargetTaskId = task.FailureTargetTaskId,
         FailureTargetTaskTitle = failureTargetTaskTitle,
         SuccessScenarioGroup = task.SuccessScenarioGroup,
+        SuccessTargetTaskId = task.SuccessTargetTaskId,
+        SuccessTargetTaskTitle = successTargetTaskTitle,
         ScenarioRejoinTaskId = task.ScenarioRejoinTaskId,
         Predecessors = task.Predecessors
             .OrderBy(d => d.DependsOnTask.Order)

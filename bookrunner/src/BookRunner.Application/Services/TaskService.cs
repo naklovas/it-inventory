@@ -36,7 +36,16 @@ public sealed class TaskService(
                 .FirstOrDefaultAsync(ct);
         }
 
-        return task.ToDto(failureTargetTaskTitle: failureTargetTitle);
+        string? successTargetTitle = null;
+        if (task.SuccessTargetTaskId.HasValue)
+        {
+            successTargetTitle = await db.Tasks
+                .Where(t => t.Id == task.SuccessTargetTaskId.Value)
+                .Select(t => t.Title)
+                .FirstOrDefaultAsync(ct);
+        }
+
+        return task.ToDto(failureTargetTaskTitle: failureTargetTitle, successTargetTaskTitle: successTargetTitle);
     }
 
     public async Task<RunbookTaskDto> CreateAsync(Guid runbookId, CreateTaskRequest request, CancellationToken ct = default)
@@ -66,6 +75,18 @@ public sealed class TaskService(
         if (failureTargetTaskId.HasValue)
         {
             await ValidateScenarioRejoinTaskAsync(runbookId, failureTargetTaskId.Value, ct);
+        }
+
+        // Basarili oldugunda iki hedef turu (senaryo/gorev) birbirini dislar -
+        // senaryo adi doluysa gorev hedefi yok sayilir (UI ikisini ayni anda
+        // doldurmaz, bu yalnizca bir savunma katmanidir).
+        var successScenarioGroup = string.IsNullOrWhiteSpace(request.SuccessScenarioGroup)
+            ? null
+            : request.SuccessScenarioGroup.Trim();
+        var successTargetTaskId = successScenarioGroup is null ? request.SuccessTargetTaskId : null;
+        if (successTargetTaskId.HasValue)
+        {
+            await ValidateScenarioRejoinTaskAsync(runbookId, successTargetTaskId.Value, ct);
         }
 
         // Ana akis, geri donus adimlari ve her senaryo grubu ayri listeler olarak
@@ -110,9 +131,8 @@ public sealed class TaskService(
                 ? request.FailureScenarioGroup?.Trim()
                 : null,
             FailureTargetTaskId = failureTargetTaskId,
-            SuccessScenarioGroup = string.IsNullOrWhiteSpace(request.SuccessScenarioGroup)
-                ? null
-                : request.SuccessScenarioGroup.Trim()
+            SuccessScenarioGroup = successScenarioGroup,
+            SuccessTargetTaskId = successTargetTaskId
         };
 
         var dependsOnIds = request.DependsOnTaskIds.Distinct().ToList();
@@ -206,6 +226,12 @@ public sealed class TaskService(
         task.SuccessScenarioGroup = string.IsNullOrWhiteSpace(request.SuccessScenarioGroup)
             ? null
             : request.SuccessScenarioGroup.Trim();
+        var successTargetTaskId = task.SuccessScenarioGroup is null ? request.SuccessTargetTaskId : null;
+        if (successTargetTaskId.HasValue)
+        {
+            await ValidateScenarioRejoinTaskAsync(task.RunbookId, successTargetTaskId.Value, ct);
+        }
+        task.SuccessTargetTaskId = successTargetTaskId;
 
         if (!string.IsNullOrWhiteSpace(request.ColorHex))
         {
@@ -385,7 +411,8 @@ public sealed class TaskService(
         // atlanir - bu otomatik adim asla hata firlatip durum degisikligini
         // engellemez.
         var hasFailureTrigger = request.Status == RunbookTaskStatus.Failed && task.FailureAction != TaskFailureAction.None;
-        var hasSuccessTrigger = request.Status == RunbookTaskStatus.Completed && !string.IsNullOrWhiteSpace(task.SuccessScenarioGroup);
+        var hasSuccessTrigger = request.Status == RunbookTaskStatus.Completed
+            && (!string.IsNullOrWhiteSpace(task.SuccessScenarioGroup) || task.SuccessTargetTaskId.HasValue);
 
         if (hasFailureTrigger || hasSuccessTrigger)
         {
@@ -420,10 +447,21 @@ public sealed class TaskService(
             else if (hasSuccessTrigger
                 && !task.Runbook.IsRollbackActive
                 && string.IsNullOrEmpty(task.Runbook.ActiveScenarioGroup)
+                && !string.IsNullOrWhiteSpace(task.SuccessScenarioGroup)
                 && siblingTasks.Any(t => !t.IsRollbackStep && t.ScenarioGroup == task.SuccessScenarioGroup))
             {
                 ActivateScenario(task.Runbook, siblingTasks, task.SuccessScenarioGroup!,
                     $"'{task.Title}' basarili oldugu icin '{task.SuccessScenarioGroup}' senaryosuna otomatik gecildi");
+            }
+            else if (hasSuccessTrigger
+                && !task.Runbook.IsRollbackActive
+                && string.IsNullOrEmpty(task.Runbook.ActiveScenarioGroup)
+                && task.SuccessTargetTaskId.HasValue
+                && siblingTasks.Any(t => t.Id == task.SuccessTargetTaskId.Value && !t.IsRollbackStep && string.IsNullOrEmpty(t.ScenarioGroup)))
+            {
+                var targetTitle = siblingTasks.First(t => t.Id == task.SuccessTargetTaskId.Value).Title;
+                ActivateTaskJump(task.Runbook, siblingTasks, task.SuccessTargetTaskId.Value,
+                    $"'{task.Title}' basarili oldugu icin '{targetTitle}' gorevine otomatik atlandi");
             }
         }
 
@@ -769,6 +807,131 @@ public sealed class TaskService(
 
         var allTasks = await db.Tasks.Where(t => t.RunbookId == runbookId).ToListAsync(ct);
         return scenario.ToDto(allTasks);
+    }
+
+    public async Task<ScenarioDto> UpdateScenarioAsync(Guid scenarioId, UpdateScenarioRequest request, CancellationToken ct = default)
+    {
+        var scenario = await db.Scenarios.FirstOrDefaultAsync(s => s.Id == scenarioId, ct)
+            ?? throw new NotFoundException("Senaryo", scenarioId);
+
+        await access.EnsureForRunbookAsync(scenario.RunbookId, Permissions.TaskWrite, ct);
+
+        var runbook = await db.Runbooks.FirstOrDefaultAsync(r => r.Id == scenario.RunbookId, ct)
+            ?? throw new NotFoundException("Runbook", scenario.RunbookId);
+
+        var oldName = scenario.Name;
+        var newName = request.Name.Trim();
+        if (newName.Length == 0)
+        {
+            throw ValidationException.Single(nameof(UpdateScenarioRequest.Name), "Senaryo adi bos olamaz.");
+        }
+
+        var nameTaken = await db.Scenarios.AnyAsync(s => s.Id != scenarioId && s.RunbookId == scenario.RunbookId
+            && s.Name.ToLower() == newName.ToLower(), ct);
+        if (nameTaken)
+        {
+            throw new BusinessRuleException($"'{newName}' adinda bir senaryo zaten var.");
+        }
+
+        if (request.RejoinTaskId.HasValue)
+        {
+            await ValidateScenarioRejoinTaskAsync(scenario.RunbookId, request.RejoinTaskId.Value, ct);
+        }
+
+        RunbookTask? newTriggerTask = null;
+        if (request.TriggerTaskId.HasValue)
+        {
+            if (request.TriggerCondition is null)
+            {
+                throw ValidationException.Single(nameof(UpdateScenarioRequest.TriggerCondition),
+                    "Bagli gorev secildiyse hangi kosulda (basarili/basarisiz) tetiklenecegi de secilmelidir.");
+            }
+
+            newTriggerTask = await db.Tasks.FirstOrDefaultAsync(t => t.Id == request.TriggerTaskId.Value && t.RunbookId == scenario.RunbookId, ct)
+                ?? throw new NotFoundException("Gorev", request.TriggerTaskId.Value);
+
+            if (newTriggerTask.IsRollbackStep)
+            {
+                throw new BusinessRuleException("Bir geri donus adimi senaryoyu tetikleyemez.");
+            }
+        }
+
+        var allTasks = await db.Tasks.Where(t => t.RunbookId == scenario.RunbookId).ToListAsync(ct);
+
+        // Eski tetikleyici gorev (varsa) Scenario uzerinde ayrica saklanmaz -
+        // ToDto ile ayni sekilde tum gorevler taranarak bulunur (bkz.
+        // Mapping.ToDto(Scenario)). Ad degisse de degismese de, tetikleyici
+        // gorev/kosul degistiyse eski gorevin alanlari once temizlenir.
+        var oldTriggerTask = allTasks.FirstOrDefault(t =>
+            (t.FailureAction == TaskFailureAction.SwitchToScenario && t.FailureScenarioGroup == oldName) ||
+            t.SuccessScenarioGroup == oldName);
+
+        // Kosulsuz temizlenir: ayni gorev yeni tetikleyici olarak kalsa bile
+        // (orn. kosulu Basarisiz'dan Basarili'ya degisti), eski alan once
+        // sifirlanmali - aksi halde asagida ayni goreve iki farkli tetikleyici
+        // alani (FailureScenarioGroup VE SuccessScenarioGroup) ayni anda dolu kalabilirdi.
+        if (oldTriggerTask is not null)
+        {
+            if (oldTriggerTask.FailureScenarioGroup == oldName)
+            {
+                oldTriggerTask.FailureAction = TaskFailureAction.None;
+                oldTriggerTask.FailureScenarioGroup = null;
+            }
+            if (oldTriggerTask.SuccessScenarioGroup == oldName)
+            {
+                oldTriggerTask.SuccessScenarioGroup = null;
+            }
+        }
+
+        if (oldName != newName)
+        {
+            foreach (var member in allTasks.Where(t => !t.IsRollbackStep && t.ScenarioGroup == oldName))
+            {
+                member.ScenarioGroup = newName;
+            }
+            foreach (var referencer in allTasks.Where(t =>
+                t.FailureAction == TaskFailureAction.SwitchToScenario && t.FailureScenarioGroup == oldName))
+            {
+                referencer.FailureScenarioGroup = newName;
+            }
+            foreach (var referencer in allTasks.Where(t => t.SuccessScenarioGroup == oldName))
+            {
+                referencer.SuccessScenarioGroup = newName;
+            }
+            if (runbook.ActiveScenarioGroup == oldName)
+            {
+                runbook.ActiveScenarioGroup = newName;
+            }
+        }
+
+        if (newTriggerTask is not null)
+        {
+            if (request.TriggerCondition == ScenarioTriggerCondition.Failure)
+            {
+                newTriggerTask.FailureAction = TaskFailureAction.SwitchToScenario;
+                newTriggerTask.FailureScenarioGroup = newName;
+            }
+            else
+            {
+                newTriggerTask.SuccessScenarioGroup = newName;
+            }
+
+            var conditionText = request.TriggerCondition == ScenarioTriggerCondition.Failure ? "basarisiz" : "basarili";
+            AddActivity(newTriggerTask.Id, TaskActivityType.Updated,
+                $"'{newName}' senaryosu bu gorev {conditionText} olursa otomatik tetiklenecek sekilde baglandi.");
+        }
+
+        scenario.Name = newName;
+        scenario.RejoinTaskId = request.RejoinTaskId;
+
+        await db.SaveChangesAsync(ct);
+
+        await audit.LogAsync(AuditAction.Update, nameof(Scenario), scenario.Id.ToString(),
+            $"'{oldName}' senaryosu guncellendi.", scenario.RunbookId, ct: ct);
+        await realtime.RunbookChangedAsync(scenario.RunbookId, "scenario-updated", ct);
+
+        var refreshedTasks = await db.Tasks.Where(t => t.RunbookId == scenario.RunbookId).ToListAsync(ct);
+        return scenario.ToDto(refreshedTasks);
     }
 
     public async Task<IReadOnlyList<ScenarioDto>> ListScenariosAsync(Guid runbookId, CancellationToken ct = default)
