@@ -1599,6 +1599,7 @@
     }
 
     let flowchartRendered = false;
+    let flowchartRenderAttempt = 0;
 
     function loadMermaid() {
         if (window.mermaid) {
@@ -1629,8 +1630,15 @@
         const scroll = document.getElementById("flowchartScroll");
         const container = document.getElementById("flowchartMermaid");
 
+        // Gecici tanilama izleri: bir onceki raporda script yuklemesi (200 OK)
+        // ve uretilen tanim (__brFlowchartDefinition()) sorunsuzken cizim yine
+        // de hicbir hata/zaman asimi vermeden takildi - JS tek threadli oldugu
+        // icin gercek bir senkron takilma setTimeout tabanli zaman asimini bile
+        // engelleyebilir. Bu loglar tam olarak HANGI adimda kalindigini gosterir.
+        console.log("[akis-semasi] baslatildi");
         try {
             await withTimeout(loadMermaid(), 15000);
+            console.log("[akis-semasi] mermaid kutuphanesi yuklendi, versiyon:", window.mermaid && window.mermaid.version);
             window.mermaid.initialize({
                 startOnLoad: false,
                 theme: "base",
@@ -1639,8 +1647,16 @@
                 maxEdges: 2000,
                 flowchart: { htmlLabels: true, curve: "basis" }
             });
+            console.log("[akis-semasi] initialize tamamlandi");
             const definition = buildFlowchartDefinition();
-            const result = await withTimeout(window.mermaid.render("flowchartSvg", definition), 20000);
+            console.log("[akis-semasi] tanim uretildi, uzunluk:", definition.length);
+            console.log("[akis-semasi] render baslatiliyor...");
+            // Ayni id'yi tekrar denemelerde yeniden kullanmamak icin sayac eklenir -
+            // mermaid'in ic render onbelleginde eski bir kaydin kalmasi ihtimaline karsi.
+            flowchartRenderAttempt += 1;
+            const result = await withTimeout(
+                window.mermaid.render("flowchartSvg" + flowchartRenderAttempt, definition), 20000);
+            console.log("[akis-semasi] render TAMAMLANDI, svg uzunlugu:", result.svg.length);
             // Not: mermaid basarili/basarisiz her SVG'de ayni ".error-icon" CSS
             // sinifini onceden tanimlar (temanin bir parcasi) - bu yuzden onceki
             // "iceriginde error-icon var mi" kontrolu YANLIS POZITIF veriyordu
@@ -1651,6 +1667,7 @@
             applyFlowchartPhotos(container);
             loading.hidden = true;
             scroll.hidden = false;
+            console.log("[akis-semasi] gosterildi");
         } catch (error) {
             loading.hidden = true;
             flowchartRendered = false;
