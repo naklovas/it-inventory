@@ -309,6 +309,27 @@ public sealed class RunbookService(
 
         if (request.Status != oldStatus)
         {
+            // Runbook Duzenle formundaki Durum secimi, TaskService.ChangeStatusAsync'i
+            // (ilk gorev baslatildiginda otomatik Devam Ediyor yapan yol) ATLAYIP
+            // dogrudan buradan da Taslak/Planlandi -> Devam Ediyor'a gecebilir - o
+            // yuzden ayni "atanmamis gorev varken baslatilamaz" kurali burada da
+            // uygulanmali, aksi halde bu form uzerinden kural tamamen bypass edilirdi.
+            if (request.Status == RunbookStatus.InProgress && oldStatus is RunbookStatus.Draft or RunbookStatus.Scheduled)
+            {
+                var unassignedTitles = await db.Tasks
+                    .Where(t => t.RunbookId == runbook.Id && !t.Assignments.Any(a => a.IsActive))
+                    .OrderBy(t => t.Order)
+                    .Select(t => t.Title)
+                    .ToListAsync(ct);
+
+                if (unassignedTitles.Count > 0)
+                {
+                    throw new BusinessRuleException(
+                        "Runbook baslatilamaz: su gorev(ler) henuz kimseye atanmamis: " +
+                        string.Join(", ", unassignedTitles) + ".");
+                }
+            }
+
             ApplyStatusTransition(runbook, request.Status);
         }
 
