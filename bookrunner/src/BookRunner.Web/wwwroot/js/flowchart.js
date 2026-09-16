@@ -196,17 +196,26 @@
         // taramasina geri duser (bkz. Scenario entity migration'inin geriye
         // donuk doldurmasi - her ikisi de ayni degeri tasiyabilir).
         const scenarioDtos = config.scenarios || [];
-        scenarioGroups.forEach((group) => {
+        scenarioGroups.forEach((group, gi) => {
             const scenarioDto = scenarioDtos.find((s) => s.name === group.name);
             const rejoinTaskId = (scenarioDto && scenarioDto.rejoinTaskId)
                 || (group.tasks.find((t) => t.scenarioRejoinTaskId) || {}).scenarioRejoinTaskId;
-            if (!rejoinTaskId) {
-                return;
+            if (rejoinTaskId) {
+                const rejoinTarget = mainTasks.find((t) => t.id === rejoinTaskId);
+                const lastStep = group.tasks[group.tasks.length - 1];
+                if (rejoinTarget && lastStep) {
+                    lines.push("    " + flowNodeId(lastStep.id) + " -.->|\"Rejoin\"| " + flowNodeId(rejoinTarget.id));
+                }
             }
-            const rejoinTarget = mainTasks.find((t) => t.id === rejoinTaskId);
-            const lastStep = group.tasks[group.tasks.length - 1];
-            if (rejoinTarget && lastStep) {
-                lines.push("    " + flowNodeId(lastStep.id) + " -.->|\"Rejoin\"| " + flowNodeId(rejoinTarget.id));
+
+            // Senaryonun TUMU basarisiz sayilma durumu: bir senaryo adiminin
+            // kendi FailureAction'i yoktur, yalnizca senaryonun kendisi
+            // (Scenario.FailureAction) boyle bir eylem tasiyabilir - aktif
+            // senaryonun HERHANGI BIR adimi Basarisiz olursa tetiklenir, bu
+            // yuzden ok belirli bir adimdan degil subgraph'in kendisinden cizilir.
+            if (scenarioDto && scenarioDto.failureAction === "StartRollback"
+                && rollbackSteps.length > 0 && group.tasks.length > 0) {
+                lines.push("    SC" + gi + " -.->|\"Basarisiz\"| " + flowNodeId(rollbackSteps[0].id));
             }
         });
 

@@ -250,6 +250,13 @@ public sealed class PdfService(BookRunnerDbContext db, IAuditService audit) : IP
                 var footNote = rejoinTask is not null
                     ? $"Tamamlaninca ana akista '{rejoinTask.Title}' gorevinden devam eder."
                     : "Tek yonlu: tum adimlari tamamlaninca calisma burada sona erer.";
+                // Senaryonun TUMU basarisiz sayilma durumu: bir senaryo adiminin
+                // kendi FailureAction'i yoktur, yalnizca senaryonun kendisi boyle
+                // bir eylem tasiyabilir (bkz. Scenario.FailureAction).
+                if (runbook.Scenarios.FirstOrDefault(s => s.Name == groupName)?.FailureAction == TaskFailureAction.StartRollback)
+                {
+                    footNote += " Herhangi bir adimi basarisiz olursa geri donus plani otomatik baslar.";
+                }
                 ComposeFlowChain(column, title, "#8BC34A", steps, footNote, allTasks);
             }
 

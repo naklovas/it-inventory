@@ -67,7 +67,8 @@
             name = s.Name,
             rejoinTaskId = s.RejoinTaskId,
             triggerTaskId = s.TriggerTaskId,
-            triggerCondition = s.TriggerCondition.HasValue ? s.TriggerCondition.Value.ToString() : null
+            triggerCondition = s.TriggerCondition.HasValue ? s.TriggerCondition.Value.ToString() : null,
+            failureAction = s.FailureAction.ToString()
         }),
         tasks = r.Tasks.OrderBy(t => t.Order).Select(t => new
         {
