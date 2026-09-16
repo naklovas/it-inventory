@@ -1466,18 +1466,22 @@
      * ile ayrica (engelleyici olmadan) yuklenir.
      */
     function flowAssigneeHtml(task) {
-        const assignment = (task.assignments || [])[0];
-        if (!assignment) {
+        const assignments = task.assignments || [];
+        if (assignments.length === 0) {
             return "Atanmamis";
         }
-        const name = flowEscapeText(assignment.name);
-        const initials = flowEscapeText(assignment.initials || "?");
-        const color = escapeAttr(assignment.avatarColor || "#7B8794");
-        const badge = assignment.photoUrl
-            ? "<span class='br-flow-avatar' data-photo-url='" + escapeAttr(assignment.photoUrl) +
-              "' style='background-color:" + color + "'>" + initials + "</span>"
-            : (assignment.isGroup ? "\u{1F465} " : "\u{1F464} ");
-        return badge + name;
+        // Birden fazla atanan varsa hepsi gosterilir (yalnizca ilki degil) -
+        // her biri kendi rozeti+adiyla, virgulle ayrilarak.
+        return assignments.map((assignment) => {
+            const name = flowEscapeText(assignment.name);
+            const initials = flowEscapeText(assignment.initials || "?");
+            const color = escapeAttr(assignment.avatarColor || "#7B8794");
+            const badge = assignment.photoUrl
+                ? "<span class='br-flow-avatar' data-photo-url='" + escapeAttr(assignment.photoUrl) +
+                  "' style='background-color:" + color + "'>" + initials + "</span>"
+                : (assignment.isGroup ? "\u{1F465} " : "\u{1F464} ");
+            return badge + name;
+        }).join(", ");
     }
 
     /**

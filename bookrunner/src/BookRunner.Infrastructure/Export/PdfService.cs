@@ -278,7 +278,7 @@ public sealed class PdfService(BookRunnerDbContext db, IAuditService audit) : IP
 
     private static void ComposeFlowNode(IContainer container, RunbookTask task, string accentColor)
     {
-        var (name, photo, _) = PrimaryAssignee(task);
+        var (name, photo, _) = AssigneeSummary(task);
 
         container.Border(1).BorderColor("#D9E2EC").Background("#FFFFFF").Padding(6).Column(column =>
         {
@@ -314,17 +314,28 @@ public sealed class PdfService(BookRunnerDbContext db, IAuditService audit) : IP
         });
     }
 
-    private static (string Name, byte[]? Photo, bool IsGroup) PrimaryAssignee(RunbookTask task)
+    /// <summary>
+    /// Bir gorevin TUM aktif atananlarinin adlarini virgulle birlestirir (yalnizca
+    /// ilki degil - birden fazla kisi/grup atanmis olabilir). Fotograf olarak
+    /// yalnizca ilk atananin fotografi kullanilir (kutu duzeni tek kucuk resme
+    /// gore tasarlandigi icin).
+    /// </summary>
+    private static (string Names, byte[]? Photo, bool IsGroup) AssigneeSummary(RunbookTask task)
     {
-        var assignment = task.Assignments.FirstOrDefault(a => a.IsActive);
-        if (assignment is null)
+        var assignments = task.Assignments.Where(a => a.IsActive).ToList();
+        if (assignments.Count == 0)
         {
             return ("Atanmamis", null, false);
         }
 
-        return assignment.AssigneeType == AssigneeType.User
-            ? (assignment.User?.DisplayName ?? "-", assignment.User?.Photo, false)
-            : ($"{assignment.Group?.Name ?? "-"} (grup)", null, true);
+        var names = string.Join(", ", assignments.Select(a => a.AssigneeType == AssigneeType.User
+            ? a.User?.DisplayName ?? "-"
+            : $"{a.Group?.Name ?? "-"} (grup)"));
+
+        var first = assignments[0];
+        return first.AssigneeType == AssigneeType.User
+            ? (names, first.User?.Photo, false)
+            : (names, null, true);
     }
 
     private static IEnumerable<(string Text, string Color)> TriggerNotes(RunbookTask task)
