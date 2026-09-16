@@ -236,6 +236,33 @@ public sealed class RunbooksController(
             return View(await FillAsync(form, ct));
         }
 
+        // Atanmamis gorev varken Taslak/Planlandi -> Devam Ediyor gecisi zaten
+        // API'de de engellenir (bkz. RunbookService.UpdateAsync), ama bu,
+        // Duzenle formundan normal/beklenen bir kullanim - burada ONCEDEN
+        // kontrol edilerek API'ye hic istek gitmemesi saglanir. Boylece bu
+        // sik senaryo icin gereksiz bir istisna/round-trip olusmaz, sayfa
+        // dogrudan (asagidaki TryAsync ile ayni banner mekanizmasiyla) bir
+        // uyari gosterip formu tekrar acar.
+        var current = await Api.GetRunbookAsync(id, ct);
+        if (current is not null && form.Status == RunbookStatus.InProgress
+            && current.Status is RunbookStatus.Draft or RunbookStatus.Scheduled)
+        {
+            var unassignedTitles = current.Tasks
+                .Where(t => t.Assignments.Count == 0)
+                .OrderBy(t => t.Order)
+                .Select(t => t.Title)
+                .ToList();
+
+            if (unassignedTitles.Count > 0)
+            {
+                TempData["ErrorKind"] = "input";
+                TempData["Error"] = "Runbook baslatilamaz: su gorev(ler) henuz kimseye atanmamis: " +
+                    string.Join(", ", unassignedTitles) + ".";
+                await PopulateSeyirNamesAsync(form, ct);
+                return View(await FillAsync(form, ct));
+            }
+        }
+
         var ok = await TryAsync(() => Api.UpdateRunbookAsync(id, new UpdateRunbookRequest
         {
             Title = form.Title,
