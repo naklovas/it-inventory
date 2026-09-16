@@ -1672,4 +1672,11 @@
             }
         });
     }
+
+    /**
+     * Tanilama yardimcisi: bir runbook'ta cizim takilirsa, konsoldan
+     * "copy(__brFlowchartDefinition())" calistirip uretilen Mermaid metnini
+     * pano uzerinden paylasmak, sorunu yeniden uretmeyi cok kolaylastirir.
+     */
+    window.__brFlowchartDefinition = buildFlowchartDefinition;
 })();
