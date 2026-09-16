@@ -1,0 +1,89 @@
+@model RunbookDetailViewModel
+@{
+    var r = Model.Runbook;
+    ViewData["Title"] = "Akis Semasi - " + r.Title;
+}
+
+@*
+    Akis semasi dugum etiketleri icin siniflar: her stili tek tek satir icinde
+    (inline style) tekrarlamak yerine burada tanimlanir. Buyuk runbook'larda
+    (cok gorev) Mermaid'in tanim metni uzunlugu icin bir ust siniri var
+    (varsayilan 50.000 karakter, asilinca sessizce hata simgesi ciziyor) -
+    inline style tekrari bu siniri kolayca asiyordu; siniflar tanimi cok
+    kisaltir (bkz. flowchart.js flowNodeLabel/flowAssigneeHtml).
+*@
+<style>
+    .br-flow-node { text-align: center; line-height: 1.35; padding: 2px 4px; }
+    .br-flow-name { font-size: 11px; }
+    .br-flow-status { font-size: 10px; font-weight: 600; }
+    .br-flow-status-NotStarted { color: #7B8794; }
+    .br-flow-status-InProgress { color: #2F80ED; }
+    .br-flow-status-Completed { color: #27AE60; }
+    .br-flow-status-Failed { color: #EB5757; }
+    .br-flow-status-Blocked { color: #F2994A; }
+    .br-flow-status-Skipped { color: #9AA5B1; }
+    .br-flow-status-NotApplicable { color: #9AA5B1; }
+    .br-flow-avatar {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 16px; height: 16px; border-radius: 50%; color: #fff;
+        font-size: 8px; font-weight: 600; vertical-align: middle;
+        margin-right: 4px; overflow: hidden; background-size: cover; background-position: center;
+    }
+</style>
+
+<div class="br-card p-3 p-lg-4 mb-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+        <div>
+            <a class="btn btn-sm btn-outline-secondary mb-2" asp-action="Details" asp-route-id="@r.Id">
+                <i class="bi bi-arrow-left me-1"></i>Geri Don
+            </a>
+            <h1 class="h4 mb-0"><i class="bi bi-diagram-3 me-2"></i>@r.Title</h1>
+            <div class="br-muted">@r.Code</div>
+        </div>
+    </div>
+</div>
+
+<div class="br-card p-0" style="min-height:70vh;">
+    <div id="flowchartLoading" class="d-flex align-items-center justify-content-center" style="min-height:70vh;">
+        <div class="spinner-border text-primary" role="status"></div>
+    </div>
+    <div id="flowchartScroll" class="w-100 d-none" style="overflow:auto;">
+        <div id="flowchartMermaid" class="mermaid p-3"></div>
+    </div>
+</div>
+
+@section Scripts {
+    <script id="brFlowchartConfig" type="application/json">@Html.Raw(System.Text.Json.JsonSerializer.Serialize(new
+    {
+        // Uygulama IIS altinda bir sanal dizinde (orn. /bookrunner/) calisiyor
+        // olabilir; JS'in mermaid.min.js'i sonradan dinamik <script> ile
+        // yuklerken kullandigi adres bu yuzden sabit "/lib/..." degil, Razor'un
+        // gercek temel yolu hesaba katarak urettigi adres olmali.
+        mermaidUrl = Url.Content("~/lib/mermaid/mermaid.min.js"),
+        isRollbackActive = r.IsRollbackActive,
+        activeScenarioGroup = r.ActiveScenarioGroup,
+        tasks = r.Tasks.OrderBy(t => t.Order).Select(t => new
+        {
+            id = t.Id,
+            title = t.Title,
+            order = t.Order,
+            isRollbackStep = t.IsRollbackStep,
+            scenarioGroup = t.ScenarioGroup,
+            failureAction = t.FailureAction.ToString(),
+            failureScenarioGroup = t.FailureScenarioGroup,
+            successScenarioGroup = t.SuccessScenarioGroup,
+            scenarioRejoinTaskId = t.ScenarioRejoinTaskId,
+            status = t.Status.ToString(),
+            statusText = t.StatusText,
+            assignments = t.Assignments.Where(a => a.IsActive).Select(a => new
+            {
+                name = a.DisplayName,
+                initials = a.Initials,
+                avatarColor = a.AvatarColor,
+                isGroup = a.AssigneeType != AssigneeType.User,
+                photoUrl = a.User != null && a.User.HasPhoto ? Url.Action("Photo", "Home", new { id = a.User.Id }) : null
+            })
+        })
+    }))</script>
+    <script src="~/js/flowchart.js" asp-append-version="true"></script>
+}

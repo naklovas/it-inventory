@@ -108,6 +108,40 @@ public sealed class RunbooksController(
         }, ct));
     }
 
+    /// <summary>
+    /// Runbook'un akis semasi: ana akis, senaryo dallanmalari ve geri donus
+    /// plani mermaid.js ile cizilir. Ayri bir sayfadir (modal degil) - boylece
+    /// site menusu gorunur kalir ve "geri don" normal sayfa gezinmesiyle olur.
+    /// </summary>
+    [HttpGet]
+    public async Task<IActionResult> Flowchart(Guid id, CancellationToken ct)
+    {
+        var currentUser = await GetCurrentUserAsync(ct);
+
+        RunbookDetailDto? runbook;
+        try
+        {
+            runbook = await Api.GetRunbookAsync(id, ct);
+        }
+        catch (ApiException ex)
+        {
+            TempData["ErrorKind"] = ex.IsInputError ? "input" : "application";
+            TempData["Error"] = ex.Message;
+            return RedirectToAction(nameof(Index));
+        }
+
+        if (runbook is null)
+        {
+            return NotFound();
+        }
+
+        return View(await FillAsync(new RunbookDetailViewModel
+        {
+            CurrentUser = currentUser,
+            Runbook = runbook
+        }, ct));
+    }
+
     // ------------------------------------------------------------ olustur/duzenle
 
     [HttpGet]

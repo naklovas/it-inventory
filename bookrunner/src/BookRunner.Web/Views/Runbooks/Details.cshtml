@@ -151,9 +151,9 @@
                 <i class="bi bi-check2-circle me-1"></i>Tamamla
             </button>
         }
-        <button class="btn btn-sm btn-outline-primary" id="btnShowFlowchart" data-bs-toggle="modal" data-bs-target="#flowchartModal">
+        <a class="btn btn-sm btn-outline-primary" asp-action="Flowchart" asp-route-id="@r.Id">
             <i class="bi bi-diagram-3 me-1"></i>Akis Semasi
-        </button>
+        </a>
         @if (Model.CanExport)
         {
             <a class="btn btn-sm btn-outline-success" asp-action="ExportExcel" asp-route-id="@r.Id">
@@ -644,57 +644,6 @@
 
 @* ------------------------------------------------------------------ modaller *@
 
-@*
-    Akis semasi dugum etiketleri icin sinifllar: her stili tek tek satir icinde
-    (inline style) tekrarlamak yerine burada tanimlanir. Buyuk runbook'larda
-    (cok gorev) Mermaid'in tanim metni uzunlugu icin bir ust siniri var
-    (varsayilan 50.000 karakter, asilinca sessizce hata simgesi ciziyor) -
-    inline style tekrari bu siniri kolayca asiyordu; siniflar tanimi cok
-    kisaltir (bkz. runbook.js flowNodeLabel/flowAssigneeHtml).
-*@
-<style>
-    .br-flow-node { text-align: center; line-height: 1.35; padding: 2px 4px; }
-    .br-flow-name { font-size: 11px; }
-    .br-flow-status { font-size: 10px; font-weight: 600; }
-    .br-flow-status-NotStarted { color: #7B8794; }
-    .br-flow-status-InProgress { color: #2F80ED; }
-    .br-flow-status-Completed { color: #27AE60; }
-    .br-flow-status-Failed { color: #EB5757; }
-    .br-flow-status-Blocked { color: #F2994A; }
-    .br-flow-status-Skipped { color: #9AA5B1; }
-    .br-flow-status-NotApplicable { color: #9AA5B1; }
-    .br-flow-avatar {
-        display: inline-flex; align-items: center; justify-content: center;
-        width: 16px; height: 16px; border-radius: 50%; color: #fff;
-        font-size: 8px; font-weight: 600; vertical-align: middle;
-        margin-right: 4px; overflow: hidden; background-size: cover; background-position: center;
-    }
-</style>
-
-<div class="modal fade" id="flowchartModal" tabindex="-1">
-    <div class="modal-dialog modal-fullscreen">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title"><i class="bi bi-diagram-3 me-1"></i>Akis Semasi - @r.Code</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body p-0">
-                @* Not: gorunurluk asagida hidden ozniteligi yerine .d-none ile
-                   degistirilir - Bootstrap'in .d-flex sinifi "!important" ile
-                   display:flex dayattigi icin native "hidden" ozniteligini
-                   (JS'teki .hidden = true) gormezden geliyordu; cember hicbir
-                   zaman kaybolmuyordu (rapor edilen "sonsuz donuyor" sorunu). *@
-                <div id="flowchartLoading" class="d-flex align-items-center justify-content-center h-100">
-                    <div class="spinner-border text-primary" role="status"></div>
-                </div>
-                <div id="flowchartScroll" class="w-100 h-100 d-none" style="overflow:auto;">
-                    <div id="flowchartMermaid" class="mermaid p-3"></div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
 <div class="modal fade" id="completeTaskModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -1063,15 +1012,6 @@
         canExecute = Model.CanExecuteThis,
         plannedStart = r.PlannedStart,
         plannedEnd = r.PlannedEnd,
-        runbookCode = r.Code,
-        runbookTitle = r.Title,
-        // Uygulama IIS altinda bir sanal dizinde (orn. /bookrunner/) calisiyor
-        // olabilir; JS'in mermaid.min.js'i sonradan dinamik <script> ile
-        // yuklerken kullandigi adres bu yuzden sabit "/lib/..." degil, Razor'un
-        // gercek temel yolu hesaba katarak urettigi adres olmali.
-        mermaidUrl = Url.Content("~/lib/mermaid/mermaid.min.js"),
-        isRollbackActive = r.IsRollbackActive,
-        activeScenarioGroup = r.ActiveScenarioGroup,
         tasks = r.Tasks.OrderBy(t => t.Order).Select(t => new
         {
             id = t.Id,
@@ -1093,19 +1033,7 @@
             successScenarioGroup = t.SuccessScenarioGroup,
             scenarioRejoinTaskId = t.ScenarioRejoinTaskId,
             dependsOnTaskIds = t.Predecessors.Select(p => p.TaskId),
-            assignmentIds = t.Assignments.Where(a => a.IsActive).Select(a => a.Id),
-            status = t.Status.ToString(),
-            statusText = t.StatusText,
-            colorHex = t.ColorHex,
-            // Akis semasi (flowchart) icin: kim atanmis, fotografi var mi.
-            assignments = t.Assignments.Where(a => a.IsActive).Select(a => new
-            {
-                name = a.DisplayName,
-                initials = a.Initials,
-                avatarColor = a.AvatarColor,
-                isGroup = a.AssigneeType != AssigneeType.User,
-                photoUrl = a.User != null && a.User.HasPhoto ? Url.Action("Photo", "Home", new { id = a.User.Id }) : null
-            })
+            assignmentIds = t.Assignments.Where(a => a.IsActive).Select(a => a.Id)
         }),
         antiforgery = Xsrf.GetAndStoreTokens(Context).RequestToken
     }))</script>
