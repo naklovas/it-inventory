@@ -27,7 +27,16 @@ public sealed class TaskService(
         var task = await LoadAsync(taskId, tracking: false, ct)
             ?? throw new NotFoundException("Gorev", taskId);
 
-        return task.ToDto();
+        string? failureTargetTitle = null;
+        if (task.FailureTargetTaskId.HasValue)
+        {
+            failureTargetTitle = await db.Tasks
+                .Where(t => t.Id == task.FailureTargetTaskId.Value)
+                .Select(t => t.Title)
+                .FirstOrDefaultAsync(ct);
+        }
+
+        return task.ToDto(failureTargetTaskTitle: failureTargetTitle);
     }
 
     public async Task<RunbookTaskDto> CreateAsync(Guid runbookId, CreateTaskRequest request, CancellationToken ct = default)
@@ -49,6 +58,14 @@ public sealed class TaskService(
         if (scenarioRejoinTaskId.HasValue)
         {
             await ValidateScenarioRejoinTaskAsync(runbookId, scenarioRejoinTaskId.Value, ct);
+        }
+
+        var failureTargetTaskId = request.FailureAction == TaskFailureAction.SwitchToTask
+            ? request.FailureTargetTaskId
+            : null;
+        if (failureTargetTaskId.HasValue)
+        {
+            await ValidateScenarioRejoinTaskAsync(runbookId, failureTargetTaskId.Value, ct);
         }
 
         // Ana akis, geri donus adimlari ve her senaryo grubu ayri listeler olarak
@@ -92,6 +109,7 @@ public sealed class TaskService(
             FailureScenarioGroup = request.FailureAction == TaskFailureAction.SwitchToScenario
                 ? request.FailureScenarioGroup?.Trim()
                 : null,
+            FailureTargetTaskId = failureTargetTaskId,
             SuccessScenarioGroup = string.IsNullOrWhiteSpace(request.SuccessScenarioGroup)
                 ? null
                 : request.SuccessScenarioGroup.Trim()
@@ -177,6 +195,14 @@ public sealed class TaskService(
         task.FailureScenarioGroup = request.FailureAction == TaskFailureAction.SwitchToScenario
             ? request.FailureScenarioGroup?.Trim()
             : null;
+        var failureTargetTaskId = request.FailureAction == TaskFailureAction.SwitchToTask
+            ? request.FailureTargetTaskId
+            : null;
+        if (failureTargetTaskId.HasValue)
+        {
+            await ValidateScenarioRejoinTaskAsync(task.RunbookId, failureTargetTaskId.Value, ct);
+        }
+        task.FailureTargetTaskId = failureTargetTaskId;
         task.SuccessScenarioGroup = string.IsNullOrWhiteSpace(request.SuccessScenarioGroup)
             ? null
             : request.SuccessScenarioGroup.Trim();
@@ -380,6 +406,16 @@ public sealed class TaskService(
             {
                 ActivateScenario(task.Runbook, siblingTasks, task.FailureScenarioGroup!,
                     $"'{task.Title}' basarisiz oldugu icin '{task.FailureScenarioGroup}' senaryosuna otomatik gecildi");
+            }
+            else if (hasFailureTrigger && task.FailureAction == TaskFailureAction.SwitchToTask
+                && !task.Runbook.IsRollbackActive
+                && string.IsNullOrEmpty(task.Runbook.ActiveScenarioGroup)
+                && task.FailureTargetTaskId.HasValue
+                && siblingTasks.Any(t => t.Id == task.FailureTargetTaskId.Value && !t.IsRollbackStep && string.IsNullOrEmpty(t.ScenarioGroup)))
+            {
+                var targetTitle = siblingTasks.First(t => t.Id == task.FailureTargetTaskId.Value).Title;
+                ActivateTaskJump(task.Runbook, siblingTasks, task.FailureTargetTaskId.Value,
+                    $"'{task.Title}' basarisiz oldugu icin '{targetTitle}' gorevine otomatik atlandi");
             }
             else if (hasSuccessTrigger
                 && !task.Runbook.IsRollbackActive
@@ -655,6 +691,154 @@ public sealed class TaskService(
         await audit.LogAsync(AuditAction.Update, nameof(Runbook), runbookId.ToString(),
             $"'{scenarioGroup}' senaryosuna gecildi.", runbookId, ct: ct);
         await realtime.RunbookChangedAsync(runbookId, "scenario-switched", ct);
+    }
+
+    public async Task<ScenarioDto> CreateScenarioAsync(Guid runbookId, CreateScenarioRequest request, CancellationToken ct = default)
+    {
+        await access.EnsureForRunbookAsync(runbookId, Permissions.TaskWrite, ct);
+
+        var runbook = await db.Runbooks.FirstOrDefaultAsync(r => r.Id == runbookId, ct)
+            ?? throw new NotFoundException("Runbook", runbookId);
+
+        var name = request.Name.Trim();
+        if (name.Length == 0)
+        {
+            throw ValidationException.Single(nameof(CreateScenarioRequest.Name), "Senaryo adi bos olamaz.");
+        }
+
+        var exists = await db.Scenarios.AnyAsync(s => s.RunbookId == runbookId
+            && s.Name.ToLower() == name.ToLower(), ct);
+        if (exists)
+        {
+            throw new BusinessRuleException($"'{name}' adinda bir senaryo zaten var.");
+        }
+
+        if (request.RejoinTaskId.HasValue)
+        {
+            await ValidateScenarioRejoinTaskAsync(runbookId, request.RejoinTaskId.Value, ct);
+        }
+
+        RunbookTask? triggerTask = null;
+        if (request.TriggerTaskId.HasValue)
+        {
+            if (request.TriggerCondition is null)
+            {
+                throw ValidationException.Single(nameof(CreateScenarioRequest.TriggerCondition),
+                    "Bagli gorev secildiyse hangi kosulda (basarili/basarisiz) tetiklenecegi de secilmelidir.");
+            }
+
+            triggerTask = await db.Tasks.FirstOrDefaultAsync(t => t.Id == request.TriggerTaskId.Value && t.RunbookId == runbookId, ct)
+                ?? throw new NotFoundException("Gorev", request.TriggerTaskId.Value);
+
+            if (triggerTask.IsRollbackStep)
+            {
+                throw new BusinessRuleException("Bir geri donus adimi senaryoyu tetikleyemez.");
+            }
+        }
+
+        var scenario = new Scenario
+        {
+            RunbookId = runbookId,
+            Name = name,
+            RejoinTaskId = request.RejoinTaskId
+        };
+        db.Scenarios.Add(scenario);
+
+        if (triggerTask is not null)
+        {
+            if (request.TriggerCondition == ScenarioTriggerCondition.Failure)
+            {
+                triggerTask.FailureAction = TaskFailureAction.SwitchToScenario;
+                triggerTask.FailureScenarioGroup = name;
+            }
+            else
+            {
+                triggerTask.SuccessScenarioGroup = name;
+            }
+
+            var conditionText = request.TriggerCondition == ScenarioTriggerCondition.Failure ? "basarisiz" : "basarili";
+            AddActivity(triggerTask.Id, TaskActivityType.Updated,
+                $"'{name}' senaryosu bu gorev {conditionText} olursa otomatik tetiklenecek sekilde baglandi.");
+        }
+
+        await db.SaveChangesAsync(ct);
+
+        await audit.LogAsync(AuditAction.Create, nameof(Scenario), scenario.Id.ToString(),
+            $"'{name}' senaryosu olusturuldu.", runbookId, ct: ct);
+        await realtime.RunbookChangedAsync(runbookId, "scenario-created", ct);
+
+        var allTasks = await db.Tasks.Where(t => t.RunbookId == runbookId).ToListAsync(ct);
+        return scenario.ToDto(allTasks);
+    }
+
+    public async Task<IReadOnlyList<ScenarioDto>> ListScenariosAsync(Guid runbookId, CancellationToken ct = default)
+    {
+        await access.EnsureForRunbookAsync(runbookId, Permissions.TaskExecute, ct);
+
+        var scenarios = await db.Scenarios.Where(s => s.RunbookId == runbookId).OrderBy(s => s.Name).ToListAsync(ct);
+        var allTasks = await db.Tasks.Where(t => t.RunbookId == runbookId).ToListAsync(ct);
+
+        return scenarios.Select(s => s.ToDto(allTasks)).ToList();
+    }
+
+    public async Task DeleteScenarioAsync(Guid scenarioId, CancellationToken ct = default)
+    {
+        var scenario = await db.Scenarios.FirstOrDefaultAsync(s => s.Id == scenarioId, ct)
+            ?? throw new NotFoundException("Senaryo", scenarioId);
+
+        await access.EnsureForRunbookAsync(scenario.RunbookId, Permissions.TaskWrite, ct);
+
+        var hasSteps = await db.Tasks.AnyAsync(t => t.RunbookId == scenario.RunbookId
+            && !t.IsRollbackStep && t.ScenarioGroup == scenario.Name, ct);
+        if (hasSteps)
+        {
+            throw new BusinessRuleException(
+                $"'{scenario.Name}' senaryosunun adimlari var, once onlari silmelisiniz.");
+        }
+
+        scenario.IsDeleted = true;
+        scenario.DeletedAt = DateTimeOffset.UtcNow;
+        scenario.DeletedBy = currentUser.UserName;
+
+        await db.SaveChangesAsync(ct);
+
+        await audit.LogAsync(AuditAction.Delete, nameof(Scenario), scenario.Id.ToString(),
+            $"'{scenario.Name}' senaryosu silindi.", scenario.RunbookId, ct: ct);
+        await realtime.RunbookChangedAsync(scenario.RunbookId, "scenario-deleted", ct);
+    }
+
+    /// <summary>
+    /// FailureAction=SwitchToTask tetiklenince ana akista hedef goreve "atlar":
+    /// hedeften ONCEKI acik (Bekliyor/Devam Eden/Bloke) ana akis gorevleri
+    /// Atlandi olur, hedef ve sonrasi normal sirayla calismaya devam eder.
+    /// ActivateScenario/ActivateRollback'ten farkli olarak adlandirilmis bir
+    /// senaryo grubuna veya geri donus moduna GECMEZ - ayni ana akis icinde
+    /// kalir, yalnizca ileri bir noktaya atlar (Runbook.ActiveScenarioGroup/
+    /// IsRollbackActive degismez).
+    /// </summary>
+    private void ActivateTaskJump(Runbook runbook, List<RunbookTask> tasks, Guid targetTaskId, string reason)
+    {
+        var target = tasks.FirstOrDefault(t => t.Id == targetTaskId);
+        if (target is null)
+        {
+            return;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var toSkip = tasks.Where(t => !t.IsRollbackStep && string.IsNullOrEmpty(t.ScenarioGroup)
+            && t.Order < target.Order
+            && t.Status is RunbookTaskStatus.NotStarted or RunbookTaskStatus.InProgress or RunbookTaskStatus.Blocked);
+
+        foreach (var t in toSkip)
+        {
+            var oldStatus = t.Status;
+            t.Status = RunbookTaskStatus.Skipped;
+            t.ActualStart ??= now;
+            t.ActualEnd = now;
+            AddActivity(t.Id, TaskActivityType.StatusChanged,
+                $"Durum {DisplayText.Status(oldStatus)} -> {DisplayText.Status(RunbookTaskStatus.Skipped)} ({reason})",
+                DisplayText.Status(oldStatus), DisplayText.Status(RunbookTaskStatus.Skipped));
+        }
     }
 
     /// <summary>

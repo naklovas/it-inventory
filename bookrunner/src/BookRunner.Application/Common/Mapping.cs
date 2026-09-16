@@ -94,7 +94,8 @@ public static class Mapping
     public static RunbookTaskDto ToDto(
         this RunbookTask task,
         bool includeComments = true,
-        IReadOnlyDictionary<Guid, AppUser>? mentionLookup = null) => new()
+        IReadOnlyDictionary<Guid, AppUser>? mentionLookup = null,
+        string? failureTargetTaskTitle = null) => new()
     {
         Id = task.Id,
         RunbookId = task.RunbookId,
@@ -120,6 +121,8 @@ public static class Mapping
         ScenarioGroup = task.ScenarioGroup,
         FailureAction = task.FailureAction,
         FailureScenarioGroup = task.FailureScenarioGroup,
+        FailureTargetTaskId = task.FailureTargetTaskId,
+        FailureTargetTaskTitle = failureTargetTaskTitle,
         SuccessScenarioGroup = task.SuccessScenarioGroup,
         ScenarioRejoinTaskId = task.ScenarioRejoinTaskId,
         Predecessors = task.Predecessors
@@ -164,6 +167,48 @@ public static class Mapping
         UpdatedAt = task.UpdatedAt
     };
 
+    /// <summary>
+    /// Bir senaryonun kendisini DTO'ya cevirir. Tetikleyen gorev Scenario uzerinde
+    /// ayrica saklanmaz - tum gorevler taranarak FailureScenarioGroup/
+    /// SuccessScenarioGroup alani bu senaryonun adina esit olan (varsa) ilk gorev
+    /// bulunur.
+    /// </summary>
+    public static ScenarioDto ToDto(this Scenario scenario, IEnumerable<RunbookTask> allTasks)
+    {
+        var taskList = allTasks as IReadOnlyCollection<RunbookTask> ?? allTasks.ToList();
+
+        var trigger = taskList.FirstOrDefault(t =>
+            (t.FailureAction == TaskFailureAction.SwitchToScenario && t.FailureScenarioGroup == scenario.Name) ||
+            t.SuccessScenarioGroup == scenario.Name);
+
+        var condition = trigger is null
+            ? (ScenarioTriggerCondition?)null
+            : trigger.SuccessScenarioGroup == scenario.Name
+                ? ScenarioTriggerCondition.Success
+                : ScenarioTriggerCondition.Failure;
+
+        // RejoinTask navigasyonu her zaman yuklenmis olmayabilir (orn. yeni
+        // olusturulan bir Scenario, ayni context'te henuz tekrar sorgulanmadan
+        // once) - bu yuzden baslik allTasks icinden aranir, navigasyona guvenilmez.
+        var rejoinTaskTitle = scenario.RejoinTaskId.HasValue
+            ? taskList.FirstOrDefault(t => t.Id == scenario.RejoinTaskId.Value)?.Title
+            : null;
+
+        return new ScenarioDto
+        {
+            Id = scenario.Id,
+            RunbookId = scenario.RunbookId,
+            Name = scenario.Name,
+            RejoinTaskId = scenario.RejoinTaskId,
+            RejoinTaskTitle = rejoinTaskTitle,
+            TriggerTaskId = trigger?.Id,
+            TriggerTaskTitle = trigger?.Title,
+            TriggerCondition = condition,
+            TaskCount = allTasks.Count(t => !t.IsRollbackStep && t.ScenarioGroup == scenario.Name),
+            CreatedAt = scenario.CreatedAt
+        };
+    }
+
     public static RunbookDetailDto ToDetailDto(
         this Runbook runbook,
         IReadOnlyList<RunbookTaskDto> tasks,
@@ -189,9 +234,16 @@ public static class Mapping
         CompletionNote = runbook.CompletionNote,
         IsRollbackActive = runbook.IsRollbackActive,
         ActiveScenarioGroup = runbook.ActiveScenarioGroup,
-        ScenarioGroups = tasks
-            .Where(t => !string.IsNullOrEmpty(t.ScenarioGroup))
-            .Select(t => t.ScenarioGroup!)
+        Scenarios = runbook.Scenarios
+            .OrderBy(s => s.Name)
+            .Select(s => s.ToDto(runbook.Tasks))
+            .ToList(),
+        // Scenario tablosundaki adlarla birlestirilir: eski verilerde (bu ozellik
+        // eklenmeden once olusturulmus) bir Scenario satiri olmadan da gorevlerde
+        // ScenarioGroup adi bulunabilir - migration'daki geriye donuk doldurma
+        // bunu kapatir, ama burada da guvenlik amacli birlestirilir.
+        ScenarioGroups = runbook.Scenarios.Select(s => s.Name)
+            .Union(tasks.Where(t => !string.IsNullOrEmpty(t.ScenarioGroup)).Select(t => t.ScenarioGroup!))
             .Distinct()
             .ToList(),
         Owner = runbook.Owner?.ToSummary(),

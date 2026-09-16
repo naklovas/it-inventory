@@ -47,7 +47,21 @@ public enum TaskFailureAction
     /// <summary>Bu gorev basarisiz olursa geri donus plani otomatik baslatilir (tanimli geri donus adimi varsa).</summary>
     StartRollback = 1,
     /// <summary>Bu gorev basarisiz olursa RunbookTask.FailureScenarioGroup'ta belirtilen senaryoya otomatik gecilir.</summary>
-    SwitchToScenario = 2
+    SwitchToScenario = 2,
+    /// <summary>
+    /// Bu gorev basarisiz olursa RunbookTask.FailureTargetTaskId'de belirtilen ANA AKIS
+    /// gorevine "atlanir": aradaki acik ana akis gorevleri Atlandi olur, akis o
+    /// gorevden normal sekilde devam eder. SwitchToScenario'dan farki, adlandirilmis
+    /// bir senaryo grubuna gecmeden, ayni ana akis icinde ileri bir noktaya atlamaktir.
+    /// </summary>
+    SwitchToTask = 3
+}
+
+/// <summary>Bir senaryoyu otomatik tetikleyen gorev sonucu (bkz. Scenario.TriggerCondition).</summary>
+public enum ScenarioTriggerCondition
+{
+    Failure = 0,
+    Success = 1
 }
 
 /// <summary>Bir gorevin kisiye mi yoksa AD grubuna mi atandigi.</summary>

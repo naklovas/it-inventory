@@ -171,6 +171,11 @@
                 if (target && target.tasks.length > 0) {
                     lines.push("    " + flowNodeId(t.id) + " -.->|\"Basarisiz\"| " + flowNodeId(target.tasks[0].id));
                 }
+            } else if (t.failureAction === "SwitchToTask" && t.failureTargetTaskId) {
+                const target = mainTasks.find((m) => m.id === t.failureTargetTaskId);
+                if (target) {
+                    lines.push("    " + flowNodeId(t.id) + " -.->|\"Basarisiz\"| " + flowNodeId(target.id));
+                }
             }
             if (t.successScenarioGroup) {
                 const target = scenarioGroups.find((g) => g.name === t.successScenarioGroup);
@@ -180,14 +185,23 @@
             }
         });
 
+        // Senaryonun bittiginde ana akista nereden devam edilecegini oncelikle
+        // ayri Scenario varligindan (config.scenarios) okur; bu alan bos olan
+        // eski/gecis donemi runbook'larinda gorev uzerindeki scenarioRejoinTaskId
+        // taramasina geri duser (bkz. Scenario entity migration'inin geriye
+        // donuk doldurmasi - her ikisi de ayni degeri tasiyabilir).
+        const scenarioDtos = config.scenarios || [];
         scenarioGroups.forEach((group) => {
-            const rejoinSource = group.tasks.find((t) => t.scenarioRejoinTaskId);
-            if (rejoinSource) {
-                const rejoinTarget = mainTasks.find((t) => t.id === rejoinSource.scenarioRejoinTaskId);
-                const lastStep = group.tasks[group.tasks.length - 1];
-                if (rejoinTarget && lastStep) {
-                    lines.push("    " + flowNodeId(lastStep.id) + " -.->|\"Rejoin\"| " + flowNodeId(rejoinTarget.id));
-                }
+            const scenarioDto = scenarioDtos.find((s) => s.name === group.name);
+            const rejoinTaskId = (scenarioDto && scenarioDto.rejoinTaskId)
+                || (group.tasks.find((t) => t.scenarioRejoinTaskId) || {}).scenarioRejoinTaskId;
+            if (!rejoinTaskId) {
+                return;
+            }
+            const rejoinTarget = mainTasks.find((t) => t.id === rejoinTaskId);
+            const lastStep = group.tasks[group.tasks.length - 1];
+            if (rejoinTarget && lastStep) {
+                lines.push("    " + flowNodeId(lastStep.id) + " -.->|\"Rejoin\"| " + flowNodeId(rejoinTarget.id));
             }
         });
 

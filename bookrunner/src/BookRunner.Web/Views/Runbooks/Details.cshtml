@@ -9,10 +9,16 @@
     // Manuel baslatmada bir gorevin "Basarisiz" olmasi sart degil - operator
     // istedigi zaman dogrudan gecebilir (bkz. TaskService.StartRollbackAsync).
     var canStartRollback = rollbackSteps.Count > 0;
-    // Her senaryo grubu (orn. "Senaryo-A") ayri, gizli bir liste olarak tutulur;
-    // henuz secilmemisse "X Senaryosuna Gec" ile aktive edilir (bkz.
+    // Her senaryo, adimlarindan BAGIMSIZ olarak once olusturulur (bkz. Scenario
+    // entity, "Yeni Senaryo Olustur"), adimlar daha sonra icine eklenir. Henuz
+    // aktif edilmemisse "X Senaryosuna Gec" ile aktive edilir (bkz.
     // Runbook.ActiveScenarioGroup, TaskService.SwitchScenarioAsync).
+    var scenarios = r.Scenarios;
     var scenarioGroups = r.ScenarioGroups;
+    // "Basarisiz/basarili olursa belirli bir goreve atla" hedefi yalnizca ANA
+    // AKIS gorevi olabilir (bkz. TaskService.ValidateScenarioRejoinTaskAsync -
+    // ayni dogrulama rejoin ve bu hedef icin ortak kullanilir).
+    var taskJumpTargets = mainTasks;
     var canSwitchScenario = !r.IsRollbackActive && string.IsNullOrEmpty(r.ActiveScenarioGroup)
         && r.Status is not (RunbookStatus.Completed or RunbookStatus.Cancelled or RunbookStatus.Archived);
 }
@@ -312,15 +318,38 @@
                         <option value="None" selected>Otomatik eylem yok</option>
                         <option value="StartRollback">Geri donus planini otomatik baslat</option>
                         <option value="SwitchToScenario">Bir senaryoya otomatik gec</option>
+                        <option value="SwitchToTask">Belirli bir goreve atla</option>
                     </select>
                 </div>
                 <div class="col-md-4" id="newTaskFailureScenarioWrap" hidden>
                     <label class="form-label small br-muted">Hangi senaryo</label>
-                    <input class="form-control" id="newTaskFailureScenario" placeholder="orn. Senaryo-A" list="scenarioGroupOptions" />
+                    <select class="form-select" id="newTaskFailureScenario">
+                        <option value="">-- Secin --</option>
+                        @foreach (var sc in scenarios)
+                        {
+                            <option value="@sc.Name">@sc.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-4" id="newTaskFailureTargetWrap" hidden>
+                    <label class="form-label small br-muted">Hangi gorev</label>
+                    <select class="form-select" id="newTaskFailureTarget">
+                        <option value="">-- Secin --</option>
+                        @foreach (var candidate in taskJumpTargets)
+                        {
+                            <option value="@candidate.Id">@candidate.Order. @candidate.Title</option>
+                        }
+                    </select>
                 </div>
                 <div class="col-md-6">
                     <label class="form-label small br-muted">Basarili olursa hangi senaryoya gecilsin (opsiyonel)</label>
-                    <input class="form-control" id="newTaskSuccessScenario" placeholder="orn. Senaryo-B" list="scenarioGroupOptions" />
+                    <select class="form-select" id="newTaskSuccessScenario">
+                        <option value="">-- Secilmedi --</option>
+                        @foreach (var sc in scenarios)
+                        {
+                            <option value="@sc.Name">@sc.Name</option>
+                        }
+                    </select>
                 </div>
                 @if (mainTasks.Count > 0)
                 {
@@ -485,15 +514,20 @@
 
 @* ------------------------------------------------------------------ senaryo planlari *@
 
-@if (scenarioGroups.Count > 0 || Model.CanEditThis)
+@if (scenarios.Count > 0 || Model.CanEditThis)
 {
-    <div class="d-flex justify-content-between align-items-center mb-2 mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-2 mt-4 flex-wrap gap-2">
         <h2 class="h5 mb-0"><i class="bi bi-signpost-split me-1"></i>Senaryo Planlari</h2>
         @if (Model.CanEditThis)
         {
-            <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="collapse" data-bs-target="#newScenarioStepPanel">
-                <i class="bi bi-plus-lg me-1"></i>Senaryo adimi ekle
-            </button>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-primary btn-sm" data-bs-toggle="collapse" data-bs-target="#newScenarioPanel">
+                    <i class="bi bi-plus-lg me-1"></i>Yeni Senaryo Olustur
+                </button>
+                <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="collapse" data-bs-target="#newScenarioStepPanel">
+                    <i class="bi bi-plus-lg me-1"></i>Senaryo Adimi Ekle
+                </button>
+            </div>
         }
     </div>
 
@@ -505,33 +539,53 @@
         </div>
     }
 
-    @foreach (var groupName in scenarioGroups)
+    @foreach (var scenario in scenarios)
     {
-        var groupSteps = r.Tasks.Where(t => !t.IsRollbackStep && t.ScenarioGroup == groupName).OrderBy(t => t.Order).ToList();
-        var isActiveGroup = r.ActiveScenarioGroup == groupName;
-        var rejoinTaskId = groupSteps.Select(s => s.ScenarioRejoinTaskId).FirstOrDefault(id => id.HasValue);
-        var rejoinTask = rejoinTaskId.HasValue ? r.Tasks.FirstOrDefault(t => t.Id == rejoinTaskId.Value) : null;
+        var groupSteps = r.Tasks.Where(t => !t.IsRollbackStep && t.ScenarioGroup == scenario.Name).OrderBy(t => t.Order).ToList();
+        var isActiveGroup = r.ActiveScenarioGroup == scenario.Name;
         <div class="br-card p-3 mb-3">
             <div class="d-flex justify-content-between align-items-center mb-2">
-                <h3 class="h6 mb-0">@groupName @if (isActiveGroup) { <span class="badge text-bg-info ms-1">Aktif</span> }</h3>
-                @if (Model.CanExecuteThis && canSwitchScenario)
-                {
-                    <button class="btn btn-outline-primary btn-sm br-switch-scenario-btn" data-scenario-group="@groupName">
-                        <i class="bi bi-signpost-split me-1"></i>@groupName Senaryosuna Gec
-                    </button>
-                }
+                <h3 class="h6 mb-0">@scenario.Name @if (isActiveGroup) { <span class="badge text-bg-info ms-1">Aktif</span> }</h3>
+                <div class="d-flex gap-2">
+                    @if (Model.CanExecuteThis && canSwitchScenario && groupSteps.Count > 0)
+                    {
+                        <button class="btn btn-outline-primary btn-sm br-switch-scenario-btn" data-scenario-group="@scenario.Name">
+                            <i class="bi bi-signpost-split me-1"></i>@scenario.Name Senaryosuna Gec
+                        </button>
+                    }
+                    @if (Model.CanEditThis && groupSteps.Count == 0)
+                    {
+                        <button class="btn btn-outline-danger btn-sm br-delete-scenario-btn" data-scenario-id="@scenario.Id" data-scenario-name="@scenario.Name">
+                            <i class="bi bi-trash me-1"></i>Sil
+                        </button>
+                    }
+                </div>
             </div>
             <p class="small br-muted mb-2">
-                @if (rejoinTask is not null)
+                @if (scenario.TriggerTaskId.HasValue)
                 {
-                    <text><i class="bi bi-arrow-return-right me-1"></i>Bittiginde ana akista <strong>@rejoinTask.Order. @rejoinTask.Title</strong> gorevinden devam eder.</text>
+                    var conditionText = scenario.TriggerCondition == ScenarioTriggerCondition.Success ? "basarili" : "basarisiz";
+                    <text><i class="bi bi-lightning-charge me-1"></i><strong>@scenario.TriggerTaskTitle</strong> gorevi @conditionText olursa otomatik devreye girer.</text>
+                }
+                else
+                {
+                    <text><i class="bi bi-hand-index me-1"></i>Otomatik tetikleyicisi yok; yalnizca elle "Senaryosuna Gec" ile baslatilir.</text>
+                }
+                <br />
+                @if (scenario.RejoinTaskId.HasValue)
+                {
+                    <text><i class="bi bi-arrow-return-right me-1"></i>Bittiginde ana akista <strong>@scenario.RejoinTaskTitle</strong> gorevinden devam eder.</text>
                 }
                 else
                 {
                     <text><i class="bi bi-info-circle me-1"></i>Tek yonlu senaryo: tum adimlar tamamlaninca runbook burada sona erer.</text>
                 }
             </p>
-            <div class="br-scenario-task-list" data-scenario-group="@groupName" data-sortable="@Model.CanEditThis.ToString().ToLowerInvariant()">
+            @if (groupSteps.Count == 0)
+            {
+                <p class="br-muted small mb-0"><i class="bi bi-inbox me-1"></i>Henuz adim eklenmedi.</p>
+            }
+            <div class="br-scenario-task-list" data-scenario-group="@scenario.Name" data-sortable="@Model.CanEditThis.ToString().ToLowerInvariant()">
                 @foreach (var step in groupSteps)
                 {
                     <partial name="_Task" model="@(TaskCardModel.From(step, Model))" />
@@ -540,15 +594,79 @@
         </div>
     }
 
-    @if (scenarioGroups.Count == 0)
+    @if (scenarios.Count == 0)
     {
         <div class="br-card p-4 text-center mb-3">
-            <p class="br-muted mb-0 small">Henuz senaryo adimi tanimlanmamis.</p>
+            <p class="br-muted mb-0 small">Henuz senaryo tanimlanmamis. Once "Yeni Senaryo Olustur" ile bir senaryo olusturun.</p>
         </div>
     }
 
     @if (Model.CanEditThis)
     {
+        <div class="collapse" id="newScenarioPanel">
+            <div class="br-card p-3 mb-3">
+                <h3 class="h6 mb-3">Yeni senaryo olustur</h3>
+                <p class="small br-muted">
+                    Once senaryonun kendisi (adi, tetikleyicisi, bittiginde nereden devam edilecegi)
+                    olusturulur; adimlar daha sonra "Senaryo Adimi Ekle" ile bu senaryonun altina eklenir.
+                </p>
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <label class="form-label small br-muted">Senaryo adi *</label>
+                        <input class="form-control" id="newScenarioName" placeholder="orn. Senaryo-A" />
+                    </div>
+                    <div class="col-12">
+                        <hr class="my-1" />
+                        <p class="small br-muted mb-2">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Bu senaryonun hangi durumda otomatik devreye girecegini belirlemek icin bir
+                            goreve baglayin (ana akis ya da baska bir senaryonun adimi olabilir). Bagli
+                            gorev secilmezse senaryo yalnizca "Senaryosuna Gec" butonuyla elle baslatilir.
+                        </p>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small br-muted">Bagli gorev (opsiyonel)</label>
+                        <select class="form-select" id="newScenarioTriggerTask">
+                            <option value="">-- Secilmedi (elle baslatilir) --</option>
+                            @foreach (var candidate in r.Tasks.Where(t => !t.IsRollbackStep).OrderBy(t => t.Order))
+                            {
+                                var prefix = string.IsNullOrEmpty(candidate.ScenarioGroup) ? "" : $"[{candidate.ScenarioGroup}] ";
+                                <option value="@candidate.Id">@prefix@candidate.Order. @candidate.Title</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-6" id="newScenarioConditionWrap" hidden>
+                        <label class="form-label small br-muted">Bagli gorev su durumda olursa bu senaryoya gecilsin</label>
+                        <select class="form-select" id="newScenarioCondition">
+                            <option value="Failure">Basarisiz olursa</option>
+                            <option value="Success">Basarili olursa</option>
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <p class="small br-muted mb-2">
+                            <i class="bi bi-signpost-split me-1"></i>
+                            Bu senaryo TUM adimlariyla tamamlaninca ana runbook nereden devam etsin?
+                            Secilmezse senaryo tek yonludur - biterse runbook orada sona erer.
+                        </p>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small br-muted">Bittiginde ana runbook'ta devam edilecek gorev (opsiyonel)</label>
+                        <select class="form-select" id="newScenarioRejoinTask">
+                            <option value="">-- Secilmedi (tek yonlu, runbook'u bitirir) --</option>
+                            @foreach (var candidate in mainTasks)
+                            {
+                                <option value="@candidate.Id">@candidate.Order. @candidate.Title</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="mt-3 d-flex gap-2">
+                    <button class="btn btn-primary btn-sm" id="btnCreateScenario"><i class="bi bi-check-lg me-1"></i>Olustur</button>
+                    <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="collapse" data-bs-target="#newScenarioPanel">Vazgec</button>
+                </div>
+            </div>
+        </div>
+
         <div class="collapse" id="newScenarioStepPanel">
             <div class="br-card p-3 mb-3">
                 <h3 class="h6 mb-3">Yeni senaryo adimi</h3>
@@ -557,14 +675,20 @@
                 </p>
                 <div class="row g-2">
                     <div class="col-md-4">
-                        <label class="form-label small br-muted">Senaryo adi *</label>
-                        <input class="form-control" id="scenarioStepGroup" placeholder="orn. Senaryo-A" list="scenarioGroupOptions" />
-                        <datalist id="scenarioGroupOptions">
-                            @foreach (var groupName in scenarioGroups)
+                        <label class="form-label small br-muted">Senaryo *</label>
+                        <select class="form-select" id="scenarioStepGroup" @(scenarios.Count == 0 ? "disabled" : "")>
+                            @if (scenarios.Count == 0)
                             {
-                                <option value="@groupName"></option>
+                                <option value="">-- Once bir senaryo olusturun --</option>
                             }
-                        </datalist>
+                            else
+                            {
+                                @foreach (var sc in scenarios)
+                                {
+                                    <option value="@sc.Name">@sc.Name</option>
+                                }
+                            }
+                        </select>
                     </div>
                     <div class="col-md-5">
                         <label class="form-label small br-muted">Baslik *</label>
@@ -589,52 +713,19 @@
                                   placeholder="Bu adimda ne yapilacak?"></textarea>
                     </div>
                     <div class="col-12">
-                        <hr class="my-1" />
-                        <p class="small br-muted mb-2">
-                            <i class="bi bi-info-circle me-1"></i>
-                            Bu senaryonun hangi durumda otomatik devreye girecegini belirlemek icin bir
-                            ana akis gorevine baglayin. Bagli gorev secilmezse plan dumduz akar; bu
-                            senaryo hicbir gorevin sonucuna otomatik baglanmaz, yalnizca yukaridaki
-                            "Senaryosuna Gec" butonuyla elle baslatilabilir.
-                        </p>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label small br-muted">Bagli gorev (opsiyonel)</label>
-                        <select class="form-select" id="scenarioStepLinkedTask">
-                            <option value="">-- Secilmedi (elle baslatilir) --</option>
-                            @foreach (var candidate in mainTasks)
-                            {
-                                <option value="@candidate.Id">@candidate.Order. @candidate.Title</option>
-                            }
-                        </select>
-                    </div>
-                    <div class="col-md-6" id="scenarioStepConditionWrap" hidden>
-                        <label class="form-label small br-muted">Bagli gorev su durumda olursa bu senaryoya gecilsin</label>
-                        <select class="form-select" id="scenarioStepCondition">
-                            <option value="Failure">Basarisiz olursa</option>
-                            <option value="Success">Basarili olursa</option>
-                        </select>
-                    </div>
-                    <div class="col-12">
-                        <p class="small br-muted mb-2">
-                            <i class="bi bi-signpost-split me-1"></i>
-                            Bu senaryo TUM adimlariyla tamamlaninca ana runbook nereden devam etsin?
-                            Secilmezse senaryo tek yonludur - biterse runbook orada sona erer.
-                        </p>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label small br-muted">Bittiginde ana runbook'ta devam edilecek gorev (opsiyonel)</label>
-                        <select class="form-select" id="scenarioStepRejoinTask">
-                            <option value="">-- Secilmedi (tek yonlu, runbook'u bitirir) --</option>
-                            @foreach (var candidate in mainTasks)
-                            {
-                                <option value="@candidate.Id">@candidate.Order. @candidate.Title</option>
-                            }
-                        </select>
+                        <label class="form-label small br-muted">
+                            Oncul gorevler (bu adim, secilenler kapanmadan baslatilamaz/tamamlanamaz) -
+                            hem bu senaryonun kendi adimlari hem ana akis gorevleri secilebilir
+                        </label>
+                        <div class="border rounded p-2" id="scenarioStepDependencies" style="max-height:160px;overflow-y:auto;">
+                            <div class="br-muted small">Once bir senaryo secin.</div>
+                        </div>
                     </div>
                 </div>
                 <div class="mt-3 d-flex gap-2">
-                    <button class="btn btn-primary btn-sm" id="btnAddScenarioStep"><i class="bi bi-check-lg me-1"></i>Ekle</button>
+                    <button class="btn btn-primary btn-sm" id="btnAddScenarioStep" @(scenarios.Count == 0 ? "disabled" : "")>
+                        <i class="bi bi-check-lg me-1"></i>Ekle
+                    </button>
                     <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="collapse" data-bs-target="#newScenarioStepPanel">Vazgec</button>
                 </div>
             </div>
@@ -737,31 +828,42 @@
                         <label class="form-label small br-muted">Planlanan kesinti (dk)</label>
                         <input class="form-control" type="number" min="0" id="editTaskOutageMinutes" />
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         <label class="form-label small br-muted">Basarisiz olursa</label>
                         <select class="form-select" id="editTaskFailureAction">
                             <option value="None">Otomatik eylem yok</option>
                             <option value="StartRollback">Geri donus planini otomatik baslat</option>
                             <option value="SwitchToScenario">Bir senaryoya otomatik gec</option>
+                            <option value="SwitchToTask">Belirli bir goreve atla</option>
                         </select>
                     </div>
-                    <div class="col-md-6" id="editTaskFailureScenarioWrap" hidden>
+                    <div class="col-md-4" id="editTaskFailureScenarioWrap" hidden>
                         <label class="form-label small br-muted">Hangi senaryo</label>
-                        <input class="form-control" id="editTaskFailureScenario" placeholder="orn. Senaryo-A" list="scenarioGroupOptions" />
+                        <select class="form-select" id="editTaskFailureScenario">
+                            <option value="">-- Secin --</option>
+                            @foreach (var sc in scenarios)
+                            {
+                                <option value="@sc.Name">@sc.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-4" id="editTaskFailureTargetWrap" hidden>
+                        <label class="form-label small br-muted">Hangi gorev</label>
+                        <select class="form-select" id="editTaskFailureTarget">
+                            <option value="">-- Secin --</option>
+                            @foreach (var candidate in taskJumpTargets)
+                            {
+                                <option value="@candidate.Id">@candidate.Order. @candidate.Title</option>
+                            }
+                        </select>
                     </div>
                     <div class="col-12">
                         <label class="form-label small br-muted">Basarili olursa hangi senaryoya gecilsin (opsiyonel)</label>
-                        <input class="form-control" id="editTaskSuccessScenario" placeholder="orn. Senaryo-B" list="scenarioGroupOptions" />
-                    </div>
-                    <div class="col-12" id="editTaskRejoinWrap" hidden>
-                        <label class="form-label small br-muted">
-                            Bu senaryo grubu tamamlaninca ana runbook'ta devam edilecek gorev (opsiyonel)
-                        </label>
-                        <select class="form-select" id="editTaskRejoinTask">
-                            <option value="">-- Secilmedi (tek yonlu, runbook'u bitirir) --</option>
-                            @foreach (var candidate in mainTasks)
+                        <select class="form-select" id="editTaskSuccessScenario">
+                            <option value="">-- Secilmedi --</option>
+                            @foreach (var sc in scenarios)
                             {
-                                <option value="@candidate.Id">@candidate.Order. @candidate.Title</option>
+                                <option value="@sc.Name">@sc.Name</option>
                             }
                         </select>
                     </div>
@@ -1030,6 +1132,7 @@
             scenarioGroup = t.ScenarioGroup,
             failureAction = t.FailureAction.ToString(),
             failureScenarioGroup = t.FailureScenarioGroup,
+            failureTargetTaskId = t.FailureTargetTaskId,
             successScenarioGroup = t.SuccessScenarioGroup,
             scenarioRejoinTaskId = t.ScenarioRejoinTaskId,
             dependsOnTaskIds = t.Predecessors.Select(p => p.TaskId),

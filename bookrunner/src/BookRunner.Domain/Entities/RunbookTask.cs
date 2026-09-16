@@ -97,6 +97,16 @@ public class RunbookTask : AuditableEntity, ISoftDeletable
     public string? FailureScenarioGroup { get; set; }
 
     /// <summary>
+    /// FailureAction = SwitchToTask oldugunda otomatik atlanacak ANA AKIS gorevi.
+    /// Aradaki acik ana akis gorevleri Atlandi olur, akis bu gorevden devam eder
+    /// (bkz. TaskService.ActivateTaskJump). ScenarioRejoinTaskId gibi kasitli
+    /// olarak FK/navigasyon ozelligi yoktur - ayni tabloya (Tasks) birden fazla
+    /// kendine-referans FK, SQL Server'da cascade yolu belirsizligine yol acar;
+    /// buradaki tutarlilik uygulama katmaninda saglanir.
+    /// </summary>
+    public Guid? FailureTargetTaskId { get; set; }
+
+    /// <summary>
     /// Dolu ise, bu gorev "Tamamlandi" olarak isaretlendiginde otomatik gecilecek
     /// senaryo grubunun adi (orn. "Senaryo-B"). FailureAction'dan farkli olarak
     /// basarili durumun tek anlamli hedefi senaryoya gecistir - "basarili olursa

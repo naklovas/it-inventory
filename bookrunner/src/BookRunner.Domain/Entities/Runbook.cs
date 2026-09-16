@@ -109,4 +109,5 @@ public class Runbook : AuditableEntity, ISoftDeletable
 
     public ICollection<RunbookTask> Tasks { get; set; } = new List<RunbookTask>();
     public ICollection<RunbookScript> Scripts { get; set; } = new List<RunbookScript>();
+    public ICollection<Scenario> Scenarios { get; set; } = new List<Scenario>();
 }

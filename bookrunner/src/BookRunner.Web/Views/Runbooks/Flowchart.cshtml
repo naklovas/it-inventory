@@ -62,6 +62,13 @@
         mermaidUrl = Url.Content("~/lib/mermaid/mermaid.min.js"),
         isRollbackActive = r.IsRollbackActive,
         activeScenarioGroup = r.ActiveScenarioGroup,
+        scenarios = r.Scenarios.Select(s => new
+        {
+            name = s.Name,
+            rejoinTaskId = s.RejoinTaskId,
+            triggerTaskId = s.TriggerTaskId,
+            triggerCondition = s.TriggerCondition.HasValue ? s.TriggerCondition.Value.ToString() : null
+        }),
         tasks = r.Tasks.OrderBy(t => t.Order).Select(t => new
         {
             id = t.Id,
@@ -71,6 +78,7 @@
             scenarioGroup = t.ScenarioGroup,
             failureAction = t.FailureAction.ToString(),
             failureScenarioGroup = t.FailureScenarioGroup,
+            failureTargetTaskId = t.FailureTargetTaskId,
             successScenarioGroup = t.SuccessScenarioGroup,
             scenarioRejoinTaskId = t.ScenarioRejoinTaskId,
             status = t.Status.ToString(),

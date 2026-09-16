@@ -98,6 +98,41 @@ public sealed class RunbookTaskConfiguration : IEntityTypeConfiguration<RunbookT
 }
 
 /// <summary>
+/// Bir senaryonun kendisi (adimlarindan bagimsiz - bkz. Scenario.cs).
+/// </summary>
+public sealed class ScenarioConfiguration : IEntityTypeConfiguration<Scenario>
+{
+    public void Configure(EntityTypeBuilder<Scenario> builder)
+    {
+        builder.ToTable("Scenarios");
+        builder.HasKey(s => s.Id);
+
+        builder.Property(s => s.Name).HasMaxLength(100).IsRequired();
+        builder.Property(s => s.CreatedBy).HasMaxLength(256).IsRequired();
+        builder.Property(s => s.UpdatedBy).HasMaxLength(256);
+        builder.Property(s => s.DeletedBy).HasMaxLength(256);
+
+        builder.HasOne(s => s.Runbook)
+            .WithMany(r => r.Scenarios)
+            .HasForeignKey(s => s.RunbookId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // Restrict, Runbook -> Tasks (cascade) ile Runbook -> Scenarios (cascade)
+        // ayni Tasks tablosuna iki farkli yoldan ulasmasin diye (bkz. Script FK
+        // yorumu yukarida) - uygulama RejoinTaskId'yi runbook/gorev silinirken
+        // kendisi tutarli tutar.
+        builder.HasOne(s => s.RejoinTask)
+            .WithMany()
+            .HasForeignKey(s => s.RejoinTaskId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasIndex(s => new { s.RunbookId, s.Name }).IsUnique();
+
+        builder.HasQueryFilter(s => !s.IsDeleted && !s.Runbook.IsDeleted);
+    }
+}
+
+/// <summary>
 /// Gorevler arasi oncul/ardil iliskisi (bkz. TaskDependency). Her iki FK de
 /// Tasks tablosuna Restrict ile baglanir; SQL Server ayni tabloya iki farkli
 /// cascade yolundan ulasilmasina izin vermez (bkz. RunbookTaskConfiguration

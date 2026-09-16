@@ -113,6 +113,10 @@ public sealed record RunbookDetailDto
     /// ilk gorulme sirasina gore), orn. ["Senaryo-A", "Senaryo-B"].</summary>
     public IReadOnlyList<string> ScenarioGroups { get; init; } = Array.Empty<string>();
 
+    /// <summary>Bu runbook'ta tanimli senaryolarin kendisi (adimsiz/bos olanlar
+    /// dahil) - bkz. Scenario entity, TaskService.CreateScenarioAsync.</summary>
+    public IReadOnlyList<ScenarioDto> Scenarios { get; init; } = Array.Empty<ScenarioDto>();
+
     public PersonSummary? Owner { get; init; }
     public string? ServiceManagerWorkItemId { get; init; }
     public IReadOnlyList<string> Tags { get; init; } = Array.Empty<string>();

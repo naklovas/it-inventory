@@ -15,6 +15,7 @@ public interface IAppDbContext
     DbSet<RoleMapping> RoleMappings { get; }
     DbSet<Runbook> Runbooks { get; }
     DbSet<RunbookTask> Tasks { get; }
+    DbSet<Scenario> Scenarios { get; }
     DbSet<TaskDependency> TaskDependencies { get; }
     DbSet<TaskAssignment> Assignments { get; }
     DbSet<TaskComment> Comments { get; }

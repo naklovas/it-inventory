@@ -479,6 +479,22 @@ public sealed class RunbooksController(
             return null;
         });
 
+    /// <summary>Once senaryo, adimsiz olarak olusturulur; adimlar daha sonra eklenir.</summary>
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public Task<IActionResult> CreateScenario(Guid id, [FromBody] CreateScenarioRequest request, CancellationToken ct)
+        => JsonResultAsync(() => Api.CreateScenarioAsync(id, request, ct));
+
+    /// <summary>Bos (adimsiz) bir senaryoyu siler.</summary>
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public Task<IActionResult> DeleteScenario(Guid scenarioId, CancellationToken ct)
+        => JsonResultAsync<object?>(async () =>
+        {
+            await Api.DeleteScenarioAsync(scenarioId, ct);
+            return null;
+        });
+
     [HttpPost]
     [ValidateAntiForgeryToken]
     public Task<IActionResult> DeleteTask(Guid taskId, CancellationToken ct)

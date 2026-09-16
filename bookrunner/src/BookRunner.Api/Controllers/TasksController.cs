@@ -92,6 +92,37 @@ public sealed class TasksController(ITaskService tasks) : ControllerBase
         return NoContent();
     }
 
+    /// <summary>Bu runbook'ta tanimli senaryolarin listesi (adimsiz olanlar dahil).</summary>
+    [HttpGet("runbooks/{runbookId:guid}/scenarios")]
+    [Authorize(Policy = Permissions.RunbookRead)]
+    [ProducesResponseType(typeof(IReadOnlyList<ScenarioDto>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<ScenarioDto>>> ListScenarios(Guid runbookId, CancellationToken ct)
+        => Ok(await tasks.ListScenariosAsync(runbookId, ct));
+
+    /// <summary>
+    /// Once senaryo, adimsiz olarak olusturulur; adimlar daha sonra ayri
+    /// ayri (mevcut senaryolardan biri secilerek) eklenir.
+    /// </summary>
+    [HttpPost("runbooks/{runbookId:guid}/scenarios")]
+    [Authorize(Policy = Permissions.RunbookRead)]
+    [ProducesResponseType(typeof(ScenarioDto), StatusCodes.Status201Created)]
+    public async Task<ActionResult<ScenarioDto>> CreateScenario(
+        Guid runbookId, [FromBody] CreateScenarioRequest request, CancellationToken ct)
+    {
+        var created = await tasks.CreateScenarioAsync(runbookId, request, ct);
+        return CreatedAtAction(nameof(ListScenarios), new { runbookId }, created);
+    }
+
+    /// <summary>Bos (adimsiz) bir senaryoyu siler.</summary>
+    [HttpDelete("scenarios/{scenarioId:guid}")]
+    [Authorize(Policy = Permissions.RunbookRead)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> DeleteScenario(Guid scenarioId, CancellationToken ct)
+    {
+        await tasks.DeleteScenarioAsync(scenarioId, ct);
+        return NoContent();
+    }
+
     /// <summary>Gorevleri surukle-birak sonrasi yeniden siralar.</summary>
     [HttpPost("runbooks/{runbookId:guid}/tasks/reorder")]
     [Authorize(Policy = Permissions.RunbookRead)]

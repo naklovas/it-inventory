@@ -24,6 +24,7 @@ public sealed class PdfService(BookRunnerDbContext db, IAuditService audit) : IP
             .Include(r => r.Tasks).ThenInclude(t => t.Assignments).ThenInclude(a => a.User)
             .Include(r => r.Tasks).ThenInclude(t => t.Assignments).ThenInclude(a => a.Group)
             .Include(r => r.Tasks).ThenInclude(t => t.Comments).ThenInclude(c => c.Author)
+            .Include(r => r.Scenarios)
             .AsSplitQuery()
             .FirstOrDefaultAsync(r => r.Id == runbookId, ct)
             ?? throw new NotFoundException("Runbook", runbookId);
@@ -232,38 +233,43 @@ public sealed class PdfService(BookRunnerDbContext db, IAuditService audit) : IP
 
             if (mainTasks.Count > 0)
             {
-                ComposeFlowChain(column, "Ana Akis", "#4F86F7", mainTasks, null);
+                ComposeFlowChain(column, "Ana Akis", "#4F86F7", mainTasks, null, allTasks);
             }
 
             foreach (var groupName in scenarioGroupNames)
             {
                 var steps = allTasks.Where(t => !t.IsRollbackStep && t.ScenarioGroup == groupName)
                     .OrderBy(t => t.Order).ToList();
-                var rejoinTaskId = steps.Select(t => t.ScenarioRejoinTaskId).FirstOrDefault(id => id.HasValue);
+                // Rejoin hedefi oncelikle ayri Scenario varligindan (yeni "Yeni
+                // Senaryo Olustur" akisi) okunur; orada yoksa (eski/gecis donemi
+                // runbook'lari) gorev uzerindeki ScenarioRejoinTaskId'ye geri duser.
+                var rejoinTaskId = runbook.Scenarios.FirstOrDefault(s => s.Name == groupName)?.RejoinTaskId
+                    ?? steps.Select(t => t.ScenarioRejoinTaskId).FirstOrDefault(id => id.HasValue);
                 var rejoinTask = rejoinTaskId.HasValue ? allTasks.FirstOrDefault(t => t.Id == rejoinTaskId.Value) : null;
                 var title = "Senaryo: " + groupName + (runbook.ActiveScenarioGroup == groupName ? " (AKTIF)" : "");
                 var footNote = rejoinTask is not null
                     ? $"Tamamlaninca ana akista '{rejoinTask.Title}' gorevinden devam eder."
                     : "Tek yonlu: tum adimlari tamamlaninca calisma burada sona erer.";
-                ComposeFlowChain(column, title, "#8BC34A", steps, footNote);
+                ComposeFlowChain(column, title, "#8BC34A", steps, footNote, allTasks);
             }
 
             if (rollbackSteps.Count > 0)
             {
                 var title = "Geri Donus Plani" + (runbook.IsRollbackActive ? " (AKTIF)" : "");
-                ComposeFlowChain(column, title, "#9C6ADE", rollbackSteps, null);
+                ComposeFlowChain(column, title, "#9C6ADE", rollbackSteps, null, allTasks);
             }
         });
     }
 
     private static void ComposeFlowChain(
-        ColumnDescriptor column, string title, string accentColor, List<RunbookTask> steps, string? footNote)
+        ColumnDescriptor column, string title, string accentColor, List<RunbookTask> steps, string? footNote,
+        List<RunbookTask> allTasks)
     {
         column.Item().PaddingTop(10).Text(title).SemiBold().FontSize(11).FontColor(accentColor);
 
         for (var i = 0; i < steps.Count; i++)
         {
-            column.Item().Element(element => ComposeFlowNode(element, steps[i], accentColor));
+            column.Item().Element(element => ComposeFlowNode(element, steps[i], accentColor, allTasks));
             if (i < steps.Count - 1)
             {
                 column.Item().AlignCenter().Text("↓").FontSize(12).FontColor(accentColor);
@@ -276,7 +282,7 @@ public sealed class PdfService(BookRunnerDbContext db, IAuditService audit) : IP
         }
     }
 
-    private static void ComposeFlowNode(IContainer container, RunbookTask task, string accentColor)
+    private static void ComposeFlowNode(IContainer container, RunbookTask task, string accentColor, List<RunbookTask> allTasks)
     {
         var (name, photo, _) = AssigneeSummary(task);
 
@@ -307,7 +313,7 @@ public sealed class PdfService(BookRunnerDbContext db, IAuditService audit) : IP
                 row.RelativeItem().Text(name).FontSize(8).FontColor("#334E68");
             });
 
-            foreach (var note in TriggerNotes(task))
+            foreach (var note in TriggerNotes(task, allTasks))
             {
                 column.Item().PaddingTop(3).PaddingLeft(10).Text(note.Text).FontSize(8).Italic().FontColor(note.Color);
             }
@@ -338,7 +344,7 @@ public sealed class PdfService(BookRunnerDbContext db, IAuditService audit) : IP
             : (names, null, true);
     }
 
-    private static IEnumerable<(string Text, string Color)> TriggerNotes(RunbookTask task)
+    private static IEnumerable<(string Text, string Color)> TriggerNotes(RunbookTask task, List<RunbookTask> allTasks)
     {
         if (task.FailureAction == TaskFailureAction.StartRollback)
         {
@@ -347,6 +353,14 @@ public sealed class PdfService(BookRunnerDbContext db, IAuditService audit) : IP
         else if (task.FailureAction == TaskFailureAction.SwitchToScenario && !string.IsNullOrEmpty(task.FailureScenarioGroup))
         {
             yield return ($"Basarisiz olursa -> Senaryo: {task.FailureScenarioGroup}", "#C0504D");
+        }
+        else if (task.FailureAction == TaskFailureAction.SwitchToTask && task.FailureTargetTaskId.HasValue)
+        {
+            var target = allTasks.FirstOrDefault(t => t.Id == task.FailureTargetTaskId.Value);
+            if (target is not null)
+            {
+                yield return ($"Basarisiz olursa -> Gorev {target.Order}. {target.Title}", "#C0504D");
+            }
         }
 
         if (!string.IsNullOrEmpty(task.SuccessScenarioGroup))

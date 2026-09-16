@@ -207,10 +207,12 @@ public sealed class RunbookService(
             ?? throw new NotFoundException("Runbook", id);
 
         var mentionLookup = await BuildMentionLookupAsync(runbook, ct);
+        var taskTitleLookup = runbook.Tasks.ToDictionary(t => t.Id, t => t.Title);
 
         var tasks = runbook.Tasks
             .OrderBy(t => t.Order)
-            .Select(t => t.ToDto(includeComments: true, mentionLookup))
+            .Select(t => t.ToDto(includeComments: true, mentionLookup,
+                t.FailureTargetTaskId.HasValue ? taskTitleLookup.GetValueOrDefault(t.FailureTargetTaskId.Value) : null))
             .ToList();
 
         var collaborators = await GetCollaboratorsAsync(id, ct);
@@ -376,7 +378,7 @@ public sealed class RunbookService(
             Tags = source.Tags
         };
 
-        CopyTasksWithDependencies(template, source.Tasks, copyAssignments: false);
+        CopyTasksWithDependencies(template, source.Tasks, source.Scenarios, copyAssignments: false);
 
         db.Runbooks.Add(template);
         await db.SaveChangesAsync(ct);
@@ -421,7 +423,7 @@ public sealed class RunbookService(
             Tags = template.Tags
         };
 
-        CopyTasksWithDependencies(runbook, template.Tasks, request.CopyAssignments);
+        CopyTasksWithDependencies(runbook, template.Tasks, template.Scenarios, request.CopyAssignments);
 
         db.Runbooks.Add(runbook);
         await db.SaveChangesAsync(ct);
@@ -629,6 +631,7 @@ public sealed class RunbookService(
             .Include(r => r.Tasks).ThenInclude(t => t.Script)
             .Include(r => r.Tasks).ThenInclude(t => t.Predecessors).ThenInclude(d => d.DependsOnTask)
             .Include(r => r.Tasks).ThenInclude(t => t.Successors).ThenInclude(d => d.Task)
+            .Include(r => r.Scenarios).ThenInclude(s => s.RejoinTask)
             .AsSplitQuery();
 
         if (!tracking)
@@ -670,7 +673,8 @@ public sealed class RunbookService(
     /// tasinir; kaynak disina (ornegin farkli bir runbook'taki gorevlere) bakan
     /// bir bagimlilik olamayacagi icin bu yeterlidir.
     /// </summary>
-    private void CopyTasksWithDependencies(Runbook target, ICollection<RunbookTask> sourceTasks, bool copyAssignments)
+    private void CopyTasksWithDependencies(
+        Runbook target, ICollection<RunbookTask> sourceTasks, ICollection<Scenario> sourceScenarios, bool copyAssignments)
     {
         var idMap = new Dictionary<Guid, Guid>();
         var pairs = new List<(RunbookTask Source, RunbookTask Copy)>();
@@ -693,15 +697,36 @@ public sealed class RunbookService(
                 }
             }
 
-            // ScenarioRejoinTaskId eski runbook'taki bir gorevi isaret eder;
-            // TaskDependency ile ayni sebepten (Id'ler kopyalanirken yeniden
-            // uretilir) yeni Id'ye cevrilmesi gerekir, aksi halde kopyalanan
-            // runbook'ta var olmayan/yanlis bir goreve isaret ederdi.
+            // ScenarioRejoinTaskId/FailureTargetTaskId eski runbook'taki bir
+            // gorevi isaret eder; TaskDependency ile ayni sebepten (Id'ler
+            // kopyalanirken yeniden uretilir) yeni Id'ye cevrilmesi gerekir,
+            // aksi halde kopyalanan runbook'ta var olmayan/yanlis bir goreve
+            // isaret ederdi.
             if (source.ScenarioRejoinTaskId.HasValue &&
                 idMap.TryGetValue(source.ScenarioRejoinTaskId.Value, out var newRejoinTaskId))
             {
                 copy.ScenarioRejoinTaskId = newRejoinTaskId;
             }
+
+            if (source.FailureTargetTaskId.HasValue &&
+                idMap.TryGetValue(source.FailureTargetTaskId.Value, out var newFailureTargetId))
+            {
+                copy.FailureTargetTaskId = newFailureTargetId;
+            }
+        }
+
+        // Senaryolarin kendisi de (adimsiz olanlar dahil) kopyalanir; RejoinTaskId
+        // ayni idMap ile yeni goreve cevrilir.
+        foreach (var scenario in sourceScenarios)
+        {
+            target.Scenarios.Add(new Scenario
+            {
+                Name = scenario.Name,
+                RejoinTaskId = scenario.RejoinTaskId.HasValue
+                    && idMap.TryGetValue(scenario.RejoinTaskId.Value, out var newScenarioRejoinId)
+                    ? newScenarioRejoinId
+                    : null
+            });
         }
     }
 

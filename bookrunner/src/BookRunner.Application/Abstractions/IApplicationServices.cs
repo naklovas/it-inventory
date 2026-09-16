@@ -120,6 +120,21 @@ public interface ITaskService
     /// </summary>
     Task SwitchScenarioAsync(Guid runbookId, SwitchScenarioRequest request, CancellationToken ct = default);
 
+    /// <summary>
+    /// Once senaryo, adimsiz olarak olusturulur - adimlar daha sonra ayri
+    /// ayri eklenir (bkz. Scenario entity). Tetikleyici gorev belirtilirse
+    /// (TriggerTaskId+TriggerCondition) o gorevin FailureAction/
+    /// SuccessScenarioGroup alanlarina yazilir.
+    /// </summary>
+    Task<ScenarioDto> CreateScenarioAsync(Guid runbookId, CreateScenarioRequest request, CancellationToken ct = default);
+
+    /// <summary>Bu runbook'ta tanimli senaryolarin listesi (adimsiz olanlar dahil).</summary>
+    Task<IReadOnlyList<ScenarioDto>> ListScenariosAsync(Guid runbookId, CancellationToken ct = default);
+
+    /// <summary>Bir senaryoyu siler - yalnizca hicbir adimi yoksa (yanlislikla
+    /// olusturulmus bos bir senaryoyu temizlemek icin).</summary>
+    Task DeleteScenarioAsync(Guid scenarioId, CancellationToken ct = default);
+
     /// <summary>Goreve tiklaninca acilan akordiyon tarihcesi.</summary>
     Task<IReadOnlyList<TaskActivityDto>> GetHistoryAsync(Guid taskId, CancellationToken ct = default);
 }

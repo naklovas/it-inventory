@@ -402,6 +402,7 @@ BEGIN
         [ScenarioRejoinTaskId] uniqueidentifier NULL,
         [FailureAction] int NOT NULL,
         [FailureScenarioGroup] nvarchar(100) NULL,
+        [FailureTargetTaskId] uniqueidentifier NULL,
         [SuccessScenarioGroup] nvarchar(100) NULL,
         [ScriptId] uniqueidentifier NULL,
         [RollbackNotes] nvarchar(4000) NULL,
@@ -489,6 +490,16 @@ GO
 IF COL_LENGTH(N'bookrunner.Tasks', 'FailureScenarioGroup') IS NULL
 BEGIN
     ALTER TABLE [bookrunner].[Tasks] ADD [FailureScenarioGroup] nvarchar(100) NULL;
+END
+GO
+
+-- Mevcut kurulumlarda Tasks tablosu "basarisiz olursa belirli bir goreve atla"
+-- hedefi olmadan olusturulmus olabilir (bkz. RunbookTask.FailureTargetTaskId).
+-- ScenarioRejoinTaskId gibi kasitli olarak FK yoktur (ayni tabloya birden
+-- fazla kendine-referans FK, SQL Server'da cascade yolu belirsizligine yol acar).
+IF COL_LENGTH(N'bookrunner.Tasks', 'FailureTargetTaskId') IS NULL
+BEGIN
+    ALTER TABLE [bookrunner].[Tasks] ADD [FailureTargetTaskId] uniqueidentifier NULL;
 END
 GO
 
@@ -710,6 +721,32 @@ BEGIN
         CONSTRAINT [PK_RunbookCollaborators] PRIMARY KEY ([Id])
     );
     PRINT N'Tablo olusturuldu: RunbookCollaborators';
+END
+GO
+
+/* ---------------------------------------------------------------------------
+   Senaryonun kendisi (adimlarindan bagimsiz - bkz. Scenario entity). Once
+   senaryo burada olusturulur (ad, opsiyonel rejoin noktasi), adimlar daha
+   sonra Tasks.ScenarioGroup = bu senaryonun Name'i ile eklenir.
+   --------------------------------------------------------------------------- */
+
+IF OBJECT_ID(N'[bookrunner].[Scenarios]', N'U') IS NULL
+BEGIN
+    CREATE TABLE [bookrunner].[Scenarios] (
+        [Id] uniqueidentifier NOT NULL,
+        [RunbookId] uniqueidentifier NOT NULL,
+        [Name] nvarchar(100) NOT NULL,
+        [RejoinTaskId] uniqueidentifier NULL,
+        [IsDeleted] bit NOT NULL,
+        [DeletedAt] datetimeoffset NULL,
+        [DeletedBy] nvarchar(256) NULL,
+        [CreatedAt] datetimeoffset NOT NULL,
+        [CreatedBy] nvarchar(256) NOT NULL,
+        [UpdatedAt] datetimeoffset NULL,
+        [UpdatedBy] nvarchar(256) NULL,
+        CONSTRAINT [PK_Scenarios] PRIMARY KEY ([Id])
+    );
+    PRINT N'Tablo olusturuldu: Scenarios';
 END
 GO
 
@@ -1177,6 +1214,26 @@ BEGIN
 END
 GO
 
+IF NOT EXISTS (
+    SELECT 1 FROM sys.indexes
+    WHERE name = N'IX_Scenarios_RunbookId_Name' AND object_id = OBJECT_ID(N'[bookrunner].[Scenarios]')
+)
+BEGIN
+    CREATE UNIQUE INDEX [IX_Scenarios_RunbookId_Name] ON [bookrunner].[Scenarios] ([RunbookId], [Name]);
+    PRINT N'Indeks olusturuldu: IX_Scenarios_RunbookId_Name';
+END
+GO
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.indexes
+    WHERE name = N'IX_Scenarios_RejoinTaskId' AND object_id = OBJECT_ID(N'[bookrunner].[Scenarios]')
+)
+BEGIN
+    CREATE INDEX [IX_Scenarios_RejoinTaskId] ON [bookrunner].[Scenarios] ([RejoinTaskId]);
+    PRINT N'Indeks olusturuldu: IX_Scenarios_RejoinTaskId';
+END
+GO
+
 /* ---------------------------------------------------------------------------
    Iliskiler (foreign key)
 
@@ -1562,6 +1619,60 @@ BEGIN
 END
 GO
 
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_Scenarios_Runbooks_RunbookId')
+BEGIN
+    BEGIN TRY
+        ALTER TABLE [bookrunner].[Scenarios] WITH CHECK
+            ADD CONSTRAINT [FK_Scenarios_Runbooks_RunbookId] FOREIGN KEY ([RunbookId])
+            REFERENCES [bookrunner].[Runbooks] ([Id]) ON DELETE CASCADE;
+        PRINT N'Iliski eklendi: FK_Scenarios_Runbooks_RunbookId';
+    END TRY
+    BEGIN CATCH
+        PRINT N'UYARI: FK_Scenarios_Runbooks_RunbookId eklenemedi -> ' + ERROR_MESSAGE();
+    END CATCH
+END
+GO
+
+-- Restrict (NO ACTION): Runbooks -> Tasks (cascade) ve Runbooks -> Scenarios
+-- (cascade) ayni Tasks tablosuna iki farkli yoldan ulasmasin diye (bkz.
+-- FK_Tasks_Scripts_ScriptId yorumu) - uygulama RejoinTaskId'yi runbook/gorev
+-- silinirken kendisi tutarli tutar.
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_Scenarios_Tasks_RejoinTaskId')
+BEGIN
+    BEGIN TRY
+        ALTER TABLE [bookrunner].[Scenarios] WITH CHECK
+            ADD CONSTRAINT [FK_Scenarios_Tasks_RejoinTaskId] FOREIGN KEY ([RejoinTaskId])
+            REFERENCES [bookrunner].[Tasks] ([Id]) ON DELETE NO ACTION;
+        PRINT N'Iliski eklendi: FK_Scenarios_Tasks_RejoinTaskId';
+    END TRY
+    BEGIN CATCH
+        PRINT N'UYARI: FK_Scenarios_Tasks_RejoinTaskId eklenemedi -> ' + ERROR_MESSAGE();
+    END CATCH
+END
+GO
+
+-- Geriye donuk doldurma: bu ozellik eklenmeden once bir senaryo, yalnizca
+-- gorevlerin ScenarioGroup metniyle "var" sayiliyordu - ayri bir Scenario
+-- satiri yoktu. Mevcut runbook'larda halihazirda kullanilan her (RunbookId,
+-- ScenarioGroup) cifti icin bir Scenario satiri olusturulur, aksi halde bu
+-- runbook'larda "Senaryo Adimi Ekle" formu (artik yalnizca var olan
+-- senaryolardan secim yaptirdigi icin) hicbir secenek gostermezdi.
+INSERT INTO [bookrunner].[Scenarios] ([Id], [RunbookId], [Name], [RejoinTaskId], [IsDeleted], [CreatedAt], [CreatedBy])
+SELECT NEWID(), x.RunbookId, x.ScenarioGroup, x.RejoinTaskId, 0, SYSDATETIMEOFFSET(), N'system-backfill'
+FROM (
+    SELECT DISTINCT t.RunbookId, t.ScenarioGroup,
+        (SELECT TOP 1 t2.ScenarioRejoinTaskId FROM [bookrunner].[Tasks] t2
+         WHERE t2.RunbookId = t.RunbookId AND t2.ScenarioGroup = t.ScenarioGroup
+            AND t2.ScenarioRejoinTaskId IS NOT NULL) AS RejoinTaskId
+    FROM [bookrunner].[Tasks] t
+    WHERE t.ScenarioGroup IS NOT NULL AND t.IsRollbackStep = 0 AND t.IsDeleted = 0
+) AS x
+WHERE NOT EXISTS (
+    SELECT 1 FROM [bookrunner].[Scenarios] s
+    WHERE s.RunbookId = x.RunbookId AND s.Name = x.ScenarioGroup
+);
+GO
+
 /* ---------------------------------------------------------------------------
    Rozet katalogu (seed)
 
@@ -1603,7 +1714,7 @@ GO
    eder.
    --------------------------------------------------------------------------- */
 
-DECLARE @expectedTables int = 19;
+DECLARE @expectedTables int = 20;
 DECLARE @actualTables int = (
     SELECT COUNT(*) FROM sys.tables WHERE schema_id = SCHEMA_ID(N'bookrunner')
 );
@@ -1743,6 +1854,15 @@ BEGIN
     BEGIN
         INSERT INTO [bookrunner].[__EFMigrationsHistory] ([MigrationId], [ProductVersion])
         VALUES (N'20260914151023_AddRunbookRollbackAutoTriggered', N'9.0.19');
+    END
+
+    IF NOT EXISTS (
+        SELECT 1 FROM [bookrunner].[__EFMigrationsHistory]
+        WHERE [MigrationId] = N'20260916113724_AddScenarioEntityAndFailureTargetTask'
+    )
+    BEGIN
+        INSERT INTO [bookrunner].[__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+        VALUES (N'20260916113724_AddScenarioEntityAndFailureTargetTask', N'9.0.19');
     END
 
     PRINT N'';

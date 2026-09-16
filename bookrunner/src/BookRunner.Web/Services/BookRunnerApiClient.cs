@@ -82,6 +82,15 @@ public sealed class BookRunnerApiClient(HttpClient httpClient, ILogger<BookRunne
     public Task SwitchScenarioAsync(Guid runbookId, SwitchScenarioRequest request, CancellationToken ct = default)
         => PostAsync<SwitchScenarioRequest, object>($"api/runbooks/{runbookId}/switch-scenario", request, ct);
 
+    public Task<IReadOnlyList<ScenarioDto>?> ListScenariosAsync(Guid runbookId, CancellationToken ct = default)
+        => GetAsync<IReadOnlyList<ScenarioDto>>($"api/runbooks/{runbookId}/scenarios", ct);
+
+    public Task<ScenarioDto?> CreateScenarioAsync(Guid runbookId, CreateScenarioRequest request, CancellationToken ct = default)
+        => PostAsync<CreateScenarioRequest, ScenarioDto>($"api/runbooks/{runbookId}/scenarios", request, ct);
+
+    public Task DeleteScenarioAsync(Guid scenarioId, CancellationToken ct = default)
+        => SendAsync(HttpMethod.Delete, $"api/scenarios/{scenarioId}", ct);
+
     public Task DeleteTaskAsync(Guid taskId, CancellationToken ct = default)
         => SendAsync(HttpMethod.Delete, $"api/tasks/{taskId}", ct);
 

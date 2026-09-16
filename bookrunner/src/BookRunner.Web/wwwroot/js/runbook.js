@@ -159,6 +159,7 @@
             scenarioRejoinTaskId: task.scenarioRejoinTaskId || null,
             failureAction: task.failureAction || "None",
             failureScenarioGroup: task.failureScenarioGroup || null,
+            failureTargetTaskId: task.failureTargetTaskId || null,
             successScenarioGroup: task.successScenarioGroup || null
         }, overrides || {});
     }
@@ -293,21 +294,32 @@
     wireOutageToggle("newTaskOutage", "newTaskOutageMinutesWrap");
     wireOutageToggle("editTaskOutage", "editTaskOutageMinutesWrap");
 
-    /** "Basarisiz olursa" secimi "Senaryoya gec" oldugunda hedef senaryo alanini gosterir/gizler. */
-    function wireFailureActionToggle(selectId, wrapId) {
+    /**
+     * "Basarisiz olursa" secimine gore ilgili hedef alanini gosterir/gizler:
+     * SwitchToScenario -> senaryo secimi, SwitchToTask -> gorev secimi.
+     */
+    function wireFailureActionToggle(selectId, scenarioWrapId, targetWrapId) {
         const select = document.getElementById(selectId);
-        const wrap = document.getElementById(wrapId);
-        if (!select || !wrap) {
+        const scenarioWrap = document.getElementById(scenarioWrapId);
+        const targetWrap = document.getElementById(targetWrapId);
+        if (!select) {
             return;
         }
 
-        const sync = () => { wrap.hidden = select.value !== "SwitchToScenario"; };
+        const sync = () => {
+            if (scenarioWrap) {
+                scenarioWrap.hidden = select.value !== "SwitchToScenario";
+            }
+            if (targetWrap) {
+                targetWrap.hidden = select.value !== "SwitchToTask";
+            }
+        };
         select.addEventListener("change", sync);
         sync();
     }
 
-    wireFailureActionToggle("newTaskFailureAction", "newTaskFailureScenarioWrap");
-    wireFailureActionToggle("editTaskFailureAction", "editTaskFailureScenarioWrap");
+    wireFailureActionToggle("newTaskFailureAction", "newTaskFailureScenarioWrap", "newTaskFailureTargetWrap");
+    wireFailureActionToggle("editTaskFailureAction", "editTaskFailureScenarioWrap", "editTaskFailureTargetWrap");
 
     // ------------------------------------------------------------ gorev ekleme
 
@@ -325,12 +337,17 @@
             const outageMinutes = document.getElementById("newTaskOutageMinutes").value;
             const failureAction = document.getElementById("newTaskFailureAction").value;
             const failureScenarioGroup = document.getElementById("newTaskFailureScenario").value.trim();
+            const failureTargetTaskId = document.getElementById("newTaskFailureTarget").value;
             const successScenarioGroup = document.getElementById("newTaskSuccessScenario").value.trim();
             const dependsOnTaskIds = Array.from(document.querySelectorAll(".br-new-task-depends:checked"))
                 .map((el) => el.value);
 
             if (failureAction === "SwitchToScenario" && !failureScenarioGroup) {
-                toast("Basarisiz olursa gecilecek senaryonun adini girin.", "warning");
+                toast("Basarisiz olursa gecilecek senaryoyu secin.", "warning");
+                return;
+            }
+            if (failureAction === "SwitchToTask" && !failureTargetTaskId) {
+                toast("Basarisiz olursa atlanacak gorevi secin.", "warning");
                 return;
             }
 
@@ -349,6 +366,7 @@
                     plannedOutageMinutes: isOutage && outageMinutes ? parseInt(outageMinutes, 10) : null,
                     failureAction: failureAction,
                     failureScenarioGroup: failureAction === "SwitchToScenario" ? failureScenarioGroup : null,
+                    failureTargetTaskId: failureAction === "SwitchToTask" ? failureTargetTaskId : null,
                     successScenarioGroup: successScenarioGroup || null
                 }, { id: config.runbookId });
 
@@ -462,12 +480,97 @@
     // -------------------------------------------------------------- senaryo plani
 
     /** "Bagli gorev" secilince kosul (basarili/basarisiz) alanini gosterir/gizler. */
-    const scenarioLinkedTaskSelect = document.getElementById("scenarioStepLinkedTask");
-    const scenarioConditionWrap = document.getElementById("scenarioStepConditionWrap");
-    if (scenarioLinkedTaskSelect && scenarioConditionWrap) {
-        scenarioLinkedTaskSelect.addEventListener("change", () => {
-            scenarioConditionWrap.hidden = !scenarioLinkedTaskSelect.value;
+    const scenarioTriggerTaskSelect = document.getElementById("newScenarioTriggerTask");
+    const scenarioTriggerConditionWrap = document.getElementById("newScenarioConditionWrap");
+    if (scenarioTriggerTaskSelect && scenarioTriggerConditionWrap) {
+        scenarioTriggerTaskSelect.addEventListener("change", () => {
+            scenarioTriggerConditionWrap.hidden = !scenarioTriggerTaskSelect.value;
         });
+    }
+
+    const createScenarioButton = document.getElementById("btnCreateScenario");
+    if (createScenarioButton) {
+        createScenarioButton.addEventListener("click", async () => {
+            const name = document.getElementById("newScenarioName").value.trim();
+            if (name.length < 1) {
+                toast("Senaryo adi girilmeli.", "warning");
+                return;
+            }
+
+            const triggerTaskId = document.getElementById("newScenarioTriggerTask").value;
+            const triggerCondition = document.getElementById("newScenarioCondition").value;
+            const rejoinTaskId = document.getElementById("newScenarioRejoinTask").value;
+
+            try {
+                await post("CreateScenario", {
+                    name: name,
+                    triggerTaskId: triggerTaskId || null,
+                    triggerCondition: triggerTaskId ? triggerCondition : null,
+                    rejoinTaskId: rejoinTaskId || null
+                }, { id: config.runbookId });
+
+                reload();
+            } catch (error) {
+                showActionError(error);
+            }
+        });
+    }
+
+    document.querySelectorAll(".br-delete-scenario-btn").forEach((button) => {
+        button.addEventListener("click", async () => {
+            const scenarioName = button.dataset.scenarioName;
+            if (!confirm(`"${scenarioName}" senaryosu silinecek. Emin misiniz?`)) {
+                return;
+            }
+
+            try {
+                await post("DeleteScenario", undefined, { scenarioId: button.dataset.scenarioId });
+                reload();
+            } catch (error) {
+                showActionError(error);
+            }
+        });
+    });
+
+    /**
+     * Senaryo adimi eklerken oncul secim listesini cizer: hem secilen
+     * senaryonun kendi adimlari hem de ana akis gorevleri secilebilir olmali.
+     */
+    function renderScenarioStepDependencies(scenarioGroup) {
+        const holder = document.getElementById("scenarioStepDependencies");
+        if (!holder) {
+            return;
+        }
+
+        if (!scenarioGroup) {
+            holder.innerHTML = '<div class="br-muted small">Once bir senaryo secin.</div>';
+            return;
+        }
+
+        const candidates = (config.tasks || []).filter((item) =>
+            !item.isRollbackStep && (!item.scenarioGroup || item.scenarioGroup === scenarioGroup));
+
+        if (candidates.length === 0) {
+            holder.innerHTML = '<div class="br-muted small">Secilebilecek gorev yok.</div>';
+            return;
+        }
+
+        holder.innerHTML = candidates.map((item) => {
+            const prefix = item.scenarioGroup ? "[" + item.scenarioGroup + "] " : "";
+            return '<div class="form-check">' +
+                '<input class="form-check-input br-scenario-step-depends" type="checkbox" value="' + item.id + '" ' +
+                'id="scenarioStepDep-' + item.id + '" />' +
+                '<label class="form-check-label small" for="scenarioStepDep-' + item.id + '">' +
+                escapeHtml(prefix + item.order + ". " + item.title) + "</label></div>";
+        }).join("");
+    }
+
+    const scenarioStepGroupSelect = document.getElementById("scenarioStepGroup");
+    if (scenarioStepGroupSelect) {
+        scenarioStepGroupSelect.addEventListener("change", () => {
+            renderScenarioStepDependencies(scenarioStepGroupSelect.value);
+        });
+        renderScenarioStepDependencies(scenarioStepGroupSelect.value);
     }
 
     const addScenarioStepButton = document.getElementById("btnAddScenarioStep");
@@ -476,7 +579,7 @@
             const scenarioGroup = document.getElementById("scenarioStepGroup").value.trim();
             const title = document.getElementById("scenarioStepTitle").value.trim();
             if (scenarioGroup.length < 1) {
-                toast("Senaryo adi girilmeli.", "warning");
+                toast("Once bir senaryo secin.", "warning");
                 return;
             }
             if (title.length < 2) {
@@ -485,9 +588,8 @@
             }
 
             const minutes = document.getElementById("scenarioStepMinutes").value;
-            const linkedTaskId = document.getElementById("scenarioStepLinkedTask").value;
-            const condition = document.getElementById("scenarioStepCondition").value;
-            const rejoinTaskId = document.getElementById("scenarioStepRejoinTask").value;
+            const dependsOnTaskIds = Array.from(document.querySelectorAll(".br-scenario-step-depends:checked"))
+                .map((el) => el.value);
 
             try {
                 await post("AddTask", {
@@ -496,26 +598,8 @@
                     priority: document.getElementById("scenarioStepPriority").value,
                     estimatedMinutes: minutes ? parseInt(minutes, 10) : null,
                     scenarioGroup: scenarioGroup,
-                    scenarioRejoinTaskId: rejoinTaskId || null
+                    dependsOnTaskIds: dependsOnTaskIds
                 }, { id: config.runbookId });
-
-                // Bagli gorev secildiyse, bu senaryoyu o gorevin basarili/basarisiz
-                // sonucuna baglar - kaynak gorevin UpdateTask ile tum alanlari
-                // korunarak, yalnizca ilgili tetikleyici alan(lar)i degistirilir.
-                if (linkedTaskId) {
-                    const linkedTask = (config.tasks || []).find((item) => item.id === linkedTaskId);
-                    if (linkedTask) {
-                        const overrides = condition === "Success"
-                            ? { successScenarioGroup: scenarioGroup }
-                            : { failureAction: "SwitchToScenario", failureScenarioGroup: scenarioGroup };
-
-                        try {
-                            await post("UpdateTask", buildUpdateTaskPayload(linkedTask, overrides), { taskId: linkedTaskId });
-                        } catch (linkError) {
-                            toast("Senaryo adimi eklendi ama gorev baglama basarisiz: " + linkError.message, "warning");
-                        }
-                    }
-                }
 
                 reload();
             } catch (error) {
@@ -595,12 +679,24 @@
             return;
         }
 
-        // Ana akis, geri donus adimlari ve her senaryo grubu birbirinden ayri
-        // bagimlilik graflarina sahiptir; oncul secenekleri yalnizca ayni gruptan gelir.
-        const others = (config.tasks || [])
-            .filter((item) => item.id !== task.id
-                && !!item.isRollbackStep === !!task.isRollbackStep
-                && (item.scenarioGroup || null) === (task.scenarioGroup || null));
+        // Geri donus adimlarinin kendi ayri bagimlilik grafigi vardir (yalnizca
+        // birbirlerine baglanabilirler - aktivasyon oncesi tarihleri olmadigindan
+        // ana akis/senaryo ile karismasi anlamli degildir). Ana akis gorevleri
+        // yalnizca ana akistan onculu olabilir. Senaryo gorevleri ise hem KENDI
+        // senaryosundaki hem de ANA AKIStaki gorevlere baglanabilir - bir senaryo
+        // adimi, ana akisin belirli bir noktasi tamamlanmadan baslamamali olabilir.
+        const others = (config.tasks || []).filter((item) => {
+            if (item.id === task.id || !!item.isRollbackStep !== !!task.isRollbackStep) {
+                return false;
+            }
+            if (task.isRollbackStep) {
+                return true;
+            }
+            if (task.scenarioGroup) {
+                return !item.scenarioGroup || item.scenarioGroup === task.scenarioGroup;
+            }
+            return !item.scenarioGroup;
+        });
         if (others.length === 0) {
             holder.innerHTML = '<div class="br-muted small">Runbook\'ta baska gorev yok.</div>';
             return;
@@ -640,16 +736,13 @@
 
             const failureActionSelect = document.getElementById("editTaskFailureAction");
             const failureScenarioWrap = document.getElementById("editTaskFailureScenarioWrap");
+            const failureTargetWrap = document.getElementById("editTaskFailureTargetWrap");
             failureActionSelect.value = task.failureAction || "None";
             document.getElementById("editTaskFailureScenario").value = task.failureScenarioGroup || "";
+            document.getElementById("editTaskFailureTarget").value = task.failureTargetTaskId || "";
             failureScenarioWrap.hidden = failureActionSelect.value !== "SwitchToScenario";
+            failureTargetWrap.hidden = failureActionSelect.value !== "SwitchToTask";
             document.getElementById("editTaskSuccessScenario").value = task.successScenarioGroup || "";
-
-            // Rejoin secimi yalnizca senaryo adimlari icin anlamlidir (ScenarioGroup
-            // doluysa) - ana akis/geri donus gorevlerinde gizlenir.
-            const rejoinWrap = document.getElementById("editTaskRejoinWrap");
-            rejoinWrap.hidden = !task.scenarioGroup;
-            document.getElementById("editTaskRejoinTask").value = task.scenarioRejoinTaskId || "";
 
             const startInput = document.getElementById("editTaskStart");
             const endInput = document.getElementById("editTaskEnd");
@@ -676,22 +769,29 @@
             const outageMinutes = document.getElementById("editTaskOutageMinutes").value;
             const failureAction = document.getElementById("editTaskFailureAction").value;
             const failureScenarioGroup = document.getElementById("editTaskFailureScenario").value.trim();
+            const failureTargetTaskId = document.getElementById("editTaskFailureTarget").value;
             const successScenarioGroup = document.getElementById("editTaskSuccessScenario").value.trim();
-            const rejoinTaskId = document.getElementById("editTaskRejoinTask").value;
             const dependsOnTaskIds = Array.from(document.querySelectorAll(".br-edit-task-depends:checked"))
                 .map((el) => el.value);
 
             if (failureAction === "SwitchToScenario" && !failureScenarioGroup) {
-                toast("Basarisiz olursa gecilecek senaryonun adini girin.", "warning");
+                toast("Basarisiz olursa gecilecek senaryoyu secin.", "warning");
+                return;
+            }
+            if (failureAction === "SwitchToTask" && !failureTargetTaskId) {
+                toast("Basarisiz olursa atlanacak gorevi secin.", "warning");
                 return;
             }
 
             // UpdateTask butun alanlari degistirir; bu form geri donus bayragini/
-            // senaryo grubunu gostermez, o yuzden mevcut degerleri config.tasks'tan
-            // korunarak gonderilir (aksi halde duzenlenince sessizce silinir).
+            // senaryo grubunu/rejoin hedefini gostermez, o yuzden mevcut degerleri
+            // config.tasks'tan korunarak gonderilir (aksi halde duzenlenince
+            // sessizce silinir). Rejoin artik senaryo olusturulurken bir kez
+            // belirlenir (bkz. Scenario.RejoinTaskId), bu formda degistirilmez.
             const editingTask = (config.tasks || []).find((item) => item.id === document.getElementById("editTaskId").value);
             const isRollbackStep = !!(editingTask && editingTask.isRollbackStep);
             const scenarioGroup = editingTask ? editingTask.scenarioGroup || null : null;
+            const scenarioRejoinTaskId = editingTask ? editingTask.scenarioRejoinTaskId || null : null;
 
             try {
                 await post("UpdateTask", {
@@ -708,9 +808,10 @@
                     plannedOutageMinutes: isOutage && outageMinutes ? parseInt(outageMinutes, 10) : null,
                     isRollbackStep: isRollbackStep,
                     scenarioGroup: scenarioGroup,
-                    scenarioRejoinTaskId: scenarioGroup ? (rejoinTaskId || null) : null,
+                    scenarioRejoinTaskId: scenarioRejoinTaskId,
                     failureAction: failureAction,
                     failureScenarioGroup: failureAction === "SwitchToScenario" ? failureScenarioGroup : null,
+                    failureTargetTaskId: failureAction === "SwitchToTask" ? failureTargetTaskId : null,
                     successScenarioGroup: successScenarioGroup || null
                 }, { taskId: document.getElementById("editTaskId").value });
 
@@ -1051,6 +1152,8 @@
             document.getElementById("newTaskFailureAction").value = "None";
             document.getElementById("newTaskFailureScenario").value = "";
             document.getElementById("newTaskFailureScenarioWrap").hidden = true;
+            document.getElementById("newTaskFailureTarget").value = "";
+            document.getElementById("newTaskFailureTargetWrap").hidden = true;
             document.getElementById("newTaskSuccessScenario").value = "";
         });
     }
