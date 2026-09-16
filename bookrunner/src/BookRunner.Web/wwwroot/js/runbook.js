@@ -1606,9 +1606,12 @@
         }
         return new Promise((resolve, reject) => {
             const script = document.createElement("script");
-            script.src = "/lib/mermaid/mermaid.min.js";
+            // Sabit "/lib/..." yerine Razor'un urettigi adres kullanilir - uygulama
+            // IIS altinda bir sanal dizinde (orn. /bookrunner/) calisiyorsa sabit
+            // kok-goreli yol yanlis adrese (404) gider ve cizim hic baslamaz.
+            script.src = config.mermaidUrl || "/lib/mermaid/mermaid.min.js";
             script.onload = resolve;
-            script.onerror = reject;
+            script.onerror = () => reject(new Error("mermaid-script-load-failed: " + script.src));
             document.head.appendChild(script);
         });
     }
@@ -1640,8 +1643,12 @@
             const result = await withTimeout(window.mermaid.render("flowchartSvg", definition), 20000);
             // mermaid.render() bazi ic sinirlar (orn. metin uzunlugu) asilinca reddetmek
             // yerine sessizce kucuk bir "hata" SVG'si dondurur - bunu basari sanmayalim.
+            // SVG'nin kendi metnini okuyup (orn. "Maximum text size...") tanidan
+            // aktarabiliyoruz - boylece hata mesaji devtools acmadan da anlasilir olur.
             if (result.svg.indexOf("error-icon") !== -1) {
-                throw new Error("mermaid-error-svg");
+                const tempDiv = document.createElement("div");
+                tempDiv.innerHTML = result.svg;
+                throw new Error("mermaid-error-svg: " + (tempDiv.textContent || "").trim());
             }
             container.innerHTML = result.svg;
             applyFlowchartPhotos(container);
@@ -1650,9 +1657,11 @@
         } catch (error) {
             loading.hidden = true;
             flowchartRendered = false;
-            const message = error && error.message === "timeout"
+            console.error("Akis semasi cizim hatasi:", error);
+            const detail = (error && error.message) || "bilinmeyen hata";
+            const message = detail === "timeout"
                 ? "Akis semasi cizimi zaman asimina ugradi (cok fazla gorev/dallanma olabilir)."
-                : "Akis semasi cizilemedi.";
+                : "Akis semasi cizilemedi: " + detail;
             toast(message, "danger");
         }
     }

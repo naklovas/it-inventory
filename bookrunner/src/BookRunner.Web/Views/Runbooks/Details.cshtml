@@ -1060,6 +1060,11 @@
         plannedEnd = r.PlannedEnd,
         runbookCode = r.Code,
         runbookTitle = r.Title,
+        // Uygulama IIS altinda bir sanal dizinde (orn. /bookrunner/) calisiyor
+        // olabilir; JS'in mermaid.min.js'i sonradan dinamik <script> ile
+        // yuklerken kullandigi adres bu yuzden sabit "/lib/..." degil, Razor'un
+        // gercek temel yolu hesaba katarak urettigi adres olmali.
+        mermaidUrl = Url.Content("~/lib/mermaid/mermaid.min.js"),
         isRollbackActive = r.IsRollbackActive,
         activeScenarioGroup = r.ActiveScenarioGroup,
         tasks = r.Tasks.OrderBy(t => t.Order).Select(t => new
