@@ -604,6 +604,11 @@
                 {
                     <text><i class="bi bi-info-circle me-1"></i>Tek yonlu senaryo: tum adimlar tamamlaninca runbook burada sona erer.</text>
                 }
+                @if (scenario.FailureAction == TaskFailureAction.StartRollback)
+                {
+                    <br />
+                    <text><i class="bi bi-exclamation-triangle me-1"></i>Bu senaryonun herhangi bir adimi basarisiz olursa geri donus plani otomatik baslar.</text>
+                }
             </p>
             @if (groupSteps.Count == 0)
             {
@@ -681,6 +686,21 @@
                             {
                                 <option value="@candidate.Id">@candidate.Order. @candidate.Title</option>
                             }
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <hr class="my-1" />
+                        <p class="small br-muted mb-2">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Bir senaryo adiminin kendi basina basarili/basarisiz durumu yoktur - yalnizca
+                            senaryonun TUMU basarisiz sayilir (adimlarindan biri Basarisiz olursa).
+                        </p>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small br-muted">Senaryo basarisiz olursa (opsiyonel)</label>
+                        <select class="form-select" id="newScenarioFailureAction">
+                            <option value="None" selected>Otomatik eylem yok</option>
+                            <option value="StartRollback">Geri donus planini otomatik baslat</option>
                         </select>
                     </div>
                 </div>
@@ -827,6 +847,13 @@
                             {
                                 <option value="@candidate.Id">@candidate.Order. @candidate.Title</option>
                             }
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label small br-muted">Senaryo basarisiz olursa (opsiyonel)</label>
+                        <select class="form-select" id="editScenarioFailureAction">
+                            <option value="None">Otomatik eylem yok</option>
+                            <option value="StartRollback">Geri donus planini otomatik baslat</option>
                         </select>
                     </div>
                 </div>
@@ -1223,7 +1250,8 @@
             name = s.Name,
             rejoinTaskId = s.RejoinTaskId,
             triggerTaskId = s.TriggerTaskId,
-            triggerCondition = s.TriggerCondition.HasValue ? s.TriggerCondition.Value.ToString() : null
+            triggerCondition = s.TriggerCondition.HasValue ? s.TriggerCondition.Value.ToString() : null,
+            failureAction = s.FailureAction.ToString()
         }),
         tasks = r.Tasks.OrderBy(t => t.Order).Select(t => new
         {

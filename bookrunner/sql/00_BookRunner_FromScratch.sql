@@ -521,6 +521,14 @@ BEGIN
 END
 GO
 
+-- Mevcut kurulumlarda Scenarios tablosu, senaryonun TUMU basarisiz sayildiginda
+-- otomatik tetiklenecek eylem olmadan olusturulmus olabilir (bkz. Scenario.FailureAction).
+IF COL_LENGTH(N'bookrunner.Scenarios', 'FailureAction') IS NULL
+BEGIN
+    ALTER TABLE [bookrunner].[Scenarios] ADD [FailureAction] int NOT NULL DEFAULT 0;
+END
+GO
+
 IF OBJECT_ID(N'[bookrunner].[TaskDependencies]', N'U') IS NULL
 BEGIN
     CREATE TABLE [bookrunner].[TaskDependencies] (
@@ -747,6 +755,7 @@ BEGIN
         [RunbookId] uniqueidentifier NOT NULL,
         [Name] nvarchar(100) NOT NULL,
         [RejoinTaskId] uniqueidentifier NULL,
+        [FailureAction] int NOT NULL DEFAULT 0,
         [IsDeleted] bit NOT NULL,
         [DeletedAt] datetimeoffset NULL,
         [DeletedBy] nvarchar(256) NULL,
@@ -1882,6 +1891,15 @@ BEGIN
     BEGIN
         INSERT INTO [bookrunner].[__EFMigrationsHistory] ([MigrationId], [ProductVersion])
         VALUES (N'20260916122746_AddSuccessTargetTaskId', N'9.0.19');
+    END
+
+    IF NOT EXISTS (
+        SELECT 1 FROM [bookrunner].[__EFMigrationsHistory]
+        WHERE [MigrationId] = N'20260916131710_AddScenarioFailureAction'
+    )
+    BEGIN
+        INSERT INTO [bookrunner].[__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+        VALUES (N'20260916131710_AddScenarioFailureAction', N'9.0.19');
     END
 
     PRINT N'';

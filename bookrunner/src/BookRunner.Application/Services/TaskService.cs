@@ -431,7 +431,16 @@ public sealed class TaskService(
         var hasSuccessTrigger = request.Status == RunbookTaskStatus.Completed
             && (!string.IsNullOrWhiteSpace(task.SuccessScenarioGroup) || task.SuccessTargetTaskId.HasValue);
 
-        if (hasFailureTrigger || hasSuccessTrigger)
+        // Bir senaryo adiminin kendi FailureAction'i yoktur (bkz. CreateAsync/
+        // UpdateAsync) - ama senaryonun KENDISI (Scenario.FailureAction)
+        // basarisiz olma durumuna bagli bir eylem tasiyabilir. Aktif senaryonun
+        // herhangi bir adimi Basarisiz olursa, senaryonun TUMU basarisiz
+        // sayilir ve bu eylem tetiklenir.
+        var hasScenarioFailureTrigger = request.Status == RunbookTaskStatus.Failed
+            && !string.IsNullOrEmpty(task.ScenarioGroup)
+            && task.Runbook.ActiveScenarioGroup == task.ScenarioGroup;
+
+        if (hasFailureTrigger || hasSuccessTrigger || hasScenarioFailureTrigger)
         {
             var siblingTasks = await db.Tasks.Where(t => t.RunbookId == task.RunbookId).ToListAsync(ct);
 
@@ -479,6 +488,18 @@ public sealed class TaskService(
                 var targetTitle = siblingTasks.First(t => t.Id == task.SuccessTargetTaskId.Value).Title;
                 ActivateTaskJump(task.Runbook, siblingTasks, task.SuccessTargetTaskId.Value,
                     $"'{task.Title}' basarili oldugu icin '{targetTitle}' gorevine otomatik atlandi");
+            }
+            else if (hasScenarioFailureTrigger && !task.Runbook.IsRollbackActive)
+            {
+                var scenario = await db.Scenarios.FirstOrDefaultAsync(
+                    s => s.RunbookId == task.RunbookId && s.Name == task.ScenarioGroup, ct);
+                if (scenario?.FailureAction == TaskFailureAction.StartRollback
+                    && siblingTasks.Any(t => t.IsRollbackStep))
+                {
+                    ActivateRollback(task.Runbook, siblingTasks,
+                        $"'{task.ScenarioGroup}' senaryosu basarisiz oldugu icin ('{task.Title}' adimi basarisiz oldu) geri donus plani otomatik baslatildi",
+                        autoTriggered: true);
+                }
             }
         }
 
@@ -795,11 +816,14 @@ public sealed class TaskService(
             }
         }
 
+        ValidateScenarioFailureAction(request.FailureAction);
+
         var scenario = new Scenario
         {
             RunbookId = runbookId,
             Name = name,
-            RejoinTaskId = request.RejoinTaskId
+            RejoinTaskId = request.RejoinTaskId,
+            FailureAction = request.FailureAction
         };
         db.Scenarios.Add(scenario);
 
@@ -877,6 +901,8 @@ public sealed class TaskService(
             }
         }
 
+        ValidateScenarioFailureAction(request.FailureAction);
+
         var allTasks = await db.Tasks.Where(t => t.RunbookId == scenario.RunbookId).ToListAsync(ct);
 
         // Eski tetikleyici gorev (varsa) Scenario uzerinde ayrica saklanmaz -
@@ -944,6 +970,7 @@ public sealed class TaskService(
 
         scenario.Name = newName;
         scenario.RejoinTaskId = request.RejoinTaskId;
+        scenario.FailureAction = request.FailureAction;
 
         await db.SaveChangesAsync(ct);
 
@@ -1275,6 +1302,22 @@ public sealed class TaskService(
         if (target.IsRollbackStep || target.ScenarioGroup is not null)
         {
             throw new BusinessRuleException("Senaryo bitince devam edilecek gorev ana akista olmalidir.");
+        }
+    }
+
+    /// <summary>
+    /// Scenario.FailureAction icin su an desteklenen tek anlamli deger
+    /// None/StartRollback'tir - senaryonun TUMU basarisiz sayildiginda geri
+    /// donus planini otomatik baslatabilir (bkz. ChangeStatusAsync). Bir
+    /// senaryonun basarisiz olunca baska bir senaryoya/goreve gecmesi henuz
+    /// desteklenmiyor.
+    /// </summary>
+    private static void ValidateScenarioFailureAction(TaskFailureAction failureAction)
+    {
+        if (failureAction is not (TaskFailureAction.None or TaskFailureAction.StartRollback))
+        {
+            throw ValidationException.Single(nameof(CreateScenarioRequest.FailureAction),
+                "Senaryo icin su an yalnizca 'Otomatik eylem yok' veya 'Geri donus planini otomatik baslat' desteklenir.");
         }
     }
 

@@ -19,6 +19,11 @@ public sealed record ScenarioDto
     public string? TriggerTaskTitle { get; init; }
     public ScenarioTriggerCondition? TriggerCondition { get; init; }
 
+    /// <summary>Senaryonun TUMU basarisiz sayildiginda (aktif senaryonun herhangi
+    /// bir adimi Basarisiz olursa) otomatik tetiklenecek eylem. Su an icin
+    /// yalnizca None/StartRollback desteklenir.</summary>
+    public TaskFailureAction FailureAction { get; init; }
+
     public int TaskCount { get; init; }
     public DateTimeOffset CreatedAt { get; init; }
 }
@@ -35,11 +40,16 @@ public sealed record CreateScenarioRequest
 
     /// <summary>Doldurulursa, bu gorev belirtilen kosulda olunca senaryo otomatik
     /// baslatilir (gorevin FailureAction/SuccessScenarioGroup alanlarina yazilir).
-    /// Ana akis veya baska bir senaryonun adimi olabilir.</summary>
+    /// Yalnizca ANA AKIS gorevi olabilir.</summary>
     public Guid? TriggerTaskId { get; init; }
 
     /// <summary>TriggerTaskId doluyken zorunlu: Basarisiz mi Basarili mi olunca tetiklenecek.</summary>
     public ScenarioTriggerCondition? TriggerCondition { get; init; }
+
+    /// <summary>Doldurulursa, senaryonun TUMU basarisiz sayildiginda (aktif
+    /// senaryonun herhangi bir adimi Basarisiz olursa) otomatik tetiklenecek
+    /// eylem. Su an icin yalnizca None/StartRollback desteklenir.</summary>
+    public TaskFailureAction FailureAction { get; init; } = TaskFailureAction.None;
 }
 
 /// <summary>Var olan bir senaryoyu guncelleme istegi (bkz. TaskService.UpdateScenarioAsync).
@@ -59,4 +69,9 @@ public sealed record UpdateScenarioRequest
 
     /// <summary>TriggerTaskId doluyken zorunlu: Basarisiz mi Basarili mi olunca tetiklenecek.</summary>
     public ScenarioTriggerCondition? TriggerCondition { get; init; }
+
+    /// <summary>Doldurulursa, senaryonun TUMU basarisiz sayildiginda (aktif
+    /// senaryonun herhangi bir adimi Basarisiz olursa) otomatik tetiklenecek
+    /// eylem. Su an icin yalnizca None/StartRollback desteklenir.</summary>
+    public TaskFailureAction FailureAction { get; init; } = TaskFailureAction.None;
 }

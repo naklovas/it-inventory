@@ -516,13 +516,15 @@
             const triggerTaskId = document.getElementById("newScenarioTriggerTask").value;
             const triggerCondition = document.getElementById("newScenarioCondition").value;
             const rejoinTaskId = document.getElementById("newScenarioRejoinTask").value;
+            const failureAction = document.getElementById("newScenarioFailureAction").value;
 
             try {
                 await post("CreateScenario", {
                     name: name,
                     triggerTaskId: triggerTaskId || null,
                     triggerCondition: triggerTaskId ? triggerCondition : null,
-                    rejoinTaskId: rejoinTaskId || null
+                    rejoinTaskId: rejoinTaskId || null,
+                    failureAction: failureAction
                 }, { id: config.runbookId });
 
                 reload();
@@ -556,6 +558,7 @@
             document.getElementById("editScenarioCondition").value = scenario.triggerCondition || "Failure";
             document.getElementById("editScenarioConditionWrap").hidden = !scenario.triggerTaskId;
             document.getElementById("editScenarioRejoinTask").value = scenario.rejoinTaskId || "";
+            document.getElementById("editScenarioFailureAction").value = scenario.failureAction || "None";
 
             editScenarioModal.show();
         });
@@ -573,13 +576,15 @@
             const triggerTaskId = document.getElementById("editScenarioTriggerTask").value;
             const triggerCondition = document.getElementById("editScenarioCondition").value;
             const rejoinTaskId = document.getElementById("editScenarioRejoinTask").value;
+            const failureAction = document.getElementById("editScenarioFailureAction").value;
 
             try {
                 await post("UpdateScenario", {
                     name: name,
                     triggerTaskId: triggerTaskId || null,
                     triggerCondition: triggerTaskId ? triggerCondition : null,
-                    rejoinTaskId: rejoinTaskId || null
+                    rejoinTaskId: rejoinTaskId || null,
+                    failureAction: failureAction
                 }, { scenarioId: document.getElementById("editScenarioId").value });
 
                 editScenarioModal.hide();

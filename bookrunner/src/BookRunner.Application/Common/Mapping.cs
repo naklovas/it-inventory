@@ -207,6 +207,7 @@ public static class Mapping
             TriggerTaskId = trigger?.Id,
             TriggerTaskTitle = trigger?.Title,
             TriggerCondition = condition,
+            FailureAction = scenario.FailureAction,
             TaskCount = allTasks.Count(t => !t.IsRollbackStep && t.ScenarioGroup == scenario.Name),
             CreatedAt = scenario.CreatedAt
         };

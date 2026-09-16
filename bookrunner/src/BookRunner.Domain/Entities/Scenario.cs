@@ -1,4 +1,5 @@
 using BookRunner.Domain.Common;
+using BookRunner.Domain.Enums;
 
 namespace BookRunner.Domain.Entities;
 
@@ -27,6 +28,16 @@ public class Scenario : AuditableEntity, ISoftDeletable
     /// </summary>
     public Guid? RejoinTaskId { get; set; }
     public RunbookTask? RejoinTask { get; set; }
+
+    /// <summary>
+    /// Senaryonun TUMU basarisiz sayildiginda (bu senaryo aktifken herhangi bir
+    /// adimi Basarisiz olarak isaretlendiginde) otomatik tetiklenecek eylem.
+    /// Senaryo adimlarinin kendi basina bir FailureAction'i yoktur (bkz.
+    /// RunbookTask.FailureAction, TaskService.CreateAsync) - bu, onun senaryo
+    /// seviyesindeki karsiligidir. Su an icin yalnizca None/StartRollback
+    /// desteklenir (bkz. TaskService.CreateScenarioAsync).
+    /// </summary>
+    public TaskFailureAction FailureAction { get; set; } = TaskFailureAction.None;
 
     public bool IsDeleted { get; set; }
     public DateTimeOffset? DeletedAt { get; set; }

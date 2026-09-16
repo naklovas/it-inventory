@@ -732,7 +732,8 @@ public sealed class RunbookService(
                 RejoinTaskId = scenario.RejoinTaskId.HasValue
                     && idMap.TryGetValue(scenario.RejoinTaskId.Value, out var newScenarioRejoinId)
                     ? newScenarioRejoinId
-                    : null
+                    : null,
+                FailureAction = scenario.FailureAction
             });
         }
     }
