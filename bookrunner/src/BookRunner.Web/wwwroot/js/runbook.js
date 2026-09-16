@@ -1641,15 +1641,12 @@
             });
             const definition = buildFlowchartDefinition();
             const result = await withTimeout(window.mermaid.render("flowchartSvg", definition), 20000);
-            // mermaid.render() bazi ic sinirlar (orn. metin uzunlugu) asilinca reddetmek
-            // yerine sessizce kucuk bir "hata" SVG'si dondurur - bunu basari sanmayalim.
-            // SVG'nin kendi metnini okuyup (orn. "Maximum text size...") tanidan
-            // aktarabiliyoruz - boylece hata mesaji devtools acmadan da anlasilir olur.
-            if (result.svg.indexOf("error-icon") !== -1) {
-                const tempDiv = document.createElement("div");
-                tempDiv.innerHTML = result.svg;
-                throw new Error("mermaid-error-svg: " + (tempDiv.textContent || "").trim());
-            }
+            // Not: mermaid basarili/basarisiz her SVG'de ayni ".error-icon" CSS
+            // sinifini onceden tanimlar (temanin bir parcasi) - bu yuzden onceki
+            // "iceriginde error-icon var mi" kontrolu YANLIS POZITIF veriyordu
+            // (basariyla cizilmis gercek bir semayi de hata sanip atiyordu).
+            // mermaid.render() gercek bir hata/sinir asiminda zaten reddediyor
+            // (asagidaki catch bunu yakalar); ayrica bir kontrole gerek yok.
             container.innerHTML = result.svg;
             applyFlowchartPhotos(container);
             loading.hidden = true;
