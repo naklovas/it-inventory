@@ -679,10 +679,15 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-0">
+                @* Not: gorunurluk asagida hidden ozniteligi yerine .d-none ile
+                   degistirilir - Bootstrap'in .d-flex sinifi "!important" ile
+                   display:flex dayattigi icin native "hidden" ozniteligini
+                   (JS'teki .hidden = true) gormezden geliyordu; cember hicbir
+                   zaman kaybolmuyordu (rapor edilen "sonsuz donuyor" sorunu). *@
                 <div id="flowchartLoading" class="d-flex align-items-center justify-content-center h-100">
                     <div class="spinner-border text-primary" role="status"></div>
                 </div>
-                <div id="flowchartScroll" class="w-100 h-100" style="overflow:auto;" hidden>
+                <div id="flowchartScroll" class="w-100 h-100 d-none" style="overflow:auto;">
                     <div id="flowchartMermaid" class="mermaid p-3"></div>
                 </div>
             </div>

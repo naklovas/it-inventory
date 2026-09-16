@@ -1630,15 +1630,8 @@
         const scroll = document.getElementById("flowchartScroll");
         const container = document.getElementById("flowchartMermaid");
 
-        // Gecici tanilama izleri: bir onceki raporda script yuklemesi (200 OK)
-        // ve uretilen tanim (__brFlowchartDefinition()) sorunsuzken cizim yine
-        // de hicbir hata/zaman asimi vermeden takildi - JS tek threadli oldugu
-        // icin gercek bir senkron takilma setTimeout tabanli zaman asimini bile
-        // engelleyebilir. Bu loglar tam olarak HANGI adimda kalindigini gosterir.
-        console.log("[akis-semasi] baslatildi");
         try {
             await withTimeout(loadMermaid(), 15000);
-            console.log("[akis-semasi] mermaid kutuphanesi yuklendi, versiyon:", window.mermaid && window.mermaid.version);
             window.mermaid.initialize({
                 startOnLoad: false,
                 theme: "base",
@@ -1647,29 +1640,23 @@
                 maxEdges: 2000,
                 flowchart: { htmlLabels: true, curve: "basis" }
             });
-            console.log("[akis-semasi] initialize tamamlandi");
             const definition = buildFlowchartDefinition();
-            console.log("[akis-semasi] tanim uretildi, uzunluk:", definition.length);
-            console.log("[akis-semasi] render baslatiliyor...");
             // Ayni id'yi tekrar denemelerde yeniden kullanmamak icin sayac eklenir -
             // mermaid'in ic render onbelleginde eski bir kaydin kalmasi ihtimaline karsi.
             flowchartRenderAttempt += 1;
             const result = await withTimeout(
                 window.mermaid.render("flowchartSvg" + flowchartRenderAttempt, definition), 20000);
-            console.log("[akis-semasi] render TAMAMLANDI, svg uzunlugu:", result.svg.length);
-            // Not: mermaid basarili/basarisiz her SVG'de ayni ".error-icon" CSS
-            // sinifini onceden tanimlar (temanin bir parcasi) - bu yuzden onceki
-            // "iceriginde error-icon var mi" kontrolu YANLIS POZITIF veriyordu
-            // (basariyla cizilmis gercek bir semayi de hata sanip atiyordu).
-            // mermaid.render() gercek bir hata/sinir asiminda zaten reddediyor
-            // (asagidaki catch bunu yakalar); ayrica bir kontrole gerek yok.
             container.innerHTML = result.svg;
             applyFlowchartPhotos(container);
-            loading.hidden = true;
-            scroll.hidden = false;
-            console.log("[akis-semasi] gosterildi");
+            // Not: gorunurluk .hidden ozniteligi yerine .d-none sinifiyla degistirilir -
+            // flowchartLoading'in Bootstrap .d-flex sinifi "!important" ile display:flex
+            // dayattigi icin native "hidden" ozniteligi gormezden geliniyordu; cember
+            // hicbir zaman kaybolmuyordu (rapor edilen "sonsuz donuyor" sorununun
+            // gercek sebebi buydu - cizim aslinda tamamlaniyordu).
+            loading.classList.add("d-none");
+            scroll.classList.remove("d-none");
         } catch (error) {
-            loading.hidden = true;
+            loading.classList.add("d-none");
             flowchartRendered = false;
             console.error("Akis semasi cizim hatasi:", error);
             const detail = (error && error.message) || "bilinmeyen hata";
