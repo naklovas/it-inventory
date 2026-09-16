@@ -246,6 +246,28 @@ public sealed class TaskService(
             }
         }
 
+        // Runbook henuz baslamadiysa (Taslak/Planlandi), ilk gorevin "Devam
+        // Ediyor" olmasi runbook'u da otomatik baslatir (asagida). Bu anda
+        // runbook'taki HICBIR gorevin (ana akis, senaryo, geri donus - hepsi
+        // dahil) atanmamis kalmamasi gerekir - aksi halde is kimseye
+        // dusmeden calisma baslamis olur.
+        if (request.Status == RunbookTaskStatus.InProgress
+            && task.Runbook.Status is RunbookStatus.Draft or RunbookStatus.Scheduled)
+        {
+            var unassignedTitles = await db.Tasks
+                .Where(t => t.RunbookId == task.RunbookId && !t.Assignments.Any(a => a.IsActive))
+                .OrderBy(t => t.Order)
+                .Select(t => t.Title)
+                .ToListAsync(ct);
+
+            if (unassignedTitles.Count > 0)
+            {
+                throw new BusinessRuleException(
+                    "Runbook baslatilamaz: su gorev(ler) henuz kimseye atanmamis: " +
+                    string.Join(", ", unassignedTitles) + ".");
+            }
+        }
+
         var oldStatus = task.Status;
         var now = DateTimeOffset.UtcNow;
 
