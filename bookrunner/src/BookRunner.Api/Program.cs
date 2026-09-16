@@ -147,13 +147,18 @@ if (app.Configuration.GetValue("Database:MigrateOnStartup", true))
     await app.Services.InitializeDatabaseAsync();
 }
 
+// UseDeveloperExceptionPage() KASITLI OLARAK EKLENMEDI: bu bir REST API'dir,
+// ASP.NET Core'un yerlesik gelistirici hata sayfasi HTML uretir ve (buraya
+// eklenseydi) ExceptionHandlingMiddleware'DEN ONCE (pipeline'da endpoint'e
+// daha yakin oldugu icin) devreye girip her istisnayi -  BusinessRuleException
+// gibi normalde temiz bir 409 JSON'a cevrilmesi gereken durumlar dahil -
+// yakalayip ozel middleware'e hic ulastirmadan kaba bir HTML/500 sayfasina
+// cevirirdi (Web katmani bunu JSON olarak ayrıstiramayip genel "API 500
+// dondu" mesajina duserdi). ExceptionHandlingMiddleware zaten Development
+// ortaminda ayrintili hata + stack trace dondurdugu icin (bkz. showRealError,
+// problem.Extensions["stackTrace"]) ayrica bu middleware'e gerek yoktur.
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseMiddleware<RequestLoggingMiddleware>();
-
-if (app.Environment.IsDevelopment())
-{
-    app.UseDeveloperExceptionPage();
-}
 
 app.UseSwagger();
 app.UseSwaggerUI(options =>
