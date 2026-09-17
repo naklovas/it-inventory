@@ -17,9 +17,15 @@ namespace BookRunner.Application.Security;
 /// </summary>
 public sealed class RunbookAccess(IAppDbContext db, ICurrentUser currentUser) : IRunbookAccess
 {
-    /// <summary>Bir "Editor"un runbook sahipligi olmadan yapabildigi tek izinler.</summary>
+    /// <summary>
+    /// Bir "Editor"un runbook sahipligi olmadan yapabildigi tek izinler.
+    /// TaskExecute burada KASITLI OLARAK var - aksi halde global rolu Izleyici
+    /// (yalnizca RunbookRead) olan biri editor olarak eklense bile gorev
+    /// durumunu degistiremez (baslatamaz/tamamlayamaz), sahibin disinda
+    /// eklenen herkes fiilen sadece izleyici kalirdi.
+    /// </summary>
     private static readonly string[] CollaboratorPermissions =
-        [Permissions.TaskWrite, Permissions.TaskAssign, Permissions.TaskComment];
+        [Permissions.TaskWrite, Permissions.TaskAssign, Permissions.TaskComment, Permissions.TaskExecute];
 
     public void Ensure(string permission)
     {

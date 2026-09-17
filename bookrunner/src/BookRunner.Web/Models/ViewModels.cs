@@ -80,7 +80,7 @@ public sealed class RunbookDetailViewModel : PageViewModel
 
     public bool CanEditThis => IsOwner || IsCollaborator || CanWrite;
     public bool CanAssignThis => IsOwner || IsCollaborator || CanAssign;
-    public bool CanExecuteThis => IsOwner || CanExecute;
+    public bool CanExecuteThis => IsOwner || IsCollaborator || CanExecute;
     public bool CanCommentThis => IsOwner || IsCollaborator || CanComment;
     public bool CanImportThis => IsOwner || CanImport;
     public bool CanPublishTemplateThis => IsOwner || CanPublishTemplate;
