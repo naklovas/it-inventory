@@ -183,22 +183,21 @@ public sealed class BookRunnerClaimsTransformation(
     /// <summary>
     /// Kullanicinin takimina karsilik gelen en yuksek rolu bulur.
     ///
-    /// Iki farkli "eslesme yok" durumu vardir ve BILEREK farkli sonuc verir:
-    ///   - Personel servisinden HICBIR takim adi gelmiyorsa (kisi hicbir takimda
-    ///     degil / servis bu kisiyi tanimiyor) kullanici en dusuk yetkide kalir.
-    ///     "Etki alanindaki herkes runbook acabilsin" ilkesi yalnizca TANINAN bir
-    ///     takimin uyesi olan kisiler icin gecerlidir; takimsiz biri icin
-    ///     yapilandirmadaki varsayilan rol dahi UYGULANMAZ.
-    ///   - Takim adi geliyor ama bu takim icin ozel bir esleme YOKSA,
-    ///     yapilandirmadaki varsayilan rol (bkz. Authorization:DefaultRole,
-    ///     tipik olarak Contributor) uygulanir; boylece takimi bilinen herkes
-    ///     en azindan kendi runbook'unu acip yonetebilir.
+    /// "Etki alanindaki herkes runbook acabilsin" ilkesi geneldir: hem takimi
+    /// bilinen ama ozel bir eslemesi olmayan kisi, HEM DE personel servisi
+    /// hicbir takim adi dondurmeyen kisi (kisi gercekten hicbir takimda degil,
+    /// ya da servis devre disi/erisilemez - bkz. PersonnelDirectoryService)
+    /// icin ayni sonuc gecerlidir: yapilandirmadaki varsayilan rol (bkz.
+    /// Authorization:DefaultRole, tipik olarak Contributor). Boylece kimliği
+    /// dogrulanmis (AD'de bulunan) HERKES en azindan kendi runbook'unu acip
+    /// yonetebilir; yalnizca AD'de hic karsiligi olmayan/kimligi cozulemeyen
+    /// hesaplar (bkz. GetProfileAsync'in erken donusleri) en dusuk yetkide kalir.
     /// </summary>
     private static async Task<AppRole> ResolveRoleAsync(BookRunnerDbContext db, string? teamName, AppRole defaultRole)
     {
         if (string.IsNullOrWhiteSpace(teamName))
         {
-            return AppRole.Viewer;
+            return defaultRole;
         }
 
         // SQL Server'in varsayilan (buyuk/kucuk harf duyarsiz) collation'ina guvenilir.
