@@ -7,7 +7,14 @@
             {
                 var routeValues = new Dictionary<string, string>(Model.RouteValues) { ["page"] = pageNumber.ToString() };
                 <li class="page-item @(pageNumber == Model.CurrentPage ? "active" : string.Empty)">
-                    <a class="page-link" asp-all-route-data="@routeValues">@pageNumber</a>
+                    @* Filtre alanlarindan biri "action" adini tasirsa (orn. Denetim Kayitlari'ndaki
+                       Islem filtresi), asp-controller/asp-action burada sabitlenmezse asp-all-route-data
+                       bu degeri MVC'nin varsayilan rota sablonundaki action parametresiyle karistirip
+                       sayfa linkini yanlis/olmayan bir controller action'a yonlendirir. *@
+                    <a class="page-link"
+                       asp-controller="@ViewContext.RouteData.Values["controller"]"
+                       asp-action="@ViewContext.RouteData.Values["action"]"
+                       asp-all-route-data="@routeValues">@pageNumber</a>
                 </li>
             }
         </ul>
