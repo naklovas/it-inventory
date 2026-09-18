@@ -470,7 +470,8 @@ public sealed class TaskService(
                 && siblingTasks.Any(t => !t.IsRollbackStep && t.ScenarioGroup == task.FailureScenarioGroup))
             {
                 await ActivateScenario(task.Runbook, siblingTasks, task.FailureScenarioGroup!,
-                    $"'{task.Title}' basarisiz oldugu icin '{task.FailureScenarioGroup}' senaryosuna otomatik gecildi", ct);
+                    $"'{task.Title}' basarisiz oldugu icin '{task.FailureScenarioGroup}' senaryosuna otomatik gecildi", ct,
+                    triggerTaskId: task.Id);
             }
             else if (hasFailureTrigger && task.FailureAction == TaskFailureAction.SwitchToTask
                 && !task.Runbook.IsRollbackActive
@@ -479,8 +480,8 @@ public sealed class TaskService(
                 && siblingTasks.Any(t => t.Id == task.FailureTargetTaskId.Value && !t.IsRollbackStep && string.IsNullOrEmpty(t.ScenarioGroup)))
             {
                 var targetTitle = siblingTasks.First(t => t.Id == task.FailureTargetTaskId.Value).Title;
-                ActivateTaskJump(task.Runbook, siblingTasks, task.FailureTargetTaskId.Value,
-                    $"'{task.Title}' basarisiz oldugu icin '{targetTitle}' gorevine otomatik atlandi");
+                await ActivateTaskJump(task.Runbook, siblingTasks, task.Id, task.FailureTargetTaskId.Value,
+                    $"'{task.Title}' basarisiz oldugu icin '{targetTitle}' gorevine otomatik atlandi", ct);
             }
             else if (hasSuccessTrigger
                 && !task.Runbook.IsRollbackActive
@@ -489,7 +490,8 @@ public sealed class TaskService(
                 && siblingTasks.Any(t => !t.IsRollbackStep && t.ScenarioGroup == task.SuccessScenarioGroup))
             {
                 await ActivateScenario(task.Runbook, siblingTasks, task.SuccessScenarioGroup!,
-                    $"'{task.Title}' basarili oldugu icin '{task.SuccessScenarioGroup}' senaryosuna otomatik gecildi", ct);
+                    $"'{task.Title}' basarili oldugu icin '{task.SuccessScenarioGroup}' senaryosuna otomatik gecildi", ct,
+                    triggerTaskId: task.Id);
             }
             else if (hasSuccessTrigger
                 && !task.Runbook.IsRollbackActive
@@ -498,8 +500,8 @@ public sealed class TaskService(
                 && siblingTasks.Any(t => t.Id == task.SuccessTargetTaskId.Value && !t.IsRollbackStep && string.IsNullOrEmpty(t.ScenarioGroup)))
             {
                 var targetTitle = siblingTasks.First(t => t.Id == task.SuccessTargetTaskId.Value).Title;
-                ActivateTaskJump(task.Runbook, siblingTasks, task.SuccessTargetTaskId.Value,
-                    $"'{task.Title}' basarili oldugu icin '{targetTitle}' gorevine otomatik atlandi");
+                await ActivateTaskJump(task.Runbook, siblingTasks, task.Id, task.SuccessTargetTaskId.Value,
+                    $"'{task.Title}' basarili oldugu icin '{targetTitle}' gorevine otomatik atlandi", ct);
             }
             else if (hasScenarioFailureTrigger && !task.Runbook.IsRollbackActive)
             {
@@ -1031,15 +1033,20 @@ public sealed class TaskService(
     }
 
     /// <summary>
-    /// FailureAction=SwitchToTask tetiklenince ana akista hedef goreve "atlar":
-    /// hedeften ONCEKI acik (Bekliyor/Devam Eden/Bloke) ana akis gorevleri
-    /// Atlandi olur, hedef ve sonrasi normal sirayla calismaya devam eder.
-    /// ActivateScenario/ActivateRollback'ten farkli olarak adlandirilmis bir
-    /// senaryo grubuna veya geri donus moduna GECMEZ - ayni ana akis icinde
-    /// kalir, yalnizca ileri bir noktaya atlar (Runbook.ActiveScenarioGroup/
-    /// IsRollbackActive degismez).
+    /// FailureAction/SuccessScenarioGroup=SwitchToTask tetiklenince ana akista
+    /// hedef goreve "atlar": tetikleyen gorev ile hedef ARASINDAKI acik
+    /// (Bekliyor/Devam Eden/Bloke) ana akis gorevleri Atlandi olur (tetikleyenden
+    /// ONCEKI gorevlere dokunulmaz - senaryoyla/atlamayla ilgisiz, ayri isler
+    /// olabilir), hedefin kendisi de kullanicinin ayrica tiklamasina gerek
+    /// kalmadan otomatik baslatilir (yalnizca atanmissa - bkz. ChangeStatusAsync'teki
+    /// "atanmadan baslatilamaz" kurali, aksi halde Bekliyor'da kalir). Ardindan
+    /// hedeften sonrasi normal sirayla calismaya devam eder. ActivateScenario/
+    /// ActivateRollback'ten farkli olarak adlandirilmis bir senaryo grubuna veya
+    /// geri donus moduna GECMEZ - ayni ana akis icinde kalir (Runbook.
+    /// ActiveScenarioGroup/IsRollbackActive degismez).
     /// </summary>
-    private void ActivateTaskJump(Runbook runbook, List<RunbookTask> tasks, Guid targetTaskId, string reason)
+    private async Task ActivateTaskJump(
+        Runbook runbook, List<RunbookTask> tasks, Guid triggerTaskId, Guid targetTaskId, string reason, CancellationToken ct)
     {
         var target = tasks.FirstOrDefault(t => t.Id == targetTaskId);
         if (target is null)
@@ -1047,9 +1054,11 @@ public sealed class TaskService(
             return;
         }
 
+        var triggerOrder = tasks.FirstOrDefault(t => t.Id == triggerTaskId)?.Order;
         var now = DateTimeOffset.UtcNow;
         var toSkip = tasks.Where(t => !t.IsRollbackStep && string.IsNullOrEmpty(t.ScenarioGroup)
             && t.Order < target.Order
+            && (triggerOrder is null || t.Order > triggerOrder.Value)
             && t.Status is RunbookTaskStatus.NotStarted or RunbookTaskStatus.InProgress or RunbookTaskStatus.Blocked);
 
         foreach (var t in toSkip)
@@ -1061,6 +1070,20 @@ public sealed class TaskService(
             AddActivity(t.Id, TaskActivityType.StatusChanged,
                 $"Durum {DisplayText.Status(oldStatus)} -> {DisplayText.Status(RunbookTaskStatus.Skipped)} ({reason})",
                 DisplayText.Status(oldStatus), DisplayText.Status(RunbookTaskStatus.Skipped));
+        }
+
+        if (target.Status is RunbookTaskStatus.NotStarted or RunbookTaskStatus.Blocked)
+        {
+            var isAssigned = await db.Assignments.AnyAsync(a => a.TaskId == target.Id && a.IsActive, ct);
+            if (isAssigned)
+            {
+                var oldStatus = target.Status;
+                target.Status = RunbookTaskStatus.InProgress;
+                target.ActualStart ??= now;
+                AddActivity(target.Id, TaskActivityType.StatusChanged,
+                    $"Durum {DisplayText.Status(oldStatus)} -> {DisplayText.Status(RunbookTaskStatus.InProgress)} ({reason}, otomatik baslatildi)",
+                    DisplayText.Status(oldStatus), DisplayText.Status(RunbookTaskStatus.InProgress));
+            }
         }
     }
 
@@ -1094,7 +1117,8 @@ public sealed class TaskService(
     /// tetikleme buradan gecer).
     /// </summary>
     private async Task ActivateScenario(
-        Runbook runbook, List<RunbookTask> tasks, string scenarioGroup, string reason, CancellationToken ct)
+        Runbook runbook, List<RunbookTask> tasks, string scenarioGroup, string reason, CancellationToken ct,
+        Guid? triggerTaskId = null)
     {
         var scenarioSteps = tasks
             .Where(t => !t.IsRollbackStep && t.ScenarioGroup == scenarioGroup)
@@ -1111,6 +1135,17 @@ public sealed class TaskService(
         // yalnizca ana akistan yapilabilir, bir senaryodan digerine degil.
         var mainTasks = tasks.Where(t => !t.IsRollbackStep && t.ScenarioGroup == null).ToList();
 
+        // Otomatik tetiklenen (bir gorevin basarili/basarisiz sonucuna bagli)
+        // bir gecisse, yalnizca TETIKLEYEN gorev ile rejoin noktasi ARASINDAKI
+        // acik ana akis gorevleri Atlandi olur - tetikleyenden ONCEKI gorevler
+        // (senaryoyla ilgisiz, runbook'ta zaten daha once kalmis ayri isler
+        // olabilir) DOKUNULMAZ. Manuel "Senaryosuna Gec" butonuyla (triggerTaskId
+        // verilmemis) gecildiyse boyle bir alt sinir yoktur - eskisi gibi rejoin
+        // noktasindan ONCEKI TUM acik gorevler Atlandi olur.
+        var triggerOrder = triggerTaskId.HasValue
+            ? tasks.FirstOrDefault(t => t.Id == triggerTaskId.Value)?.Order
+            : null;
+
         var now = DateTimeOffset.UtcNow;
 
         // Rejoin noktasi tanimliysa yalnizca ONDAN ONCEKI acik ana akis gorevleri
@@ -1125,6 +1160,7 @@ public sealed class TaskService(
         // isaretlenmis (senaryoyu tetikleyen) gorevin durumunu sessizce
         // "Atlandi"ya cevirip asil sebebi gizlerdi.
         var tasksToSkip = mainTasks.Where(t =>
+            (triggerOrder is null || t.Order > triggerOrder.Value) &&
             t.Status is RunbookTaskStatus.NotStarted or RunbookTaskStatus.InProgress or RunbookTaskStatus.Blocked
             && (rejoinOrder is null || t.Order < rejoinOrder.Value));
 
@@ -1513,6 +1549,8 @@ public sealed class TaskService(
             return;
         }
 
+        var now = DateTimeOffset.UtcNow;
+
         // Onceden yazilmis ama hic aktive edilmemis geri donus/senaryo adimlari
         // (hala "Baslamadi" durumunda) akisin normal sekilde tamamlanmasini
         // yanlislikla ENGELLEMEMELIDIR - yalnizca su an aktif olan tek grup
@@ -1558,10 +1596,29 @@ public sealed class TaskService(
             // Senaryo tek yonlu degil: tum adimlari kapandi ama runbook burada
             // bitmiyor, rejoin noktasindan (ve sonrasindan) ana akisa devam
             // ediliyor. Bu adim/sonrasi hic Atlandi yapilmamisti (bkz.
-            // ActivateScenario), o yuzden burada baska bir sey yapmaya gerek yok -
-            // yalnizca senaryo bayragi kaldirilir ki bir sonraki durum
-            // degisikliginde bu metot ana akisi degerlendirsin.
+            // ActivateScenario) - rejoin noktasindaki gorev burada, kullanicinin
+            // ayrica "Devam Ediyor" tiklamasina gerek kalmadan otomatik baslatilir.
+            // Yalnizca atanmis ve hala acikSA (Bekliyor/Bloke) baslatilir - aksi
+            // halde ChangeStatusAsync'teki "atanmadan baslatilamaz" kuraliyla
+            // celisirdi; atanana kadar Bekliyor'da kalir.
             runbook.ActiveScenarioGroup = null;
+
+            var rejoinTask = await db.Tasks.FirstOrDefaultAsync(t => t.Id == scenarioRejoinTaskId.Value, ct);
+            if (rejoinTask is not null && rejoinTask.Status is RunbookTaskStatus.NotStarted or RunbookTaskStatus.Blocked)
+            {
+                var isAssigned = await db.Assignments.AnyAsync(a => a.TaskId == rejoinTask.Id && a.IsActive, ct);
+                if (isAssigned)
+                {
+                    var oldStatus = rejoinTask.Status;
+                    rejoinTask.Status = RunbookTaskStatus.InProgress;
+                    rejoinTask.ActualStart ??= now;
+                    AddActivity(rejoinTask.Id, TaskActivityType.StatusChanged,
+                        $"Durum {DisplayText.Status(oldStatus)} -> {DisplayText.Status(RunbookTaskStatus.InProgress)} " +
+                        "(senaryo tamamlandigi icin ana akisa donulup otomatik baslatildi)",
+                        DisplayText.Status(oldStatus), DisplayText.Status(RunbookTaskStatus.InProgress));
+                }
+            }
+
             await db.SaveChangesAsync(ct);
             await audit.LogAsync(AuditAction.Update, nameof(Runbook), runbook.Id.ToString(),
                 "Senaryo tamamlandigi icin ana akisa geri donuldu.", runbook.Id, ct: ct);
@@ -1569,7 +1626,6 @@ public sealed class TaskService(
             return;
         }
 
-        var now = DateTimeOffset.UtcNow;
         runbook.Status = RunbookStatus.Completed;
         runbook.ActualStart ??= now;
         runbook.ActualEnd = now;
