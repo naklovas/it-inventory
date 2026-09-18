@@ -61,6 +61,9 @@ public sealed class BookRunnerApiClient(HttpClient httpClient, ILogger<BookRunne
 
     // ------------------------------------------------------------------- task
 
+    public Task<RunbookTaskDto?> GetTaskAsync(Guid taskId, CancellationToken ct = default)
+        => GetAsync<RunbookTaskDto>($"api/tasks/{taskId}", ct);
+
     public Task<RunbookTaskDto?> CreateTaskAsync(Guid runbookId, CreateTaskRequest request, CancellationToken ct = default)
         => PostAsync<CreateTaskRequest, RunbookTaskDto>($"api/runbooks/{runbookId}/tasks", request, ct);
 

@@ -1,3 +1,4 @@
+using BookRunner.Application.Common;
 using BookRunner.Application.Dtos;
 using BookRunner.Domain.Enums;
 using BookRunner.Web.Models;
@@ -458,13 +459,37 @@ public sealed class RunbooksController(
     [ValidateAntiForgeryToken]
     public Task<IActionResult> ChangeTaskStatus(
         Guid taskId, RunbookTaskStatus status, string? note, int? actualMinutes, int? actualOutageMinutes, CancellationToken ct)
-        => JsonResultAsync(() => Api.ChangeTaskStatusAsync(taskId, new ChangeTaskStatusRequest
+        => JsonResultAsync(async () =>
         {
-            Status = status,
-            Note = note,
-            ActualMinutes = actualMinutes,
-            ActualOutageMinutes = actualOutageMinutes
-        }, ct));
+            // Ayni kural API'de de uygulanir (bkz. TaskService.ChangeStatusAsync)
+            // ama gunluk kullanimda gayet normal/beklenen bir senaryo oldugu icin
+            // burada ONCEDEN kontrol edilerek API'ye hic istek gitmemesi saglanir -
+            // boylece gereksiz bir BusinessRuleException/round-trip olusmaz (bkz.
+            // BaseController.JsonResultAsync'in bu istisnayi da GIRIS HATASI olarak
+            // isleyip sayfada duzgun bir uyari gostermesi).
+            if (status is RunbookTaskStatus.InProgress or RunbookTaskStatus.Completed)
+            {
+                var current = await Api.GetTaskAsync(taskId, ct);
+                var openPredecessors = current?.Predecessors
+                    .Where(p => !p.Status.IsClosed())
+                    .Select(p => p.Title)
+                    .ToList();
+
+                if (openPredecessors is { Count: > 0 })
+                {
+                    throw new BusinessRuleException(
+                        $"Bu gorev baslatilamaz: once su oncul gorev(ler) tamamlanmali: {string.Join(", ", openPredecessors)}.");
+                }
+            }
+
+            return await Api.ChangeTaskStatusAsync(taskId, new ChangeTaskStatusRequest
+            {
+                Status = status,
+                Note = note,
+                ActualMinutes = actualMinutes,
+                ActualOutageMinutes = actualOutageMinutes
+            }, ct);
+        });
 
     /// <summary>Gorevleri surukle-birak sonrasi siralar.</summary>
     [HttpPost]

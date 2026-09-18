@@ -1,3 +1,4 @@
+using BookRunner.Application.Common;
 using BookRunner.Application.Dtos;
 using BookRunner.Web.Models;
 using BookRunner.Web.Services;
@@ -105,6 +106,19 @@ public abstract class BaseController(BookRunnerApiClient api, ILogger logger) : 
             }
 
             return Json(new { ok = false, error = ex.Message, kind = ex.IsInputError ? "input" : "application" });
+        }
+        catch (Exception ex) when (ex is BusinessRuleException or ValidationException or NotFoundException or ForbiddenException)
+        {
+            // Web katmaninda API'ye hic istek gitmeden ONCE yapilan on
+            // dogrulamalar (orn. ChangeTaskStatus'taki oncul kontrolu, Edit'teki
+            // atanmamis gorev kontrolu) bu Application katmani istisnalarini
+            // dogrudan firlatabilir - API sinirini hic gecmedikleri icin
+            // ApiException olarak sarilmamis olurlar. Genel "beklenmeyen hata"ya
+            // dusup mesaji kaybetmemesi icin ayni GIRIS HATASI siniflandirmasi
+            // burada da uygulanir (bkz. ApiException.IsInputError, ayni sinir: < 500).
+            Logger.LogInformation(ex, "Istek reddedildi: on dogrulama.");
+            Response.StatusCode = StatusCodes.Status400BadRequest;
+            return Json(new { ok = false, error = ex.Message, kind = "input" });
         }
         catch (Exception ex)
         {
