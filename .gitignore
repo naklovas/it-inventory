@@ -1,2 +1,6 @@
 bin/
 obj/
+
+# Ortama ozel ayarlar (baglanti dizesi, LiteLLM anahtari vb.) - repoya commit edilmez.
+appsettings.*.json
+!appsettings.json

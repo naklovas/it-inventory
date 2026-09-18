@@ -1,0 +1,4 @@
+Sistem,DegisiklikTipi,Aciklama,PlanlananTarih
+ERP,Veritabani Yamasi,"ERP veritabani sunucusuna guvenlik yamasi uygulanacak",03.03.2026
+Depo Yonetim Sistemi,Disk Degisimi,"RAID grubu icin ek disk eklenecek, bakim penceresinde yapilacak",04.03.2026
+E-posta,Sunucu Yeniden Baslatma,"Planli aylik bakim kapsaminda posta sunuculari yeniden baslatilacak",05.03.2026
