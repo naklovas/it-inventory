@@ -42,7 +42,8 @@ public sealed class ExcelService(
         using var workbook = new XLWorkbook();
 
         BuildOverviewSheet(workbook, runbook);
-        BuildTaskSheet(workbook, runbook);
+        BuildPlannedRunbookSheet(workbook, runbook);
+        BuildActualRunbookSheet(workbook, runbook);
         BuildCommentSheet(workbook, runbook);
 
         var bytes = ToBytes(workbook);
@@ -419,9 +420,18 @@ public sealed class ExcelService(
         sheet.Column(2).Width = 80;
     }
 
-    private static void BuildTaskSheet(XLWorkbook workbook, Runbook runbook)
+    /// <summary>
+    /// Runbook'un PLANLANAN halini gosterir: ana gorevler, her senaryo plani ve
+    /// geri donus plani gorevleri ayri gruplar halinde (renkli bir baslik satiri
+    /// ile ayrilarak) yazilir. Onceden hepsi Order alanina gore tek bir listede
+    /// siralaniyordu - ama Order her track (ana akis/geri donus/her senaryo)
+    /// icin AYRI AYRI 1'den basladigindan bu, uc turun gorevlerini birbirine
+    /// karistiriyordu. Gruplar arasina ayirici satirlar girdigi icin bu sayfada
+    /// AutoFilter kullanilmaz (tek bir duz tablo degildir).
+    /// </summary>
+    private static void BuildPlannedRunbookSheet(XLWorkbook workbook, Runbook runbook)
     {
-        var sheet = workbook.AddWorksheet("Gorevler");
+        var sheet = workbook.AddWorksheet("Planlanan Runbook");
 
         string[] headers =
         [
@@ -432,8 +442,132 @@ public sealed class ExcelService(
 
         WriteHeader(sheet, headers);
 
+        var allTasks = runbook.Tasks.ToList();
+        var mainTasks = allTasks.Where(t => !t.IsRollbackStep && string.IsNullOrEmpty(t.ScenarioGroup))
+            .OrderBy(t => t.Order).ToList();
+        var rollbackSteps = allTasks.Where(t => t.IsRollbackStep).OrderBy(t => t.Order).ToList();
+        var scenarioGroupNames = allTasks
+            .Where(t => !t.IsRollbackStep && !string.IsNullOrEmpty(t.ScenarioGroup))
+            .Select(t => t.ScenarioGroup!)
+            .Distinct()
+            .OrderBy(name => allTasks.Where(t => t.ScenarioGroup == name).Min(t => t.Order))
+            .ToList();
+
         var row = 2;
-        foreach (var task in runbook.Tasks.OrderBy(t => t.Order))
+        row = WriteTaskGroup(sheet, row, $"ANA GOREVLER ({mainTasks.Count})", "#2F5BD7", mainTasks, headers.Length);
+
+        foreach (var groupName in scenarioGroupNames)
+        {
+            var steps = allTasks.Where(t => !t.IsRollbackStep && t.ScenarioGroup == groupName)
+                .OrderBy(t => t.Order).ToList();
+            row = WriteTaskGroup(sheet, row, $"SENARYO PLANI: {groupName.ToUpperInvariant()} ({steps.Count})",
+                "#8BC34A", steps, headers.Length);
+        }
+
+        if (rollbackSteps.Count > 0)
+        {
+            row = WriteTaskGroup(sheet, row, $"GERI DONUS PLANI GOREVLERI ({rollbackSteps.Count})",
+                "#9C6ADE", rollbackSteps, headers.Length);
+        }
+
+        sheet.SheetView.FreezeRows(1);
+        sheet.Columns().AdjustToContents();
+        sheet.Column(3).Width = 60;
+        sheet.Column(3).Style.Alignment.WrapText = true;
+    }
+
+    /// <summary>
+    /// Bir grubun baslik satirini (tum sutunlari kaplayan renkli, birlestirilmis
+    /// bir bant) ve ardindan o gruptaki gorev satirlarini yazar. Bir sonraki
+    /// grubun baslayacagi (bir bosluk satiri sonrasindaki) satir numarasini dondurur.
+    /// </summary>
+    private static int WriteTaskGroup(
+        IXLWorksheet sheet, int startRow, string groupTitle, string colorHex, List<RunbookTask> tasks, int columnCount)
+    {
+        var row = startRow;
+
+        var titleRange = sheet.Range(row, 1, row, columnCount);
+        titleRange.Merge();
+        titleRange.Value = groupTitle;
+        titleRange.Style.Font.Bold = true;
+        titleRange.Style.Font.FontColor = XLColor.White;
+        titleRange.Style.Fill.BackgroundColor = XLColor.FromHtml(colorHex);
+        row++;
+
+        if (tasks.Count == 0)
+        {
+            sheet.Cell(row, 1).Value = "Henuz adim eklenmedi.";
+            sheet.Cell(row, 1).Style.Font.Italic = true;
+            sheet.Cell(row, 1).Style.Font.FontColor = XLColor.Gray;
+            row++;
+        }
+
+        foreach (var task in tasks)
+        {
+            WriteTaskRow(sheet, row, task);
+            row++;
+        }
+
+        return row + 1;
+    }
+
+    private static void WriteTaskRow(IXLWorksheet sheet, int row, RunbookTask task)
+    {
+        var assignees = string.Join(", ", task.Assignments
+            .Where(a => a.IsActive)
+            .Select(a => a.AssigneeType == AssigneeType.User
+                ? a.User?.DisplayName ?? "-"
+                : $"{a.Group?.Name} (grup)"));
+
+        sheet.Cell(row, 1).Value = task.Order;
+        sheet.Cell(row, 2).Value = task.Title;
+        sheet.Cell(row, 3).Value = task.Description ?? "-";
+        sheet.Cell(row, 4).Value = DisplayText.Status(task.Status);
+        sheet.Cell(row, 5).Value = DisplayText.Priority(task.Priority);
+        sheet.Cell(row, 6).Value = string.IsNullOrWhiteSpace(assignees) ? "-" : assignees;
+        sheet.Cell(row, 7).Value = task.EstimatedMinutes?.ToString() ?? "-";
+        sheet.Cell(row, 8).Value = FormatDate(task.PlannedStart);
+        sheet.Cell(row, 9).Value = FormatDate(task.PlannedEnd);
+        sheet.Cell(row, 10).Value = FormatDate(task.ActualStart);
+        sheet.Cell(row, 11).Value = FormatDate(task.ActualEnd);
+        sheet.Cell(row, 12).Value = task.RollbackNotes ?? "-";
+        sheet.Cell(row, 13).Value = task.Comments.Count(c => !c.IsDeleted);
+
+        // Gorev rengi arayuzdeki bari temsil eder; Excel'de de ilk sutunda gosterilir.
+        if (TryParseColor(task.ColorHex, out var color))
+        {
+            sheet.Cell(row, 1).Style.Fill.BackgroundColor = color;
+            sheet.Cell(row, 1).Style.Font.FontColor = XLColor.White;
+        }
+    }
+
+    /// <summary>
+    /// Runbook'un GERCEKLESEN halini gosterir: yalnizca fiilen baslatilmis
+    /// adimlar, gercek baslama zamanina gore TEK bir kronolojik sirada - ana
+    /// akis/senaryo/geri donus ayrimi yapilmadan, calisma sirasinda gercekte
+    /// hangi adimin hangisinden once/sonra yapildigini gosterir (bkz. Grup sutunu).
+    /// </summary>
+    private static void BuildActualRunbookSheet(XLWorkbook workbook, Runbook runbook)
+    {
+        var sheet = workbook.AddWorksheet("Gerceklesen Runbook");
+
+        string[] headers =
+        [
+            "Gercek Sira", "Grup", "Planlanan Sira", "Baslik", "Durum", "Atananlar",
+            "Gerceklesen Baslangic", "Gerceklesen Bitis", "Gercek Sure (dk)"
+        ];
+
+        WriteHeader(sheet, headers);
+
+        var executedTasks = runbook.Tasks
+            .Where(t => t.ActualStart.HasValue)
+            .OrderBy(t => t.ActualStart!.Value)
+            .ThenBy(t => t.ActualEnd ?? DateTimeOffset.MaxValue)
+            .ToList();
+
+        var row = 2;
+        var sequence = 1;
+        foreach (var task in executedTasks)
         {
             var assignees = string.Join(", ", task.Assignments
                 .Where(a => a.IsActive)
@@ -441,21 +575,21 @@ public sealed class ExcelService(
                     ? a.User?.DisplayName ?? "-"
                     : $"{a.Group?.Name} (grup)"));
 
-            sheet.Cell(row, 1).Value = task.Order;
-            sheet.Cell(row, 2).Value = task.Title;
-            sheet.Cell(row, 3).Value = task.Description ?? "-";
-            sheet.Cell(row, 4).Value = DisplayText.Status(task.Status);
-            sheet.Cell(row, 5).Value = DisplayText.Priority(task.Priority);
-            sheet.Cell(row, 6).Value = string.IsNullOrWhiteSpace(assignees) ? "-" : assignees;
-            sheet.Cell(row, 7).Value = task.EstimatedMinutes?.ToString() ?? "-";
-            sheet.Cell(row, 8).Value = FormatDate(task.PlannedStart);
-            sheet.Cell(row, 9).Value = FormatDate(task.PlannedEnd);
-            sheet.Cell(row, 10).Value = FormatDate(task.ActualStart);
-            sheet.Cell(row, 11).Value = FormatDate(task.ActualEnd);
-            sheet.Cell(row, 12).Value = task.RollbackNotes ?? "-";
-            sheet.Cell(row, 13).Value = task.Comments.Count(c => !c.IsDeleted);
+            var actualMinutes = task.ActualMinutes
+                ?? (task.ActualStart.HasValue && task.ActualEnd.HasValue
+                    ? (int)(task.ActualEnd.Value - task.ActualStart.Value).TotalMinutes
+                    : (int?)null);
 
-            // Gorev rengi arayuzdeki bari temsil eder; Excel'de de ilk sutunda gosterilir.
+            sheet.Cell(row, 1).Value = sequence;
+            sheet.Cell(row, 2).Value = TrackLabel(task);
+            sheet.Cell(row, 3).Value = task.Order;
+            sheet.Cell(row, 4).Value = task.Title;
+            sheet.Cell(row, 5).Value = DisplayText.Status(task.Status);
+            sheet.Cell(row, 6).Value = string.IsNullOrWhiteSpace(assignees) ? "-" : assignees;
+            sheet.Cell(row, 7).Value = FormatDate(task.ActualStart);
+            sheet.Cell(row, 8).Value = FormatDate(task.ActualEnd);
+            sheet.Cell(row, 9).Value = actualMinutes?.ToString() ?? "-";
+
             if (TryParseColor(task.ColorHex, out var color))
             {
                 sheet.Cell(row, 1).Style.Fill.BackgroundColor = color;
@@ -463,14 +597,27 @@ public sealed class ExcelService(
             }
 
             row++;
+            sequence++;
+        }
+
+        if (executedTasks.Count == 0)
+        {
+            sheet.Cell(2, 1).Value = "Henuz hicbir adim baslatilmadi.";
+            sheet.Cell(2, 1).Style.Font.Italic = true;
+            sheet.Cell(2, 1).Style.Font.FontColor = XLColor.Gray;
         }
 
         sheet.SheetView.FreezeRows(1);
         sheet.RangeUsed()?.SetAutoFilter();
         sheet.Columns().AdjustToContents();
-        sheet.Column(3).Width = 60;
-        sheet.Column(3).Style.Alignment.WrapText = true;
+        sheet.Column(4).Width = 45;
     }
+
+    /// <summary>Bir gorevin hangi track'e (ana akis/senaryo/geri donus) ait oldugunu kisa bir etiket olarak dondurur.</summary>
+    private static string TrackLabel(RunbookTask task)
+        => task.IsRollbackStep ? "Geri Donus Plani"
+            : string.IsNullOrEmpty(task.ScenarioGroup) ? "Ana Akis"
+            : $"Senaryo: {task.ScenarioGroup}";
 
     private static void BuildCommentSheet(XLWorkbook workbook, Runbook runbook)
     {

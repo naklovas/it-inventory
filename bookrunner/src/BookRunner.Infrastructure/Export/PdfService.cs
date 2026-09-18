@@ -90,12 +90,15 @@ public sealed class PdfService(BookRunnerDbContext db, IAuditService audit) : IP
                 });
             }
 
-            column.Item().PaddingTop(4).Text($"Gorevler ({runbook.Tasks.Count})").SemiBold().FontSize(12);
+            column.Item().PaddingTop(4).Text("Planlanan Runbook").SemiBold().FontSize(14);
+            column.Item().Element(element => ComposePlannedRunbook(element, runbook));
 
-            foreach (var task in runbook.Tasks.OrderBy(t => t.Order))
-            {
-                column.Item().Element(element => ComposeTask(element, task));
-            }
+            column.Item().PageBreak();
+            column.Item().Text("Gerceklesen Runbook").SemiBold().FontSize(14);
+            column.Item().PaddingBottom(2).Text(
+                "Adimlar, gercek baslama zamanlarina gore hangi sirayla yapildigini gosterecek sekilde siralanmistir.")
+                .FontSize(8).FontColor("#7B8794");
+            column.Item().Element(element => ComposeActualRunbook(element, runbook));
 
             column.Item().PageBreak();
             column.Item().Element(element => ComposeFlowchart(element, runbook));
@@ -127,6 +130,131 @@ public sealed class PdfService(BookRunnerDbContext db, IAuditService audit) : IP
             Row("Gerceklesen Baslangic", FormatDate(runbook.ActualStart), "Gerceklesen Bitis", FormatDate(runbook.ActualEnd));
             Row("Etiketler", runbook.Tags ?? "-", "Olusturan", runbook.CreatedBy);
         });
+    }
+
+    /// <summary>
+    /// Runbook'un PLANLANAN halini gosterir: ana gorevler, her senaryo plani ve
+    /// geri donus plani gorevleri ayri alt basliklar altinda gruplanir. Onceden
+    /// hepsi tek bir listede (Order alanina gore) siralaniyordu - ama Order her
+    /// track (ana akis/geri donus/her senaryo) icin AYRI AYRI 1'den basladigindan
+    /// bu, uc turun gorevlerini birbirine karistiriyordu.
+    /// </summary>
+    private static void ComposePlannedRunbook(IContainer container, Runbook runbook)
+    {
+        var allTasks = runbook.Tasks.ToList();
+        var mainTasks = allTasks.Where(t => !t.IsRollbackStep && string.IsNullOrEmpty(t.ScenarioGroup))
+            .OrderBy(t => t.Order).ToList();
+        var rollbackSteps = allTasks.Where(t => t.IsRollbackStep).OrderBy(t => t.Order).ToList();
+        var scenarioGroupNames = allTasks
+            .Where(t => !t.IsRollbackStep && !string.IsNullOrEmpty(t.ScenarioGroup))
+            .Select(t => t.ScenarioGroup!)
+            .Distinct()
+            .OrderBy(name => allTasks.Where(t => t.ScenarioGroup == name).Min(t => t.Order))
+            .ToList();
+
+        container.Column(column =>
+        {
+            column.Spacing(6);
+
+            column.Item().Text($"Ana Gorevler ({mainTasks.Count})").SemiBold().FontSize(12);
+            foreach (var task in mainTasks)
+            {
+                column.Item().Element(element => ComposeTask(element, task));
+            }
+
+            foreach (var groupName in scenarioGroupNames)
+            {
+                var steps = allTasks.Where(t => !t.IsRollbackStep && t.ScenarioGroup == groupName)
+                    .OrderBy(t => t.Order).ToList();
+                column.Item().PaddingTop(6).Text($"Senaryo Plani: {groupName} ({steps.Count})")
+                    .SemiBold().FontSize(12).FontColor("#8BC34A");
+                foreach (var task in steps)
+                {
+                    column.Item().Element(element => ComposeTask(element, task));
+                }
+            }
+
+            if (rollbackSteps.Count > 0)
+            {
+                column.Item().PaddingTop(6).Text($"Geri Donus Plani Gorevleri ({rollbackSteps.Count})")
+                    .SemiBold().FontSize(12).FontColor("#9C6ADE");
+                foreach (var task in rollbackSteps)
+                {
+                    column.Item().Element(element => ComposeTask(element, task));
+                }
+            }
+        });
+    }
+
+    /// <summary>
+    /// Runbook'un GERCEKLESEN halini gosterir: yalnizca fiilen baslatilmis
+    /// adimlar, gercek baslama zamanina gore tek bir kronolojik sirada -
+    /// ana akis/senaryo/geri donus ayrimi yapilmadan, calisma sirasinda
+    /// gercekte hangi adimin hangisinden once/sonra yapildigini gosterir.
+    /// </summary>
+    private static void ComposeActualRunbook(IContainer container, Runbook runbook)
+    {
+        var executedTasks = runbook.Tasks
+            .Where(t => t.ActualStart.HasValue)
+            .OrderBy(t => t.ActualStart!.Value)
+            .ThenBy(t => t.ActualEnd ?? DateTimeOffset.MaxValue)
+            .ToList();
+
+        container.Column(column =>
+        {
+            column.Spacing(6);
+
+            if (executedTasks.Count == 0)
+            {
+                column.Item().Text("Henuz hicbir adim baslatilmadi.").FontColor("#7B8794").Italic();
+                return;
+            }
+
+            for (var i = 0; i < executedTasks.Count; i++)
+            {
+                column.Item().Element(element => ComposeActualTask(element, executedTasks[i], i + 1));
+            }
+        });
+    }
+
+    /// <summary>Bir gorevin hangi track'e (ana akis/senaryo/geri donus) ait oldugunu kisa bir etiket olarak dondurur.</summary>
+    private static string TrackLabel(RunbookTask task)
+        => task.IsRollbackStep ? "Geri Donus Plani"
+            : string.IsNullOrEmpty(task.ScenarioGroup) ? "Ana Akis"
+            : $"Senaryo: {task.ScenarioGroup}";
+
+    private static void ComposeActualTask(IContainer container, RunbookTask task, int sequenceNumber)
+    {
+        container
+            .BorderLeft(4)
+            .BorderColor(task.ColorHex)
+            .Background("#FFFFFF")
+            .PaddingLeft(8)
+            .PaddingVertical(6)
+            .Column(column =>
+            {
+                column.Item().Row(row =>
+                {
+                    row.RelativeItem().Text(text =>
+                    {
+                        text.Span($"{sequenceNumber}. ").SemiBold().FontColor(task.ColorHex);
+                        text.Span(task.Title).SemiBold().FontSize(11);
+                        text.Span($"  [{TrackLabel(task)}]").FontSize(8).FontColor("#7B8794");
+                    });
+
+                    row.ConstantItem(120).AlignRight().Text(DisplayText.Status(task.Status)).FontColor("#334E68");
+                });
+
+                var (assigneeNames, _, _) = AssigneeSummary(task);
+
+                column.Item().PaddingTop(2).Text(text =>
+                {
+                    text.Span("Atanan: ").FontColor("#7B8794").FontSize(8);
+                    text.Span(assigneeNames).FontSize(8);
+                    text.Span("   Gerceklesen: ").FontColor("#7B8794").FontSize(8);
+                    text.Span($"{FormatDate(task.ActualStart)} - {FormatDate(task.ActualEnd)}").FontSize(8);
+                });
+            });
     }
 
     private static void ComposeTask(IContainer container, RunbookTask task)
