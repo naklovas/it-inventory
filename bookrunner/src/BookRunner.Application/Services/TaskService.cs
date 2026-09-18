@@ -469,8 +469,8 @@ public sealed class TaskService(
                 && !string.IsNullOrWhiteSpace(task.FailureScenarioGroup)
                 && siblingTasks.Any(t => !t.IsRollbackStep && t.ScenarioGroup == task.FailureScenarioGroup))
             {
-                ActivateScenario(task.Runbook, siblingTasks, task.FailureScenarioGroup!,
-                    $"'{task.Title}' basarisiz oldugu icin '{task.FailureScenarioGroup}' senaryosuna otomatik gecildi");
+                await ActivateScenario(task.Runbook, siblingTasks, task.FailureScenarioGroup!,
+                    $"'{task.Title}' basarisiz oldugu icin '{task.FailureScenarioGroup}' senaryosuna otomatik gecildi", ct);
             }
             else if (hasFailureTrigger && task.FailureAction == TaskFailureAction.SwitchToTask
                 && !task.Runbook.IsRollbackActive
@@ -488,8 +488,8 @@ public sealed class TaskService(
                 && !string.IsNullOrWhiteSpace(task.SuccessScenarioGroup)
                 && siblingTasks.Any(t => !t.IsRollbackStep && t.ScenarioGroup == task.SuccessScenarioGroup))
             {
-                ActivateScenario(task.Runbook, siblingTasks, task.SuccessScenarioGroup!,
-                    $"'{task.Title}' basarili oldugu icin '{task.SuccessScenarioGroup}' senaryosuna otomatik gecildi");
+                await ActivateScenario(task.Runbook, siblingTasks, task.SuccessScenarioGroup!,
+                    $"'{task.Title}' basarili oldugu icin '{task.SuccessScenarioGroup}' senaryosuna otomatik gecildi", ct);
             }
             else if (hasSuccessTrigger
                 && !task.Runbook.IsRollbackActive
@@ -772,7 +772,7 @@ public sealed class TaskService(
             throw new BusinessRuleException($"'{scenarioGroup}' adinda tanimli bir senaryo bulunamadi.");
         }
 
-        ActivateScenario(runbook, tasks, scenarioGroup, $"'{scenarioGroup}' senaryosuna gecildi");
+        await ActivateScenario(runbook, tasks, scenarioGroup, $"'{scenarioGroup}' senaryosuna gecildi", ct);
 
         await db.SaveChangesAsync(ct);
 
@@ -1065,6 +1065,27 @@ public sealed class TaskService(
     }
 
     /// <summary>
+    /// Bir senaryonun rejoin noktasini bulur: oncelikle ayri Scenario varligindan
+    /// (Scenario.RejoinTaskId - "Yeni Senaryo Olustur" akisinin yazdigi tek yer)
+    /// okunur; orada yoksa (eski/gecis donemi runbook'lari, veya adim uzerinden
+    /// dogrudan API ile olusturulmus senaryolar icin) gorevler uzerindeki eski
+    /// ScenarioRejoinTaskId alanina geri dusulur. Bu iki kaynagin herhangi biri
+    /// atlanirsa (orn. yalnizca eski alan kontrol edilirse) yeni akisla
+    /// olusturulan bir senaryo "tek yonlu" sanilip rejoin noktasi da dahil TUM
+    /// ana akis Atlandi yapilir - bu metodun var olma sebebi budur.
+    /// </summary>
+    private async Task<Guid?> ResolveScenarioRejoinTaskIdAsync(
+        Guid runbookId, string scenarioGroup, IEnumerable<Guid?> perTaskRejoinTaskIds, CancellationToken ct)
+    {
+        var scenarioRejoinTaskId = await db.Scenarios
+            .Where(s => s.RunbookId == runbookId && s.Name == scenarioGroup)
+            .Select(s => s.RejoinTaskId)
+            .FirstOrDefaultAsync(ct);
+
+        return scenarioRejoinTaskId ?? perTaskRejoinTaskIds.FirstOrDefault(id => id.HasValue);
+    }
+
+    /// <summary>
     /// Belirtilen senaryoya gecisi aktive eder: ana akistaki kapanmamis (Bekliyor/
     /// Devam Eden/Bloke) gorevler "Atlandi" olur, senaryo adimlarinin tarihleri
     /// simdiden itibaren sirayla hesaplanir. Cagiran taraf tum on kosullari
@@ -1072,17 +1093,16 @@ public sealed class TaskService(
     /// metot yalnizca uygular (hem manuel buton hem gorev bazinda otomatik
     /// tetikleme buradan gecer).
     /// </summary>
-    private void ActivateScenario(Runbook runbook, List<RunbookTask> tasks, string scenarioGroup, string reason)
+    private async Task ActivateScenario(
+        Runbook runbook, List<RunbookTask> tasks, string scenarioGroup, string reason, CancellationToken ct)
     {
         var scenarioSteps = tasks
             .Where(t => !t.IsRollbackStep && t.ScenarioGroup == scenarioGroup)
             .OrderBy(t => t.Order)
             .ToList();
 
-        // Senaryo grubunun rejoin noktasi (bkz. RunbookTask.ScenarioRejoinTaskId):
-        // gruptaki herhangi bir adimda dolu olmasi yeterlidir, tumune kopyalanmasi
-        // gerekmez.
-        var rejoinTaskId = scenarioSteps.Select(t => t.ScenarioRejoinTaskId).FirstOrDefault(id => id.HasValue);
+        var rejoinTaskId = await ResolveScenarioRejoinTaskIdAsync(
+            runbook.Id, scenarioGroup, scenarioSteps.Select(t => t.ScenarioRejoinTaskId), ct);
         var rejoinOrder = rejoinTaskId.HasValue
             ? tasks.FirstOrDefault(t => t.Id == rejoinTaskId.Value)?.Order
             : null;
@@ -1517,7 +1537,8 @@ public sealed class TaskService(
                 .Select(t => new { t.Status, t.ScenarioRejoinTaskId })
                 .ToListAsync(ct);
             taskStatuses = scenarioTasks.Select(t => t.Status).ToList();
-            scenarioRejoinTaskId = scenarioTasks.Select(t => t.ScenarioRejoinTaskId).FirstOrDefault(id => id.HasValue);
+            scenarioRejoinTaskId = await ResolveScenarioRejoinTaskIdAsync(
+                runbookId, runbook.ActiveScenarioGroup, scenarioTasks.Select(t => t.ScenarioRejoinTaskId), ct);
         }
         else
         {
