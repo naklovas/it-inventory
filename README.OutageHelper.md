@@ -20,8 +20,8 @@ gecmis kesintilere dayanarak degerlendiren .NET 8 konsol uygulamalari seti.
    Database__ConnectionString=Server=...;Database=...;...
    LiteLlm__BaseUrl=https://litellm.kurumsal.ornek/v1
    LiteLlm__ApiKey=***
-   LiteLlm__ChatModel=gpt-4o-mini        # LiteLLM'de tanimli model adi
-   LiteLlm__EmbeddingModel=text-embedding-3-small
+   LiteLlm__ChatModel=zt-ga-small-0      # kurumsal LiteLLM'de tanimli model adi
+   LiteLlm__EmbeddingModel=               # henuz kurumsal LiteLLM'de embedding modeli yoksa BOS birakin
    ```
 
    LiteLLM URL ve anahtari asla koda yazilmaz; her zaman appsettings/env'den okunur.
@@ -63,3 +63,7 @@ konulmaz):
 - Risk asamasinda LLM, kendisine sunulmayan bir kesinti kaydina asla atifta bulunamaz;
   ayni sistemde gecmis kayit veya yeterli benzerlik yoksa risk seviyesi `Belirsiz` olarak
   isaretlenir ve model cagrilmaz (uydurma onlenir).
+- Benzerlik olcumu icin `LiteLlm:EmbeddingModel` ayari **opsiyoneldir**: kurumsal LiteLLM
+  henuz embedding sunmadigi icin bu deger bos birakildiginda `Kesinti.Risk` otomatik olarak
+  kelime-bazli (Jaccard) benzerlige duser. Embedding modeli ileride eklendiginde tek yapilmasi
+  gereken bu ayara model adini yazmaktir; kod degisikligi gerekmez.

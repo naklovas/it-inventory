@@ -6,11 +6,19 @@ using Kesinti.Core.Models;
 using Kesinti.Risk.Risk;
 
 const int EnFazlaAday = 5;
-const double MinimumBenzerlik = 0.55;
+const double MinimumBenzerlikEmbedding = 0.55;
+const double MinimumBenzerlikMetin = 0.12; // Jaccard skorlari embedding cosine benzerliginden dogal olarak daha dusuk cikar.
 
 var configuration = AppConfig.Load(AppContext.BaseDirectory, args);
 var dbOptions = AppConfig.GetDatabase(configuration);
 var liteLlmOptions = AppConfig.GetLiteLlm(configuration);
+
+var embeddingKullaniliyorMu = !string.IsNullOrWhiteSpace(liteLlmOptions.EmbeddingModel);
+var minimumBenzerlik = embeddingKullaniliyorMu ? MinimumBenzerlikEmbedding : MinimumBenzerlikMetin;
+
+Console.WriteLine(embeddingKullaniliyorMu
+    ? $"Benzerlik yontemi: embedding ({liteLlmOptions.EmbeddingModel})"
+    : "Benzerlik yontemi: kelime-bazli (embedding modeli tanimli degil - LiteLlm:EmbeddingModel bos)");
 
 var dosyaYolu = args.FirstOrDefault(a => !a.StartsWith("--"))
     ?? configuration["Risk:DegisiklikListesiDosyasi"]
@@ -60,7 +68,7 @@ foreach (var degisiklik in degisiklikler)
         }
 
         var adaylar = await CandidateSelector.SecVeSiralaAsync(
-            liteLlmClient, degisiklik, ayniSistemKayitlari, EnFazlaAday, MinimumBenzerlik);
+            liteLlmClient, liteLlmOptions, degisiklik, ayniSistemKayitlari, EnFazlaAday, minimumBenzerlik);
 
         if (adaylar.Count == 0)
         {
