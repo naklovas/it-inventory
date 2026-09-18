@@ -400,45 +400,67 @@ public sealed class PdfService(BookRunnerDbContext db, IAuditService audit) : IP
         ColumnDescriptor column, string title, string accentColor, List<RunbookTask> steps, string? footNote,
         List<RunbookTask> allTasks)
     {
-        column.Item().PaddingTop(10).Text(title).SemiBold().FontSize(11).FontColor(accentColor);
+        column.Item().PaddingTop(10).Row(row =>
+        {
+            row.ConstantItem(10).Height(10).AlignMiddle().Background(accentColor).CornerRadius(5);
+            row.RelativeItem().PaddingLeft(6).Text(title).SemiBold().FontSize(11).FontColor(accentColor);
+        });
 
         for (var i = 0; i < steps.Count; i++)
         {
             column.Item().Element(element => ComposeFlowNode(element, steps[i], accentColor, allTasks));
             if (i < steps.Count - 1)
             {
-                column.Item().AlignCenter().Text("↓").FontSize(12).FontColor(accentColor);
+                ComposeFlowArrow(column, accentColor);
             }
         }
 
         if (!string.IsNullOrEmpty(footNote))
         {
-            column.Item().PaddingTop(2).Text(footNote).FontSize(8).Italic().FontColor("#7B8794");
+            column.Item().PaddingTop(4).Element(element => ComposeFlowLabel(element, footNote, "#7B8794", "#F5F7FA"));
         }
+    }
+
+    /// <summary>Iki kutu arasindaki bagi, dikey bir cizgi + ok ucu olarak cizer (mermaid'deki dikey oklarin PDF karsiligi).</summary>
+    private static void ComposeFlowArrow(ColumnDescriptor column, string accentColor)
+    {
+        column.Item().AlignCenter().Column(arrow =>
+        {
+            arrow.Item().AlignCenter().Width(2).Height(10).Background(accentColor);
+            // Not: "▼" (U+25BC) bazi font/ortamlarda eksik glif (bos kutu)
+            // olarak cizildi - "↓" (U+2193) daha genis desteklendigi icin
+            // tercih edildi.
+            arrow.Item().AlignCenter().Text("↓").FontSize(13).FontColor(accentColor);
+        });
+    }
+
+    /// <summary>Bir dallanma/tetikleme notunu, mermaid'deki ok etiketlerine benzer kucuk bir rozet olarak cizer.</summary>
+    private static void ComposeFlowLabel(IContainer container, string text, string textColor, string backgroundColor)
+    {
+        container.Background(backgroundColor).CornerRadius(4).PaddingVertical(3).PaddingHorizontal(6)
+            .Text(text).FontSize(8).Italic().FontColor(textColor);
     }
 
     private static void ComposeFlowNode(IContainer container, RunbookTask task, string accentColor, List<RunbookTask> allTasks)
     {
         var (name, photo, _) = AssigneeSummary(task);
+        var statusColor = StatusColor(task.Status);
 
-        container.Border(1).BorderColor("#D9E2EC").Background("#FFFFFF").Padding(6).Column(column =>
+        container.Border(1).BorderColor("#D9E2EC").Background("#FFFFFF").CornerRadius(6).Padding(8).Column(column =>
         {
             column.Item().Row(row =>
             {
-                row.ConstantItem(4).Height(14).Background(accentColor);
-                row.RelativeItem().PaddingLeft(6).Row(inner =>
-                {
-                    inner.RelativeItem().Text(text =>
-                    {
-                        text.Span($"{task.Order}. ").SemiBold().FontColor(accentColor);
-                        text.Span(task.Title).SemiBold().FontSize(10);
-                    });
-                    inner.ConstantItem(90).AlignRight().Text(DisplayText.Status(task.Status))
-                        .FontSize(8).SemiBold().FontColor(StatusColor(task.Status));
-                });
+                row.ConstantItem(22).Height(22).Background(accentColor).CornerRadius(11).AlignMiddle().AlignCenter()
+                    .Text(task.Order.ToString()).FontSize(10).SemiBold().FontColor(Colors.White);
+
+                row.RelativeItem().PaddingLeft(8).AlignMiddle().Text(task.Title).SemiBold().FontSize(10.5f);
+
+                row.ConstantItem(85).AlignMiddle().AlignRight()
+                    .Background(WithOpacity(statusColor, 0.15f)).CornerRadius(3).PaddingVertical(2).PaddingHorizontal(5)
+                    .Text(DisplayText.Status(task.Status)).FontSize(7.5f).SemiBold().FontColor(statusColor);
             });
 
-            column.Item().PaddingTop(3).PaddingLeft(10).Row(row =>
+            column.Item().PaddingTop(4).PaddingLeft(30).Row(row =>
             {
                 if (photo is { Length: > 0 })
                 {
@@ -448,11 +470,26 @@ public sealed class PdfService(BookRunnerDbContext db, IAuditService audit) : IP
                 row.RelativeItem().Text(name).FontSize(8).FontColor("#334E68");
             });
 
-            foreach (var note in TriggerNotes(task, allTasks))
+            var notes = TriggerNotes(task, allTasks).ToList();
+            if (notes.Count > 0)
             {
-                column.Item().PaddingTop(3).PaddingLeft(10).Text(note.Text).FontSize(8).Italic().FontColor(note.Color);
+                column.Item().PaddingTop(5).PaddingLeft(30).Column(notesColumn =>
+                {
+                    notesColumn.Spacing(3);
+                    foreach (var note in notes)
+                    {
+                        notesColumn.Item().Element(element => ComposeFlowLabel(element, note.Text, note.Color, WithOpacity(note.Color, 0.1f)));
+                    }
+                });
             }
         });
+    }
+
+    /// <summary>Bir hex rengi, verilen opaklikta acik bir arka plan tonuna cevirir (rozet/etiket arka planlari icin).</summary>
+    private static string WithOpacity(string hexColor, float opacity)
+    {
+        var alpha = (byte)Math.Round(opacity * 255);
+        return $"#{alpha:X2}{hexColor.TrimStart('#')}";
     }
 
     /// <summary>
