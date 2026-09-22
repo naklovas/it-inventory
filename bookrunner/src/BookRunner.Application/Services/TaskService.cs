@@ -517,6 +517,70 @@ public sealed class TaskService(
             }
         }
 
+        // Bir senaryoya OTOMATIK gecis, tetikleyen gorevin "Tamamlandi"/"Basarisiz"
+        // olmasina baglidir. Tetikleyen gorev geri cekilirse (orn. yonetici onu
+        // "Baslamadi"ya dondururse) o senaryoya gecilmis olmasinin sebebi ortadan
+        // kalkar: senaryo aktif kalmaya devam ederse, ona ulasmak icin "Atlandi"
+        // yapilan ana akis gorevleri de atlanmis gorunmeye devam eder ve calisma
+        // tetikleyen adima geri donemez. Bu yuzden gecis burada geri alinir (bkz.
+        // DeactivateScenarioCoreAsync - ActivateScenario'nun tam tersi).
+        //
+        // Kontrol yalnizca DEGISTIRILEN gorev, aktif senaryonun tetikleyicisiyse
+        // calisir; manuel "Senaryosuna Gec" butonuyla yapilan (hicbir kosula bagli
+        // olmayan) bir gecis boylece kendiliginden iptal olmaz - ayni gerekce
+        // asagidaki geri donus otomatik iptalinde de gecerlidir.
+        // Kontrol, senaryonun HALA aktif olmasina degil, GOREVIN KENDI tanimina
+        // bakar: senaryo tamamlanip ana akisa donuldugunde ActiveScenarioGroup
+        // zaten temizlenmis olur (bkz. TryAutoCompleteRunbookAsync) ama gecisin
+        // biraktigi "Atlandi" gorevler ortada durur - o durumda da geri alinmalidir.
+        var wasSuccessScenarioTrigger = oldStatus == RunbookTaskStatus.Completed
+            && !string.IsNullOrWhiteSpace(task.SuccessScenarioGroup);
+        var wasFailureScenarioTrigger = oldStatus == RunbookTaskStatus.Failed
+            && task.FailureAction == TaskFailureAction.SwitchToScenario
+            && !string.IsNullOrWhiteSpace(task.FailureScenarioGroup);
+
+        if (wasSuccessScenarioTrigger || wasFailureScenarioTrigger)
+        {
+            var triggeredGroup = (wasSuccessScenarioTrigger ? task.SuccessScenarioGroup : task.FailureScenarioGroup)!;
+            var scenarioCheckTasks = await db.Tasks.Where(t => t.RunbookId == task.RunbookId).ToListAsync(ct);
+
+            // Ayni senaryoyu tetikleyebilen baska bir gorev hala kosulu
+            // sagliyorsa gecis korunur - senaryoya gecilmis olmasinin gecerli
+            // bir sebebi devam ediyor demektir.
+            var stillTriggered = scenarioCheckTasks.Any(t => t.Id != task.Id
+                && ((t.Status == RunbookTaskStatus.Completed && t.SuccessScenarioGroup == triggeredGroup)
+                    || (t.Status == RunbookTaskStatus.Failed
+                        && t.FailureAction == TaskFailureAction.SwitchToScenario
+                        && t.FailureScenarioGroup == triggeredGroup)));
+
+            if (!stillTriggered)
+            {
+                var conditionText = wasSuccessScenarioTrigger ? "tamamlanmis" : "basarisiz";
+                await DeactivateScenarioCoreAsync(task.Runbook, scenarioCheckTasks, triggeredGroup, task.Id,
+                    $"'{task.Title}' artik {conditionText} degil, '{triggeredGroup}' senaryosuna gecis geri alindi", ct);
+            }
+        }
+
+        // "Belirli bir goreve atla" (SwitchToTask) icin ayni simetri: atlama bir
+        // senaryo gibi runbook uzerinde bir durum birakmaz, ama ARADAKI gorevleri
+        // "Atlandi" yapip hedefi otomatik baslatir (bkz. ActivateTaskJump). Tetikleyen
+        // gorev geri cekilince bu iki etki de geri alinir, aksi halde aradaki gorevler
+        // atlanmis kalirdi.
+        var wasSuccessJump = oldStatus == RunbookTaskStatus.Completed && task.SuccessTargetTaskId.HasValue;
+        var wasFailureJump = oldStatus == RunbookTaskStatus.Failed
+            && task.FailureAction == TaskFailureAction.SwitchToTask
+            && task.FailureTargetTaskId.HasValue;
+
+        if (wasSuccessJump || wasFailureJump)
+        {
+            var jumpTargetId = wasSuccessJump ? task.SuccessTargetTaskId!.Value : task.FailureTargetTaskId!.Value;
+            var jumpCheckTasks = await db.Tasks.Where(t => t.RunbookId == task.RunbookId).ToListAsync(ct);
+            var conditionText = wasSuccessJump ? "tamamlanmis" : "basarisiz";
+
+            RevertTaskJump(jumpCheckTasks, task.Id, jumpTargetId,
+                $"'{task.Title}' artik {conditionText} degil, gorev atlamasi geri alindi");
+        }
+
         // Geri donus plani aktifken, onu tetikleyen kosul ortadan kalkarsa (aktif
         // akista artik hicbir gorev "Basarisiz" degilse) otomatik olarak iptal
         // edilir - aksi halde bir yonetici tetikleyen gorevi "Devam Ediyor" veya
@@ -659,19 +723,7 @@ public sealed class TaskService(
 
         foreach (var step in rollbackSteps)
         {
-            if (step.Status != RunbookTaskStatus.NotStarted)
-            {
-                AddActivity(step.Id, TaskActivityType.StatusChanged,
-                    $"Durum {DisplayText.Status(step.Status)} -> {DisplayText.Status(RunbookTaskStatus.NotStarted)} ({reason})",
-                    DisplayText.Status(step.Status), DisplayText.Status(RunbookTaskStatus.NotStarted));
-            }
-
-            step.Status = RunbookTaskStatus.NotStarted;
-            step.ActualStart = null;
-            step.ActualEnd = null;
-            step.ActualMinutes = null;
-            step.ActualOutageMinutes = null;
-            step.CompletionNote = null;
+            ResetTaskToNotStarted(step, reason);
             step.PlannedStart = null;
             step.PlannedEnd = null;
         }
@@ -1191,6 +1243,128 @@ public sealed class TaskService(
         {
             runbook.PlannedEnd = cursor;
         }
+    }
+
+    /// <summary>
+    /// ActivateScenario'nun tam tersi: senaryoya gecisi geri alir. Gecis
+    /// sirasinda "Atlandi" yapilan ana akis gorevleri (tetikleyici ile rejoin
+    /// noktasi ARASINDAKI ayni aralik) "Baslamadi"ya doner, senaryo adimlarinin
+    /// kendisi de sifirlanir (gecis sirasinda hesaplanan planlanan tarihleri
+    /// dahil - senaryo yeniden tetiklenirse tekrar hesaplanir) ve runbook ana
+    /// akisa geri alinir. Boylece calisma, senaryoya atlamadan onceki noktadan
+    /// devam edebilir.
+    /// </summary>
+    private async Task DeactivateScenarioCoreAsync(
+        Runbook runbook, List<RunbookTask> tasks, string scenarioGroup, Guid? triggerTaskId, string reason,
+        CancellationToken ct)
+    {
+        var scenarioSteps = tasks
+            .Where(t => !t.IsRollbackStep && t.ScenarioGroup == scenarioGroup)
+            .ToList();
+
+        var rejoinTaskId = await ResolveScenarioRejoinTaskIdAsync(
+            runbook.Id, scenarioGroup, scenarioSteps.Select(t => t.ScenarioRejoinTaskId), ct);
+        var rejoinOrder = rejoinTaskId.HasValue
+            ? tasks.FirstOrDefault(t => t.Id == rejoinTaskId.Value)?.Order
+            : null;
+        var triggerOrder = triggerTaskId.HasValue
+            ? tasks.FirstOrDefault(t => t.Id == triggerTaskId.Value)?.Order
+            : null;
+
+        // ActivateScenario'nun atladigi aralikla AYNI aralik taranir - boylece
+        // yalnizca bu gecis yuzunden atlanmis gorevler geri acilir, baska bir
+        // sebeple (orn. operatorun kendi karariyla) atlanmis gorevlere dokunulmaz.
+        var skippedMainTasks = tasks.Where(t => !t.IsRollbackStep && string.IsNullOrEmpty(t.ScenarioGroup)
+            && t.Status == RunbookTaskStatus.Skipped
+            && (triggerOrder is null || t.Order > triggerOrder.Value)
+            && (rejoinOrder is null || t.Order < rejoinOrder.Value));
+
+        foreach (var mainTask in skippedMainTasks)
+        {
+            ResetTaskToNotStarted(mainTask, reason);
+        }
+
+        foreach (var step in scenarioSteps)
+        {
+            ResetTaskToNotStarted(step, reason);
+            step.PlannedStart = null;
+            step.PlannedEnd = null;
+        }
+
+        // Senaryo tamamlanip ana akisa donuldugunde rejoin gorevi otomatik
+        // baslatilmis olabilir (bkz. TryAutoCompleteRunbookAsync). Hala o otomatik
+        // baslatmanin biraktigi "Devam Ediyor" durumundaysa o da geri alinir;
+        // kapanmis (Tamamlandi/Basarisiz/Atlandi) bir gorevde gercek is yapilmis
+        // demektir, ona dokunulmaz.
+        if (rejoinTaskId.HasValue)
+        {
+            var rejoinTask = tasks.FirstOrDefault(t => t.Id == rejoinTaskId.Value);
+            if (rejoinTask is { Status: RunbookTaskStatus.InProgress })
+            {
+                ResetTaskToNotStarted(rejoinTask, reason);
+            }
+        }
+
+        // Senaryo tamamlanip ana akisa donulduyse ActiveScenarioGroup zaten
+        // temizlenmistir; bu arada BASKA bir senaryo aktif hale gelmisse onu
+        // burada sessizce kapatmamak icin yalnizca geri alinan senaryo temizlenir.
+        if (runbook.ActiveScenarioGroup == scenarioGroup)
+        {
+            runbook.ActiveScenarioGroup = null;
+        }
+    }
+
+    /// <summary>
+    /// ActivateTaskJump'in tam tersi: atlama sirasinda "Atlandi" yapilan ara
+    /// gorevler "Baslamadi"ya doner, otomatik baslatilan hedef gorev de (hala
+    /// yalnizca "Devam Ediyor" durumundaysa) geri alinir.
+    /// </summary>
+    private void RevertTaskJump(List<RunbookTask> tasks, Guid triggerTaskId, Guid targetTaskId, string reason)
+    {
+        var target = tasks.FirstOrDefault(t => t.Id == targetTaskId);
+        if (target is null)
+        {
+            return;
+        }
+
+        var triggerOrder = tasks.FirstOrDefault(t => t.Id == triggerTaskId)?.Order;
+
+        var skipped = tasks.Where(t => !t.IsRollbackStep && string.IsNullOrEmpty(t.ScenarioGroup)
+            && t.Status == RunbookTaskStatus.Skipped
+            && t.Order < target.Order
+            && (triggerOrder is null || t.Order > triggerOrder.Value));
+
+        foreach (var t in skipped)
+        {
+            ResetTaskToNotStarted(t, reason);
+        }
+
+        if (target.Status == RunbookTaskStatus.InProgress)
+        {
+            ResetTaskToNotStarted(target, reason);
+        }
+    }
+
+    /// <summary>
+    /// Bir gorevi baslangic durumuna dondurur: gerceklesen tarih/sure/not
+    /// bilgileri de temizlenir, yoksa bir sonraki gecişte yanlis bilgi kalir.
+    /// Durum gercekten degisiyorsa gecmise bir kayit dusulur.
+    /// </summary>
+    private void ResetTaskToNotStarted(RunbookTask task, string reason)
+    {
+        if (task.Status != RunbookTaskStatus.NotStarted)
+        {
+            AddActivity(task.Id, TaskActivityType.StatusChanged,
+                $"Durum {DisplayText.Status(task.Status)} -> {DisplayText.Status(RunbookTaskStatus.NotStarted)} ({reason})",
+                DisplayText.Status(task.Status), DisplayText.Status(RunbookTaskStatus.NotStarted));
+        }
+
+        task.Status = RunbookTaskStatus.NotStarted;
+        task.ActualStart = null;
+        task.ActualEnd = null;
+        task.ActualMinutes = null;
+        task.ActualOutageMinutes = null;
+        task.CompletionNote = null;
     }
 
     public async Task ReorderAsync(Guid runbookId, ReorderTasksRequest request, CancellationToken ct = default)
