@@ -180,6 +180,22 @@ public sealed class ExcelService(
         var runbook = await db.Runbooks.FirstOrDefaultAsync(r => r.Id == runbookId, ct)
             ?? throw new NotFoundException("Runbook", runbookId);
 
+        // Ice aktarim da sonucta yeni gorev olusturur, bu yuzden tek tek gorev
+        // eklemeyle ayni kurala tabidir (bkz. TaskService.CreateAsync): kapanmis
+        // veya calismasi baslamis bir runbook'un adim listesi degistirilemez.
+        // Yalnizca dogrulama modunda (commit=false) da ayni sekilde engellenir -
+        // islenemeyecek bir dosyayi dogrulatmanin anlami yok.
+        if (runbook.Status is RunbookStatus.Completed or RunbookStatus.Cancelled or RunbookStatus.Archived)
+        {
+            throw new BusinessRuleException("Kapanmis bir runbook'a Excel'den gorev aktarilamaz.");
+        }
+
+        if (runbook.Status == RunbookStatus.InProgress)
+        {
+            throw new BusinessRuleException(
+                "Calismasi baslamis bir runbook'a Excel'den gorev aktarilamaz: adimlar calisma baslamadan once tanimlanmalidir.");
+        }
+
         using var workbook = new XLWorkbook(excelStream);
         var sheet = workbook.Worksheets.FirstOrDefault(w => w.Name.Equals("Gorevler", StringComparison.OrdinalIgnoreCase))
                     ?? workbook.Worksheets.First();

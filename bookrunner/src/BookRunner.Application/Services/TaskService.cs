@@ -60,6 +60,17 @@ public sealed class TaskService(
             throw new BusinessRuleException("Kapanmis bir runbook'a yeni gorev eklenemez.");
         }
 
+        // Calisma basladiktan sonra adim listesi dondurulur: yurutme sirasinda
+        // araya yeni adim girmesi, hem o ana kadar hesaplanan ilerlemeyi/sirayi
+        // hem de senaryo-geri donus akislarinin dayandigi sira araliklarini
+        // (bkz. ActivateScenario/ActivateTaskJump) gecmise donuk degistirir.
+        // Yeni bir adim gerekiyorsa runbook once "Taslak"a geri alinmalidir.
+        if (runbook.Status == RunbookStatus.InProgress)
+        {
+            throw new BusinessRuleException(
+                "Calismasi baslamis bir runbook'a yeni gorev eklenemez: adimlar calisma baslamadan once tanimlanmalidir.");
+        }
+
         ValidateTaskPlannedRange(runbook, request.PlannedStart, request.PlannedEnd);
 
         var scenarioGroup = string.IsNullOrWhiteSpace(request.ScenarioGroup) ? null : request.ScenarioGroup.Trim();

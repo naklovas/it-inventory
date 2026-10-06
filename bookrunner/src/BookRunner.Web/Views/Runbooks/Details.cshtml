@@ -202,7 +202,7 @@
 
 <div class="d-flex justify-content-between align-items-center mb-2">
     <h2 class="h5 mb-0"><i class="bi bi-list-ol me-1"></i>Gorevler</h2>
-    @if (Model.CanEditThis)
+    @if (Model.CanAddTaskThis)
     {
         <button class="btn btn-primary btn-sm" data-bs-toggle="collapse" data-bs-target="#newTaskPanel">
             <i class="bi bi-plus-lg me-1"></i>Gorev ekle
@@ -247,7 +247,7 @@
     </div>
 }
 
-@if (Model.CanEditThis)
+@if (Model.CanAddTaskThis)
 {
     <div class="collapse @(mainTasks.Count == 0 ? "show" : string.Empty)" id="newTaskPanel">
         <div class="br-card p-3 mb-3">
@@ -424,12 +424,12 @@
 
 @* ------------------------------------------------------------- geri donus plani *@
 
-@if (rollbackSteps.Count > 0 || Model.CanEditThis)
+@if (rollbackSteps.Count > 0 || Model.CanAddTaskThis)
 {
     <div class="d-flex justify-content-between align-items-center mb-2 mt-4">
         <h2 class="h5 mb-0"><i class="bi bi-arrow-counterclockwise me-1"></i>Geri Donus Plani</h2>
         <div class="d-flex gap-2">
-            @if (Model.CanEditThis)
+            @if (Model.CanAddTaskThis)
             {
                 <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="collapse" data-bs-target="#newRollbackStepPanel">
                     <i class="bi bi-plus-lg me-1"></i>Adim ekle
@@ -489,7 +489,7 @@
         </div>
     }
 
-    @if (Model.CanEditThis)
+    @if (Model.CanAddTaskThis)
     {
         <div class="collapse" id="newRollbackStepPanel">
             <div class="br-card p-3 mb-3">
@@ -542,9 +542,12 @@
                 <button class="btn btn-outline-primary btn-sm" data-bs-toggle="collapse" data-bs-target="#newScenarioPanel">
                     <i class="bi bi-plus-lg me-1"></i>Yeni Senaryo Olustur
                 </button>
-                <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="collapse" data-bs-target="#newScenarioStepPanel">
-                    <i class="bi bi-plus-lg me-1"></i>Senaryo Adimi Ekle
-                </button>
+                @if (Model.CanAddTaskThis)
+                {
+                    <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="collapse" data-bs-target="#newScenarioStepPanel">
+                        <i class="bi bi-plus-lg me-1"></i>Senaryo Adimi Ekle
+                    </button>
+                }
             </div>
         }
     </div>
@@ -711,6 +714,8 @@
             </div>
         </div>
 
+        @if (Model.CanAddTaskThis)
+        {
         <div class="collapse" id="newScenarioStepPanel">
             <div class="br-card p-3 mb-3">
                 <h3 class="h6 mb-3">Yeni senaryo adimi</h3>
@@ -774,6 +779,7 @@
                 </div>
             </div>
         </div>
+        }
     }
 }
 

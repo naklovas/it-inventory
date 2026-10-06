@@ -82,8 +82,21 @@ public sealed class RunbookDetailViewModel : PageViewModel
     public bool CanAssignThis => IsOwner || IsCollaborator || CanAssign;
     public bool CanExecuteThis => IsOwner || IsCollaborator || CanExecute;
     public bool CanCommentThis => IsOwner || IsCollaborator || CanComment;
-    public bool CanImportThis => IsOwner || CanImport;
+    public bool CanImportThis => (IsOwner || CanImport) && IsTaskListOpen;
     public bool CanPublishTemplateThis => IsOwner || CanPublishTemplate;
+
+    /// <summary>
+    /// Yeni adim (ana gorev, geri donus adimi, senaryo adimi) eklenebilir mi:
+    /// yalnizca calisma baslamadan once. Runbook "Devam Ediyor" olduktan veya
+    /// kapandiktan sonra adim listesi dondurulur - ayni kural API tarafinda da
+    /// uygulanir (bkz. TaskService.CreateAsync, ExcelService.ImportTasksAsync);
+    /// buradaki bayrak yalnizca arayuzde ekleme alanlarini gizler. Mevcut
+    /// adimlarin duzenlenmesi/siralanmasi bundan etkilenmez (bkz. CanEditThis).
+    /// </summary>
+    public bool CanAddTaskThis => CanEditThis && IsTaskListOpen;
+
+    private bool IsTaskListOpen =>
+        Runbook.Status is Domain.Enums.RunbookStatus.Draft or Domain.Enums.RunbookStatus.Scheduled;
 
     /// <summary>Runbook silme: yonetici rolu veya runbook sahibi.</summary>
     public bool CanDeleteRunbookThis => IsOwner || CanDelete;
